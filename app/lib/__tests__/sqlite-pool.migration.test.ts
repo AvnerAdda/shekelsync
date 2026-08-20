@@ -102,7 +102,7 @@ describe('sqlite-pool legacy investment holdings migration', () => {
     const startupSql = execCalls.join('\n');
 
     expect(pragmaCalls.slice(0, 3)).toEqual(['foreign_keys = ON', 'journal_mode = WAL', 'busy_timeout = 5000']);
-    expect(pragmaCalls).toContain('user_version = 5');
+    expect(pragmaCalls).toContain('user_version = 6');
     expect(getCalls).toContainEqual({
       sql: "SELECT sql FROM sqlite_master WHERE type = 'table' AND name = ?",
       params: ['investment_holdings'],

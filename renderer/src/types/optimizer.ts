@@ -89,3 +89,137 @@ export interface OptimizerStatusResponse {
   recommendations: OptimizerRecommendation[];
   isStale: boolean;
 }
+
+export type OptimizerV2ReviewStatus = 'pending' | 'confirmed' | 'excluded';
+export type OptimizerV2Scope = 'general' | 'spending_subscriptions' | 'banking_cards'
+  | 'cash_deposits' | 'investments_retirement' | 'real_estate_mortgage';
+export type OptimizerV2Lifecycle = 'candidate' | 'added' | 'started' | 'snoozed' | 'done' | 'dismissed';
+
+export interface OptimizerV2ReviewFact {
+  key: string;
+  label: string;
+  value: unknown;
+  kind: 'text' | 'currency' | 'count' | 'percent' | 'list' | 'mapping' | 'category_list';
+  source: string | null;
+  asOf: string | null;
+  sensitive: boolean;
+}
+
+export interface OptimizerV2ReviewGroup {
+  key: 'household' | 'cash_flow' | 'banking' | 'investments' | 'real_estate';
+  title: string;
+  facts: OptimizerV2ReviewFact[];
+  provenance: string[];
+  recorded: boolean;
+  stale: boolean;
+  freshnessDays: number | null;
+  fingerprint: string;
+  sourceRoute: { path: string; search?: string; hash?: string };
+  status: OptimizerV2ReviewStatus;
+  confirmedAt: string | null;
+  confirmationExpiresAt: string | null;
+}
+
+export interface OptimizerV2ScopeSelection {
+  primary: OptimizerV2Scope;
+  extras: OptimizerV2Scope[];
+  change: 'negotiate_only' | 'switch_selected' | 'broader_changes';
+  effort: 'low' | 'medium' | 'high';
+  liquidity: 'no_lockup' | 'up_to_3_months' | 'up_to_12_months';
+  selectedProviders: string[];
+}
+
+export interface OptimizerV2EligibilityCondition {
+  id: string;
+  label: string;
+  factKey: string;
+  operator: string;
+  expected: unknown;
+}
+
+export interface OptimizerV2Candidate {
+  id: number;
+  runId: number;
+  actionId: string;
+  smartActionItemId: number | null;
+  scope: OptimizerV2Scope;
+  provider: string | null;
+  product: string | null;
+  title: string;
+  rationale: string;
+  nextAction: string;
+  caveat: string | null;
+  eligibility: {
+    status: 'matched' | 'possible' | 'ineligible';
+    matchedFacts: OptimizerV2EligibilityCondition[];
+    failedFacts: OptimizerV2EligibilityCondition[];
+    missingConditions: OptimizerV2EligibilityCondition[];
+    answers: Record<string, 'yes' | 'no' | 'not_sure'>;
+  };
+  benefits: {
+    oneTime: { low: number; high: number };
+    monthly: { low: number; high: number };
+    annual: { low: number; high: number };
+  };
+  score: number;
+  confidence: 'low' | 'medium' | 'high';
+  effort: 'low' | 'medium' | 'high';
+  evidence: string[];
+  publicTerms: {
+    fees: { oneTime: number; monthly: number; annual: number };
+    conditions: string[];
+  } | null;
+  sourceUrls: string[];
+  retrievedAt: string | null;
+  validUntil: string | null;
+  reverifyRequired: boolean;
+  lifecycleState: OptimizerV2Lifecycle;
+  feedbackCode: 'useful' | 'not_useful' | 'unsure' | null;
+  feedbackReasons: string[];
+  outcomeBand: 'none' | 'below_estimate' | 'within_estimate' | 'above_estimate' | 'unknown' | null;
+  snoozePreset: '1_week' | '1_month' | '3_months' | null;
+  dismissReason: string | null;
+  sourceVerifiedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface OptimizerV2Run {
+  id: number;
+  runUuid: string;
+  status: 'complete' | 'failed';
+  scope: OptimizerV2ScopeSelection;
+  checkedAreas: OptimizerV2Scope[];
+  timings: { snapshotMs?: number; researchMs?: number; wordingMs?: number; persistenceMs?: number; totalMs?: number };
+  sourceMetadata: Array<{
+    title: string;
+    url: string;
+    domain: string;
+    trustTier: 'regulator' | 'provider' | 'established' | 'lead';
+    retrievedAt: string;
+    validUntil: string | null;
+  }>;
+  researchStatus: 'not_requested' | 'complete' | 'partial' | 'fallback';
+  scoreVersion: string;
+  openaiModel: string | null;
+  errors: string[];
+  generatedAt: string;
+  candidates: OptimizerV2Candidate[];
+}
+
+export interface OptimizerV2StatusResponse {
+  success: boolean;
+  feature: { name: 'optimizerV2'; enabled: boolean; version: 2 };
+  review: {
+    groups: OptimizerV2ReviewGroup[];
+    ready: boolean;
+    resolvedCount: number;
+    totalCount: number;
+    period: { startDate: string; endDate: string; completedMonths: number };
+  };
+  scopeOptions: OptimizerV2Scope[];
+  defaults: OptimizerV2ScopeSelection;
+  providers: { banking: string[]; subscriptions: string[]; investments: string[]; all: string[] };
+  latestRun: OptimizerV2Run | null;
+  history: Omit<OptimizerV2Run, 'candidates'>[];
+}

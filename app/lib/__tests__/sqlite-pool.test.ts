@@ -108,8 +108,8 @@ describe('sqlite-pool', () => {
       'journal_mode = WAL',
       'busy_timeout = 5000',
     ]);
-    // The versioned migration runner stamps the latest investment schema.
-    expect(latestDb?.pragmaCalls).toContain('user_version = 5');
+    // The versioned migration runner stamps the latest additive schema.
+    expect(latestDb?.pragmaCalls).toContain('user_version = 6');
   });
 
   it('converts positional placeholders and normalises params for SELECT', async () => {

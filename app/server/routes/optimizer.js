@@ -1,6 +1,7 @@
 const express = require('express');
 
 const optimizerService = require('../services/optimizer.js');
+const optimizerV2Service = require('../services/optimizer-v2.js');
 
 function getHeaderValue(headers, key) {
   const value = headers?.[key];
@@ -40,6 +41,49 @@ function sendError(res, error, fallbackMessage) {
 
 function createOptimizerRouter() {
   const router = express.Router();
+
+  router.get('/v2/status', async (_req, res) => {
+    try {
+      const result = await optimizerV2Service.getOptimizerV2Status();
+      res.json(result);
+    } catch (error) {
+      console.error('Optimizer v2 status error:', error);
+      sendError(res, error, 'Failed to fetch optimizer v2 status');
+    }
+  });
+
+  router.put('/v2/review-groups/:groupKey', async (req, res) => {
+    try {
+      const result = await optimizerV2Service.updateReviewGroup(req.params.groupKey, req.body || {});
+      res.json(result);
+    } catch (error) {
+      console.error('Optimizer v2 review error:', error);
+      sendError(res, error, 'Failed to update optimizer v2 review group');
+    }
+  });
+
+  router.post('/v2/generate', async (req, res) => {
+    try {
+      const result = await optimizerV2Service.generateOptimizerV2({
+        ...withResolvedOpenAiApiKey(req),
+        ...(req.locale ? { locale: req.locale } : {}),
+      });
+      res.json(result);
+    } catch (error) {
+      console.error('Optimizer v2 generation error:', error);
+      sendError(res, error, 'Failed to generate optimizer v2 actions');
+    }
+  });
+
+  router.put('/v2/recommendations/:id/status', async (req, res) => {
+    try {
+      const result = await optimizerV2Service.updateCandidateStatus(req.params.id, req.body || {});
+      res.json(result);
+    } catch (error) {
+      console.error('Optimizer v2 candidate status error:', error);
+      sendError(res, error, 'Failed to update optimizer v2 candidate');
+    }
+  });
 
   router.get('/status', async (_req, res) => {
     try {

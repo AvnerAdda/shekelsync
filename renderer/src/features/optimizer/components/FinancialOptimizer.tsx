@@ -52,6 +52,7 @@ import type {
   OptimizerRecommendation,
   OptimizerStatusResponse,
 } from '@renderer/types/optimizer';
+import FinancialOptimizerV2 from './FinancialOptimizerV2';
 
 type OptimizerView = 'review' | 'quiz' | 'plan' | 'history';
 type FollowThroughAction = 'done' | 'snoozed';
@@ -108,7 +109,7 @@ function parseOptimizerDate(value: string): Date {
   return new Date(normalized);
 }
 
-const FinancialOptimizer: React.FC = () => {
+export const FinancialOptimizerV1: React.FC = () => {
   const theme = useTheme();
   const { t, i18n } = useTranslation('translation', { keyPrefix: 'optimizer' });
   const { formatCurrency, maskAmounts } = useFinancePrivacy();
@@ -1250,4 +1251,6 @@ const FinancialOptimizer: React.FC = () => {
   );
 };
 
-export default FinancialOptimizer;
+const optimizerV2Enabled = import.meta.env.VITE_OPTIMIZER_V2_ENABLED !== 'false';
+
+export default optimizerV2Enabled ? FinancialOptimizerV2 : FinancialOptimizerV1;

@@ -1273,6 +1273,7 @@ function shouldAttachChatbotApiKey(endpoint = '') {
     || normalizedEndpoint === '/api/chat/stream'
     || normalizedEndpoint === '/api/analytics/profiling/generate'
     || normalizedEndpoint === '/api/optimizer/generate'
+    || normalizedEndpoint === '/api/optimizer/v2/generate'
   );
 }
 

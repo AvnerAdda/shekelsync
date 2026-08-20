@@ -356,6 +356,26 @@ const scenarios = {
         ) VALUES (14, 'buy', '2026-01-02', NULL, NULL)
       `).run());
     }),
+
+  'optimizer-v2-from-legacy-v5': () =>
+    withDatabase((db, dbPath) => {
+      db.pragma('user_version = 5');
+      const result = runSchemaMigrations(db, { dbPath, logger: { log: () => {} } });
+      assert.equal(result.fromVersion, 5);
+      assert.equal(result.toVersion, 6);
+      assert.equal(getSchemaVersion(db), 6);
+      const tables = db.prepare(`
+        SELECT name FROM sqlite_master
+        WHERE type = 'table' AND name LIKE 'optimizer_v2_%'
+        ORDER BY name
+      `).all().map((row) => row.name);
+      assert.deepEqual(tables, [
+        'optimizer_v2_candidates',
+        'optimizer_v2_review_groups',
+        'optimizer_v2_runs',
+        'optimizer_v2_sources',
+      ]);
+    }),
 };
 
 const scenario = process.argv[2];

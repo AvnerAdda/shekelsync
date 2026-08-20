@@ -4,6 +4,7 @@ const os = require('os');
 const path = require('path');
 
 const optimizerService = require('../optimizer.js');
+const optimizerV2Service = require('../optimizer-v2.js');
 const profileService = require('../profile.js');
 const createSqlitePool = require('../../../lib/sqlite-pool.js');
 const { initializeSqliteDatabase } = require('../../../../scripts/init_sqlite_db.js');
@@ -42,15 +43,172 @@ async function withDatabase(run) {
     console.log = originalLog;
     pool = createSqlitePool({ databasePath });
     optimizerService.__setDatabase({ getClient: () => pool.connect() });
+    optimizerV2Service.__setDatabase({ getClient: () => pool.connect() });
     await run(pool);
   } finally {
     console.log = originalLog;
     optimizerService.__resetDatabase();
     optimizerService.__resetOpenAI();
     optimizerService.__resetGenerationState();
+    optimizerV2Service.__resetDatabase();
+    optimizerV2Service.__resetOpenAI();
     pool?.close();
     fs.rmSync(tempDir, { recursive: true, force: true });
   }
+}
+
+function completedMonthDate(monthsAgo, day = 15) {
+  const now = new Date();
+  return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - monthsAgo, day))
+    .toISOString().slice(0, 10);
+}
+
+async function runOptimizerV2Lifecycle() {
+  await withDatabase(async (pool) => {
+    const profile = await pool.query(`
+      INSERT INTO user_profile (
+        username, marital_status, age, monthly_income, location, household_size,
+        home_ownership, employment_status
+      ) VALUES ('v2-profile', 'married', 39, 999999, 'Israel', 2, 'rent', 'employed')
+      RETURNING id
+    `);
+    assert.ok(profile.rows[0].id);
+    const salaryCategory = await pool.query(`
+      INSERT INTO category_definitions (name, name_en, category_type, is_counted_as_income)
+      VALUES ('Integration Salary', 'Salary', 'income', 1)
+      RETURNING id
+    `);
+    const irregularCategory = await pool.query(`
+      INSERT INTO category_definitions (name, name_en, category_type, is_counted_as_income)
+      VALUES ('Integration Other Income', 'Other income', 'income', 1)
+      RETURNING id
+    `);
+    const salaryId = salaryCategory.rows[0].id;
+    const irregularId = irregularCategory.rows[0].id;
+    for (const [index, amount] of [24000, 24500, 23500].entries()) {
+      await pool.query(`
+        INSERT INTO transactions (
+          identifier, vendor, date, name, price, type, status,
+          category_definition_id, category_type, is_pikadon_related
+        ) VALUES ($1, 'integration', $2, $3, $4, 'income', 'completed', $5, 'income', 0)
+      `, [`salary-${index}`, completedMonthDate(3 - index), `Private employer ${9000 + index}`, amount, salaryId]);
+    }
+    await pool.query(`
+      INSERT INTO transactions (
+        identifier, vendor, date, name, price, type, status,
+        category_definition_id, category_type, is_pikadon_related
+      ) VALUES ('irregular-1', 'integration', $1, 'One-time private sale', 100000, 'income', 'completed', $2, 'income', 0)
+    `, [completedMonthDate(1), irregularId]);
+    await pool.query(`
+      INSERT INTO subscriptions (
+        pattern_key, display_name, detected_frequency, detected_amount, status
+      ) VALUES ('integration-subscription', 'Streaming service', 'monthly', 200, 'review')
+    `);
+
+    const initial = await optimizerV2Service.getOptimizerV2Status();
+    assert.equal(initial.review.groups.length, 5);
+    assert.equal(initial.review.ready, false);
+    const cashFlow = initial.review.groups.find((group) => group.key === 'cash_flow');
+    const recurring = cashFlow.facts.find((item) => item.key === 'recurring_income');
+    const observed = cashFlow.facts.find((item) => item.key === 'observed_inflows');
+    assert.equal(recurring.value, 24000);
+    assert.ok(observed.value > recurring.value);
+    assert.ok(!cashFlow.facts.some((item) => item.label.toLowerCase().includes('reported monthly income')));
+
+    for (const group of initial.review.groups) {
+      await optimizerV2Service.updateReviewGroup(group.key, {
+        status: 'confirmed',
+        fingerprint: group.fingerprint,
+      });
+    }
+    const reviewed = await optimizerV2Service.getOptimizerV2Status();
+    assert.equal(reviewed.review.ready, true);
+
+    const generated = await optimizerV2Service.generateOptimizerV2({
+      researchMode: 'offline',
+      scope: {
+        primary: 'spending_subscriptions',
+        extras: [],
+        change: 'negotiate_only',
+        effort: 'low',
+        liquidity: 'no_lockup',
+        selectedProviders: [],
+      },
+    });
+    assert.ok(generated.run.candidates.length > 0);
+    assert.equal((await pool.query('SELECT COUNT(*) AS count FROM smart_action_items')).rows[0].count, 0);
+    const candidate = generated.run.candidates[0];
+    const added = await optimizerV2Service.updateCandidateStatus(candidate.id, { status: 'added' });
+    assert.equal(added.candidate.lifecycleState, 'added');
+    assert.equal((await pool.query('SELECT COUNT(*) AS count FROM smart_action_items')).rows[0].count, 1);
+    await optimizerV2Service.updateCandidateStatus(candidate.id, {
+      status: 'feedback',
+      feedbackCode: 'useful',
+      feedbackReasons: ['already_done'],
+    });
+    const done = await optimizerV2Service.updateCandidateStatus(candidate.id, {
+      status: 'done',
+      outcomeBand: 'within_estimate',
+    });
+    assert.equal(done.candidate.outcomeBand, 'within_estimate');
+
+    const responsesPayloads = [];
+    optimizerV2Service.__setOpenAI({
+      getClient: () => ({
+        responses: {
+          create: async (payload) => {
+            responsesPayloads.push(payload);
+            if (payload.tools) return { output_text: JSON.stringify({ offers: [] }) };
+            const input = JSON.parse(payload.input);
+            return {
+              output_text: JSON.stringify({
+                wording: input.actions.map((action) => ({
+                  actionId: action.actionId,
+                  title: action.title,
+                  rationale: action.rationale,
+                  nextAction: action.nextAction,
+                  caveat: action.caveat,
+                })),
+              }),
+            };
+          },
+        },
+      }),
+    });
+    const live = await optimizerV2Service.generateOptimizerV2({
+      openaiApiKey: 'sk-test',
+      researchMode: 'live',
+      scope: {
+        primary: 'general', extras: [], change: 'negotiate_only', effort: 'low',
+        liquidity: 'no_lockup', selectedProviders: [],
+      },
+    });
+    assert.equal(live.run.researchStatus, 'complete');
+    const webPayloads = responsesPayloads.filter((payload) => payload.tools);
+    assert.equal(webPayloads.length, 3);
+    const serializedWebPayloads = JSON.stringify(webPayloads);
+    for (const forbidden of ['24000', '999999', 'Private employer', 'One-time private sale', 'Streaming service']) {
+      assert.ok(!serializedWebPayloads.includes(forbidden));
+    }
+
+    const persisted = JSON.stringify({
+      runs: (await pool.query('SELECT * FROM optimizer_v2_runs')).rows,
+      candidates: (await pool.query('SELECT * FROM optimizer_v2_candidates')).rows,
+    });
+    assert.ok(!persisted.includes('Private employer'));
+    assert.ok(!persisted.includes('One-time private sale'));
+    assert.ok(!persisted.includes('999999'));
+    assert.equal((await pool.query('SELECT COUNT(*) AS count FROM optimizer_runs')).rows[0].count, 0);
+
+    await pool.query(`
+      INSERT INTO transactions (
+        identifier, vendor, date, name, price, type, status,
+        category_definition_id, category_type, is_pikadon_related
+      ) VALUES ('changed-data', 'integration', $1, 'Changed data marker', 25000, 'income', 'completed', $2, 'income', 0)
+    `, [completedMonthDate(1, 20), salaryId]);
+    const changed = await optimizerV2Service.getOptimizerV2Status();
+    assert.equal(changed.review.groups.find((group) => group.key === 'cash_flow').status, 'pending');
+  });
 }
 
 async function runLifecycle() {
@@ -515,6 +673,8 @@ async function main() {
     await runNearCurrentSmartActionUpgrade();
   } else if (scenario === 'legacy-optimizer-follow-through-upgrade') {
     await runLegacyOptimizerFollowThroughUpgrade();
+  } else if (scenario === 'v2-lifecycle') {
+    await runOptimizerV2Lifecycle();
   } else {
     throw new Error(`Unknown optimizer integration scenario: ${scenario}`);
   }

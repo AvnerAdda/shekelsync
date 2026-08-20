@@ -6,6 +6,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 const { createOptimizerRouter } = require('../../routes/optimizer.js');
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const optimizerService = require('../../services/optimizer.js');
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const optimizerV2Service = require('../../services/optimizer-v2.js');
 
 function buildApp() {
   const app = express();
@@ -33,6 +35,26 @@ describe('Shared /api/optimizer routes', () => {
 
     expect(res.body).toEqual(payload);
     expect(spy).toHaveBeenCalledTimes(1);
+  });
+
+  it('exposes the versioned Review → Scope → Action API', async () => {
+    const statusPayload = { success: true, feature: { name: 'optimizerV2', enabled: true, version: 2 } };
+    vi.spyOn(optimizerV2Service, 'getOptimizerV2Status').mockResolvedValue(statusPayload);
+    vi.spyOn(optimizerV2Service, 'updateReviewGroup').mockResolvedValue({ success: true, group: { key: 'cash_flow', status: 'confirmed' } });
+    vi.spyOn(optimizerV2Service, 'generateOptimizerV2').mockResolvedValue({ success: true, run: { id: 9 } });
+    vi.spyOn(optimizerV2Service, 'updateCandidateStatus').mockResolvedValue({ success: true, candidate: { id: 7, lifecycleState: 'added' } });
+
+    expect((await request(app).get('/api/optimizer/v2/status').expect(200)).body).toEqual(statusPayload);
+    await request(app).put('/api/optimizer/v2/review-groups/cash_flow').send({ status: 'confirmed', fingerprint: 'abc' }).expect(200);
+    await request(app).post('/api/optimizer/v2/generate').set('x-openai-api-key', 'sk-header').send({
+      openaiApiKey: 'sk-body',
+      scope: { primary: 'general', extras: [], change: 'negotiate_only', effort: 'low', liquidity: 'no_lockup' },
+    }).expect(200);
+    await request(app).put('/api/optimizer/v2/recommendations/7/status').send({ status: 'added' }).expect(200);
+
+    expect(optimizerV2Service.updateReviewGroup).toHaveBeenCalledWith('cash_flow', { status: 'confirmed', fingerprint: 'abc' });
+    expect(optimizerV2Service.generateOptimizerV2).toHaveBeenCalledWith(expect.objectContaining({ openaiApiKey: 'sk-header' }));
+    expect(optimizerV2Service.updateCandidateStatus).toHaveBeenCalledWith('7', { status: 'added' });
   });
 
   it('returns bounded optimizer plan history', async () => {
