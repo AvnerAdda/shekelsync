@@ -56,4 +56,10 @@ describe('optimizer SQLite lifecycle integration', () => {
     expect(result.status, result.stderr || result.stdout).toBe(0);
     expect(result.stdout).toContain('optimizer-integration:legacy-optimizer-follow-through-upgrade:ok');
   });
+
+  it('runs the v2 review, recurring-income, candidate, and Smart Action lifecycle', () => {
+    const result = runScenario('v2-lifecycle');
+    expect(result.status, result.stderr || result.stdout).toBe(0);
+    expect(result.stdout).toContain('optimizer-integration:v2-lifecycle:ok');
+  });
 });

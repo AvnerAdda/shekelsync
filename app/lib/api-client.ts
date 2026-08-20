@@ -63,7 +63,7 @@ function getRequestTimeoutMs(url: string, requestedTimeout?: number): number {
     return Number.isFinite(requestedTimeout) ? Math.max(0, requestedTimeout) : DEFAULT_REQUEST_TIMEOUT_MS;
   }
   const { path } = splitPathAndQuery(url);
-  return /^\/api\/(?:chat|optimizer\/generate|scrape|scraping)/.test(path)
+  return /^\/api\/(?:chat|optimizer\/(?:generate|v2\/generate)|scrape|scraping)/.test(path)
     ? LONG_REQUEST_TIMEOUT_MS
     : DEFAULT_REQUEST_TIMEOUT_MS;
 }
