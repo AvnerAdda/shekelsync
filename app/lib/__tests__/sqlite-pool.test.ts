@@ -68,6 +68,10 @@ class MockStatement {
     return [{ ok: true }];
   }
 
+  get() {
+    return undefined;
+  }
+
   run(params: unknown[]) {
     this.record.runCalls.push(params);
     return { changes: 1 };
@@ -104,8 +108,8 @@ describe('sqlite-pool', () => {
       'journal_mode = WAL',
       'busy_timeout = 5000',
     ]);
-    // The versioned migration runner stamps user_version (baseline v1).
-    expect(latestDb?.pragmaCalls).toContain('user_version = 1');
+    // The versioned migration runner stamps the latest investment schema.
+    expect(latestDb?.pragmaCalls).toContain('user_version = 5');
   });
 
   it('converts positional placeholders and normalises params for SELECT', async () => {

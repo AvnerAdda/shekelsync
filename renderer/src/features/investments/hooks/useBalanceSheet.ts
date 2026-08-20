@@ -33,7 +33,9 @@ export function useInvestmentBalanceSheet(
     setError(null);
 
     try {
-      const response = await apiClient.get<InvestmentBalanceSheetResponse>('/api/investments/balance-sheet');
+      const response = await apiClient.get<InvestmentBalanceSheetResponse>(
+        '/api/investments/balance-sheet?includeAccounts=true&includeLiabilities=true&normalizeCurrencies=true',
+      );
       if (!response.ok) {
         throw new Error(response.statusText || 'Failed to fetch balance sheet');
       }
@@ -42,7 +44,6 @@ export function useInvestmentBalanceSheet(
       setData((response.data as InvestmentBalanceSheetResponse) || null);
     } catch (err) {
       if (requestId !== requestIdRef.current) return;
-      setData(null);
       setError(err as Error);
     } finally {
       if (requestId === requestIdRef.current) {
@@ -53,7 +54,9 @@ export function useInvestmentBalanceSheet(
 
   useEffect(() => {
     if (!enabled) {
+      requestIdRef.current += 1;
       setLoading(false);
+      setError(null);
       return;
     }
     void fetchBalanceSheet();

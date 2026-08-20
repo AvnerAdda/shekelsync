@@ -56,4 +56,18 @@ describe('schema migrations (PRAGMA user_version)', () => {
     expect(result.status, result.stderr || result.stdout).toBe(0);
     expect(result.stdout).toContain('schema-migrations:default-registry:ok');
   });
+
+  it('migrates legacy assets once, preserves ledger data, and mirrors later updates', () => {
+    const result = runScenario('migrates-legacy-investment-assets');
+    expect(result.status, result.stderr || result.stdout).toBe(0);
+    expect(result.stdout).toContain('schema-migrations:migrates-legacy-investment-assets:ok');
+  });
+
+  it('preserves legacy duplicate event rows while blocking new duplicate transaction links', () => {
+    const result = runScenario('preserves-duplicate-position-event-links');
+    expect(result.status, result.stderr || result.stdout).toBe(0);
+    expect(result.stdout).toContain(
+      'schema-migrations:preserves-duplicate-position-event-links:ok',
+    );
+  });
 });

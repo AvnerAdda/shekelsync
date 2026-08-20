@@ -182,6 +182,13 @@ function createInvestmentsRouter({ services = {} } = {}) {
   const summaryService = services.summaryService || require('../services/investments/summary.js');
   const balanceSheetService = services.balanceSheetService || require('../services/investments/balance-sheet.js');
   const positionsService = services.positionsService || require('../services/investments/positions.js');
+  const allocationTargetsService = services.allocationTargetsService
+    || require('../services/investments/allocation-targets.js');
+  const liabilitiesService = services.liabilitiesService
+    || require('../services/investments/liabilities.js');
+  const fxService = services.fxService || require('../services/investments/fx.js');
+  const benchmarksService = services.benchmarksService
+    || require('../services/investments/benchmarks.js');
   const bankSummaryService = services.bankSummaryService || require('../services/investments/bank-summary.js');
   const suggestionAnalyzerCJS = services.suggestionAnalyzerCJS || require('../services/investments/suggestion-analyzer-cjs.js');
   const pikadonService = services.pikadonService || require('../services/investments/pikadon.js');
@@ -228,6 +235,21 @@ function createInvestmentsRouter({ services = {} } = {}) {
       console.error('Investments performance error:', error);
       res.status(error?.status || 500).json({
         error: error?.message || 'Failed to fetch investment performance',
+        details: error?.stack,
+      });
+    }
+  });
+
+  router.get('/coverage', async (req, res) => {
+    try {
+      const unlinkedTransactions = await suggestionAnalyzerCJS.countUnlinkedInvestmentTransactions(
+        req.query?.thresholdDays || req.query?.threshold_days || 90,
+      );
+      res.json({ unlinkedTransactions });
+    } catch (error) {
+      console.error('Investments coverage error:', error);
+      res.status(error?.status || 500).json({
+        error: error?.message || 'Failed to fetch investment coverage',
         details: error?.stack,
       });
     }
@@ -530,6 +552,54 @@ function createInvestmentsRouter({ services = {} } = {}) {
     }
   });
 
+  router.post('/positions', async (req, res) => {
+    try {
+      res.status(201).json(await positionsService.createPosition(req.body || {}));
+    } catch (error) {
+      console.error('Investments position create error:', error);
+      res.status(error?.status || 500).json({
+        error: error?.message || 'Failed to create investment position',
+        details: error?.stack,
+      });
+    }
+  });
+
+  router.put('/positions', async (req, res) => {
+    try {
+      res.json(await positionsService.updatePosition(req.body || {}));
+    } catch (error) {
+      console.error('Investments position update error:', error);
+      res.status(error?.status || 500).json({
+        error: error?.message || 'Failed to update investment position',
+        details: error?.stack,
+      });
+    }
+  });
+
+  router.delete('/positions', async (req, res) => {
+    try {
+      res.json(await positionsService.deactivatePosition(req.query || {}));
+    } catch (error) {
+      console.error('Investments position close error:', error);
+      res.status(error?.status || 500).json({
+        error: error?.message || 'Failed to close investment position',
+        details: error?.stack,
+      });
+    }
+  });
+
+  router.get('/position-events', async (req, res) => {
+    try {
+      res.json(await positionsService.listPositionEvents(req.query || {}));
+    } catch (error) {
+      console.error('Investments position-event list error:', error);
+      res.status(error?.status || 500).json({
+        error: error?.message || 'Failed to fetch investment position events',
+        details: error?.stack,
+      });
+    }
+  });
+
   router.post('/position-events', async (req, res) => {
     try {
       const result = await positionsService.createPositionEvent(req.body || {});
@@ -538,6 +608,198 @@ function createInvestmentsRouter({ services = {} } = {}) {
       console.error('Investments position-event create error:', error);
       res.status(error?.status || 500).json({
         error: error?.message || 'Failed to create investment position event',
+        details: error?.stack,
+      });
+    }
+  });
+
+  router.get('/allocation-targets', async (req, res) => {
+    try {
+      res.json(await allocationTargetsService.listTargets(req.query || {}));
+    } catch (error) {
+      console.error('Investments allocation-target list error:', error);
+      res.status(error?.status || 500).json({
+        error: error?.message || 'Failed to fetch allocation targets',
+        details: error?.stack,
+      });
+    }
+  });
+
+  router.put('/allocation-targets', async (req, res) => {
+    try {
+      res.json(await allocationTargetsService.replaceTargets(req.body || {}));
+    } catch (error) {
+      console.error('Investments allocation-target update error:', error);
+      res.status(error?.status || 500).json({
+        error: error?.message || 'Failed to save allocation targets',
+        details: error?.stack,
+      });
+    }
+  });
+
+  router.delete('/allocation-targets', async (req, res) => {
+    try {
+      res.json(await allocationTargetsService.clearTargets(req.query || {}));
+    } catch (error) {
+      console.error('Investments allocation-target delete error:', error);
+      res.status(error?.status || 500).json({
+        error: error?.message || 'Failed to clear allocation targets',
+        details: error?.stack,
+      });
+    }
+  });
+
+  router.get('/liabilities', async (req, res) => {
+    try {
+      res.json(await liabilitiesService.listLiabilities(req.query || {}));
+    } catch (error) {
+      console.error('Investments liabilities list error:', error);
+      res.status(error?.status || 500).json({
+        error: error?.message || 'Failed to fetch liabilities',
+        details: error?.stack,
+      });
+    }
+  });
+
+  router.post('/liabilities', async (req, res) => {
+    try {
+      res.status(201).json(await liabilitiesService.createLiability(req.body || {}));
+    } catch (error) {
+      console.error('Investments liability create error:', error);
+      res.status(error?.status || 500).json({
+        error: error?.message || 'Failed to create liability',
+        details: error?.stack,
+      });
+    }
+  });
+
+  router.put('/liabilities', async (req, res) => {
+    try {
+      res.json(await liabilitiesService.updateLiability(req.body || {}));
+    } catch (error) {
+      console.error('Investments liability update error:', error);
+      res.status(error?.status || 500).json({
+        error: error?.message || 'Failed to update liability',
+        details: error?.stack,
+      });
+    }
+  });
+
+  router.delete('/liabilities', async (req, res) => {
+    try {
+      res.json(await liabilitiesService.deactivateLiability(req.query || {}));
+    } catch (error) {
+      console.error('Investments liability delete error:', error);
+      res.status(error?.status || 500).json({
+        error: error?.message || 'Failed to deactivate liability',
+        details: error?.stack,
+      });
+    }
+  });
+
+  router.get('/fx', async (req, res) => {
+    try {
+      const [baseCurrency, rates] = await Promise.all([
+        fxService.getBaseCurrency(),
+        fxService.listRates(req.query || {}),
+      ]);
+      res.json({ baseCurrency, rates });
+    } catch (error) {
+      console.error('Investments FX list error:', error);
+      res.status(error?.status || 500).json({
+        error: error?.message || 'Failed to fetch FX settings',
+        details: error?.stack,
+      });
+    }
+  });
+
+  router.put('/fx/base-currency', async (req, res) => {
+    try {
+      const baseCurrency = await fxService.setBaseCurrency(
+        req.body?.baseCurrency ?? req.body?.base_currency,
+      );
+      res.json({ baseCurrency });
+    } catch (error) {
+      console.error('Investments FX base-currency update error:', error);
+      res.status(error?.status || 500).json({
+        error: error?.message || 'Failed to update base currency',
+        details: error?.stack,
+      });
+    }
+  });
+
+  router.post('/fx/rates', async (req, res) => {
+    try {
+      res.status(201).json({ rate: await fxService.upsertRate(req.body || {}) });
+    } catch (error) {
+      console.error('Investments FX rate upsert error:', error);
+      res.status(error?.status || 500).json({
+        error: error?.message || 'Failed to save FX rate',
+        details: error?.stack,
+      });
+    }
+  });
+
+  router.post('/fx/sync', async (req, res) => {
+    try {
+      res.json(await fxService.syncBoiRates(req.body || {}));
+    } catch (error) {
+      console.error('Investments FX sync error:', error);
+      res.status(error?.status || 500).json({
+        error: error?.message || 'Failed to sync Bank of Israel FX rates',
+        details: error?.stack,
+      });
+    }
+  });
+
+  router.get('/benchmarks', async (req, res) => {
+    try {
+      res.json(await benchmarksService.listBenchmarks(req.query || {}));
+    } catch (error) {
+      console.error('Investments benchmark list error:', error);
+      res.status(error?.status || 500).json({
+        error: error?.message || 'Failed to fetch benchmarks',
+        details: error?.stack,
+      });
+    }
+  });
+
+  router.get('/benchmarks/comparison', async (req, res) => {
+    try {
+      res.json(await benchmarksService.getBenchmarkComparison({
+        startDate: req.query?.startDate || req.query?.start_date,
+        endDate: req.query?.endDate || req.query?.end_date,
+        benchmarkId: req.query?.benchmarkId || req.query?.benchmark_id,
+        baseCurrency: req.query?.baseCurrency || req.query?.base_currency,
+      }));
+    } catch (error) {
+      console.error('Investments benchmark comparison error:', error);
+      res.status(error?.status || 500).json({
+        error: error?.message || 'Failed to compare benchmark',
+        details: error?.stack,
+      });
+    }
+  });
+
+  router.post('/benchmarks/import', async (req, res) => {
+    try {
+      res.status(201).json(await benchmarksService.importBenchmark(req.body || {}));
+    } catch (error) {
+      console.error('Investments benchmark import error:', error);
+      res.status(error?.status || 500).json({
+        error: error?.message || 'Failed to import benchmark',
+        details: error?.stack,
+      });
+    }
+  });
+
+  router.delete('/benchmarks', async (req, res) => {
+    try {
+      res.json(await benchmarksService.removeBenchmark(req.query || {}));
+    } catch (error) {
+      console.error('Investments benchmark delete error:', error);
+      res.status(error?.status || 500).json({
+        error: error?.message || 'Failed to remove benchmark',
         details: error?.stack,
       });
     }
