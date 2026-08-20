@@ -58,6 +58,30 @@ function coerceBoolean(value) {
   return undefined;
 }
 
+function normalizeCurrency(value) {
+  const normalized = String(value || '').trim().toUpperCase();
+  if (!/^[A-Z]{3}$/.test(normalized)) {
+    throw serviceError(400, 'currency must be a three-letter ISO currency code');
+  }
+  return normalized;
+}
+
+async function resolveAccountInstitution(row) {
+  const linkedInstitution = buildInstitutionFromRow(row);
+  if (linkedInstitution) {
+    return linkedInstitution;
+  }
+
+  if (row?.account_type) {
+    const accountTypeInstitution = await getInstitutionByVendorCode(database, row.account_type);
+    if (accountTypeInstitution) {
+      return accountTypeInstitution;
+    }
+  }
+
+  return row?.institution || null;
+}
+
 async function listAccounts(params = {}) {
   const includeInactive = params.includeInactive === 'true' || params.includeInactive === true;
   const category = params.category;
@@ -114,11 +138,7 @@ async function listAccounts(params = {}) {
       };
       const explicitValue = snapshot.current_value;
       const totalInvested = row.total_invested ? Number.parseFloat(row.total_invested) : null;
-      let institution = buildInstitutionFromRow(row);
-
-      if (!institution && row.account_type) {
-        institution = await getInstitutionByVendorCode(database, row.account_type);
-      }
+      const institution = await resolveAccountInstitution(row);
 
       return {
         ...row,
@@ -131,7 +151,7 @@ async function listAccounts(params = {}) {
         holdings_count: Number.parseInt(row.holdings_count, 10),
         is_liquid: row.is_liquid,
         investment_category: row.investment_category,
-        institution: institution || null, // Add institution object
+        institution,
       };
     }),
   );
@@ -213,9 +233,8 @@ async function createAccount(payload = {}) {
 
   const { isLiquid, investmentCategory } = classifyInvestmentAccountType(accountTypeValue);
 
-  if (!institutionIdValue) {
-    throw serviceError(400, 'institution_id is required. Please select a known institution.');
-  }
+  // Manual/custom investment accounts may not have a registered institution.
+  // account_type remains the canonical classification and lookup fallback.
 
   const result = await database.query(
     `
@@ -230,11 +249,11 @@ async function createAccount(payload = {}) {
       accountTypeValue,
       institution || null,
       account_number || null,
-      currency,
+      normalizeCurrency(currency),
       notes || null,
       isLiquid,
       investmentCategory,
-      institutionIdValue,
+      institutionIdValue ?? null,
     ],
   );
 
@@ -253,7 +272,7 @@ async function createAccount(payload = {}) {
   return {
     account: {
       ...row,
-      institution: buildInstitutionFromRow(row),
+      institution: await resolveAccountInstitution(row),
     },
   };
 }
@@ -316,9 +335,6 @@ async function updateAccount(payload = {}) {
   }
 
   if (institution_id !== undefined) {
-    if (institution_id === null) {
-      throw serviceError(400, 'institution_id is required when updating an investment account');
-    }
     updates.push(`institution_id = $${paramIndex++}`);
     values.push(institution_id);
   }
@@ -330,7 +346,7 @@ async function updateAccount(payload = {}) {
 
   if (currency !== undefined) {
     updates.push(`currency = $${paramIndex++}`);
-    values.push(currency);
+    values.push(normalizeCurrency(currency));
   }
 
   if (is_active !== undefined) {
@@ -381,7 +397,7 @@ async function updateAccount(payload = {}) {
   return {
     account: {
       ...row,
-      institution: buildInstitutionFromRow(row),
+      institution: await resolveAccountInstitution(row),
     },
   };
 }

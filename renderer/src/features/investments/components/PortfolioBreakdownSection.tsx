@@ -25,6 +25,7 @@ import {
   getPortfolioCategoryBucketsForScope,
   PortfolioScopeKey,
 } from '../utils/portfolio-categories';
+import { getCurrencyDisplaySymbol } from '../utils/currency-format';
 
 interface PortfolioBreakdownSectionProps {
   portfolioData: PortfolioSummary;
@@ -43,7 +44,11 @@ const PortfolioBreakdownSection: React.FC<PortfolioBreakdownSectionProps> = ({
   const locale = i18n.language;
 
   const formatCurrencyValue = (value: number) =>
-    formatCurrency(value, { absolute: true, maximumFractionDigits: 0 });
+    formatCurrency(value, {
+      absolute: true,
+      maximumFractionDigits: 0,
+      currencySymbol: getCurrencyDisplaySymbol(portfolioData.fx?.baseCurrency),
+    });
 
   if (!portfolioData) {
     return null;
@@ -62,8 +67,10 @@ const PortfolioBreakdownSection: React.FC<PortfolioBreakdownSectionProps> = ({
           {title}
         </ListSubheader>
         {accounts.map((account) => {
-          const roi = calculatePortfolioRoi(account.current_value, account.cost_basis);
-          const isPositive = roi >= 0;
+          const roi = account.current_value !== null && account.cost_basis !== null
+            ? calculatePortfolioRoi(account.current_value, account.cost_basis)
+            : null;
+          const isPositive = roi === null || roi >= 0;
           const isClickable = Boolean(onAccountClick)
             && ['savings', 'real_estate'].includes(account.account_type);
 
@@ -96,7 +103,9 @@ const PortfolioBreakdownSection: React.FC<PortfolioBreakdownSectionProps> = ({
                     <Typography variant="body2" sx={{
                       fontWeight: "600"
                     }}>
-                      {formatCurrencyValue(account.current_value)}
+                      {account.current_value === null
+                        ? t('na', 'N/A')
+                        : formatCurrencyValue(account.current_value)}
                     </Typography>
                   </Box>
                 }
@@ -111,7 +120,7 @@ const PortfolioBreakdownSection: React.FC<PortfolioBreakdownSectionProps> = ({
                       }}>
                       {resolvePortfolioInstitutionName(account.institution, locale)}
                     </Typography>
-                    {account.cost_basis > 0 && (
+                    {account.cost_basis !== null && account.cost_basis > 0 && roi !== null && (
                       <Typography 
                         variant="caption" 
                         sx={{ 

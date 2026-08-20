@@ -1,5 +1,5 @@
 import React from 'react';
-import { Box, Card, Chip, Grid, Skeleton, Typography, Alert } from '@mui/material';
+import { Alert, Box, Button, Card, Chip, Grid, Skeleton, Typography } from '@mui/material';
 import { alpha, useTheme } from '@mui/material/styles';
 import AccountBalanceWalletIcon from '@mui/icons-material/AccountBalanceWallet';
 import AccountBalanceIcon from '@mui/icons-material/AccountBalance';
@@ -12,11 +12,13 @@ import WidgetsIcon from '@mui/icons-material/Widgets';
 import { useFinancePrivacy } from '@app/contexts/FinancePrivacyContext';
 import type { InvestmentBalanceSheetResponse, InvestmentCategoryKey } from '@renderer/types/investments';
 import { useTranslation } from 'react-i18next';
+import { getCurrencyDisplaySymbol } from '../utils/currency-format';
 
 interface BalanceSheetSectionProps {
   data: InvestmentBalanceSheetResponse | null;
   loading: boolean;
   error?: Error | null;
+  onRetry?: () => void;
 }
 
 function formatShortDate(value: string | null): string | null {
@@ -26,15 +28,19 @@ function formatShortDate(value: string | null): string | null {
   return parsed.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
 }
 
-const BalanceSheetSection: React.FC<BalanceSheetSectionProps> = ({ data, loading, error }) => {
+const BalanceSheetSection: React.FC<BalanceSheetSectionProps> = ({ data, loading, error, onRetry }) => {
   const theme = useTheme();
   const { formatCurrency } = useFinancePrivacy();
   const { t } = useTranslation('translation', { keyPrefix: 'investmentsPage.balanceSheet' });
 
-  const formatCurrencyValue = (value: number) =>
-    formatCurrency(value, { absolute: true, maximumFractionDigits: 0 });
+  const formatCurrencyValue = (value: number | null) =>
+    value === null ? t('na') : formatCurrency(value, {
+      absolute: true,
+      maximumFractionDigits: 0,
+      currencySymbol: getCurrencyDisplaySymbol(data?.baseCurrency),
+    });
 
-  if (loading) {
+  if (loading && !data) {
     return (
       <Card sx={{ p: 3, mb: 2 }}>
         <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
@@ -63,9 +69,17 @@ const BalanceSheetSection: React.FC<BalanceSheetSectionProps> = ({ data, loading
     );
   }
 
-  if (error) {
+  if (error && !data) {
     return (
-      <Alert severity="warning" sx={{ mb: 2, borderRadius: 2 }}>
+      <Alert
+        severity="warning"
+        sx={{ mb: 2, borderRadius: 2 }}
+        action={onRetry ? (
+          <Button color="inherit" size="small" onClick={onRetry}>
+            {t('retry')}
+          </Button>
+        ) : undefined}
+      >
         {t('error')}
       </Alert>
     );
@@ -78,19 +92,24 @@ const BalanceSheetSection: React.FC<BalanceSheetSectionProps> = ({ data, loading
   const headlineFormatted =
     data.netWorth === null
       ? formatCurrencyValue(headlineValue)
-      : formatCurrency(headlineValue, { absolute: false, maximumFractionDigits: 0 });
+      : formatCurrency(headlineValue, {
+        absolute: false,
+        maximumFractionDigits: 0,
+        currencySymbol: getCurrencyDisplaySymbol(data.baseCurrency),
+      });
   const updatedLabel =
     formatShortDate(data.assets.newestUpdateDate) || formatShortDate(data.generatedAt) || t('na');
 
   const pendingDebt = data.liabilities.pendingCreditCardDebt;
-  const showDebtUnavailable = pendingDebt === null;
-
   const chips: Array<{ label: string; color?: 'default' | 'warning' | 'error' }> = [];
   if (data.netWorthStatus !== 'ok') {
     chips.push({ label: t('badges.partial'), color: 'warning' });
   }
   if (data.assets.currencies.hasMultiple) {
     chips.push({ label: t('badges.multiCurrency'), color: 'warning' });
+  }
+  if (data.fx && !data.fx.complete) {
+    chips.push({ label: t('badges.missingFx', { count: data.fx.missingCount, defaultValue: `${data.fx.missingCount} missing FX rates` }), color: 'warning' });
   }
   if (data.missingValuationsCount > 0) {
     chips.push({ label: t('badges.missingValues', { count: data.missingValuationsCount }), color: 'warning' });
@@ -194,10 +213,13 @@ const BalanceSheetSection: React.FC<BalanceSheetSectionProps> = ({ data, loading
   };
 
   const liabilityCard = () => {
+    const totalDebt = data.liabilities.total !== undefined
+      ? data.liabilities.total
+      : pendingDebt;
     const debtLabel =
-      pendingDebt === null ? t('liabilities.unavailable') : `-${formatCurrencyValue(pendingDebt)}`;
+      totalDebt === null ? t('liabilities.unavailable') : `-${formatCurrencyValue(totalDebt)}`;
 
-    const debtColor = showDebtUnavailable ? theme.palette.text.secondary : theme.palette.error.main;
+    const debtColor = totalDebt === null ? theme.palette.text.secondary : theme.palette.error.main;
 
     const updated = formatShortDate(data.liabilities.lastCreditCardRepaymentDate);
 
@@ -221,7 +243,7 @@ const BalanceSheetSection: React.FC<BalanceSheetSectionProps> = ({ data, loading
               fontWeight: 700,
               lineHeight: 1.2
             }}>
-            {t('liabilities.pendingCcDebt')}
+              {t('liabilities.totalTracked', 'Tracked liabilities')}
           </Typography>
         </Box>
         <Typography
@@ -236,7 +258,12 @@ const BalanceSheetSection: React.FC<BalanceSheetSectionProps> = ({ data, loading
         <Typography variant="caption" sx={{
           color: "text.secondary"
         }}>
-          {updated ? t('updated', { date: updated }) : t('liabilities.noBaseline')}
+          {data.liabilities.manual?.length
+            ? t('liabilities.components', {
+                manual: data.liabilities.manual.length,
+                defaultValue: `${data.liabilities.manual.length} standalone + pending card debt`,
+              })
+            : updated ? t('updated', { date: updated }) : t('liabilities.noBaseline')}
         </Typography>
       </Card>
     );
@@ -244,6 +271,19 @@ const BalanceSheetSection: React.FC<BalanceSheetSectionProps> = ({ data, loading
 
   return (
     <Card sx={{ p: 3, mb: 2, borderRadius: 3, overflow: 'hidden' }}>
+      {error && (
+        <Alert
+          severity="warning"
+          sx={{ mb: 2, borderRadius: 2 }}
+          action={onRetry ? (
+            <Button color="inherit" size="small" onClick={onRetry}>
+              {t('retry')}
+            </Button>
+          ) : undefined}
+        >
+          {t('staleError')}
+        </Alert>
+      )}
       <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 2, mb: 2 }}>
         <AccountBalanceWalletIcon sx={{ fontSize: 30, color: 'primary.main', mt: 0.25 }} />
         <Box sx={{ flexGrow: 1, minWidth: 0 }}>
@@ -299,6 +339,13 @@ const BalanceSheetSection: React.FC<BalanceSheetSectionProps> = ({ data, loading
           }}>
             {t('footnote')}
           </Typography>
+          {data.assets.nativeTotals && data.assets.nativeTotals.length > 0 && (
+            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 1 }}>
+              {data.assets.nativeTotals
+                .map((item) => `${item.currency} ${item.total.toLocaleString(undefined, { maximumFractionDigits: 0 })}`)
+                .join(' · ')}
+            </Typography>
+          )}
         </Grid>
 
         <Grid size={{ xs: 12, md: 8 }}>
@@ -313,15 +360,18 @@ const BalanceSheetSection: React.FC<BalanceSheetSectionProps> = ({ data, loading
             </Grid>
           </Grid>
 
-          {(data.liabilities.pendingCreditCardDebtStatus !== 'ok' || data.assets.currencies.hasMultiple) && (
+          {(data.liabilities.pendingCreditCardDebtStatus !== 'ok' || data.assets.currencies.hasMultiple || data.fx?.complete === false) && (
             <Box sx={{ mt: 2 }}>
               <Typography variant="caption" sx={{
                 color: "text.secondary"
               }}>
-                {data.assets.currencies.hasMultiple
-                  ? t('hints.multiCurrency', { currencies: data.assets.currencies.distinct.join(', ') })
+                {data.fx?.complete === false
+                  ? t('hints.missingFx', { count: data.fx.missingCount, defaultValue: 'Totals are partial until every dated FX rate is available.' })
+                  : data.assets.currencies.hasMultiple
+                    ? t('hints.multiCurrency', { currencies: data.assets.currencies.distinct.join(', ') })
                   : null}
-                {data.assets.currencies.hasMultiple && data.liabilities.pendingCreditCardDebtStatus !== 'ok' ? ' • ' : null}
+                {(data.fx?.complete === false || data.assets.currencies.hasMultiple)
+                  && data.liabilities.pendingCreditCardDebtStatus !== 'ok' ? ' • ' : null}
                 {data.liabilities.pendingCreditCardDebtStatus !== 'ok' ? t('hints.pendingDebt') : null}
               </Typography>
             </Box>

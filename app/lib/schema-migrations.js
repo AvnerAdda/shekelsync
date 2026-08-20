@@ -19,6 +19,228 @@ const path = require('path');
  * both the schema change and the stamp. A file-level backup of the database
  * is taken before the first pending migration is applied.
  */
+function tableExists(db, tableName) {
+  return Boolean(db.prepare(
+    "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ? LIMIT 1",
+  ).get(tableName));
+}
+
+function addColumnIfMissing(db, tableName, columnName, definition) {
+  if (!tableExists(db, tableName)) return;
+  const columns = db.prepare(`PRAGMA table_info('${tableName}')`).all();
+  if (!columns.some((column) => column?.name === columnName)) {
+    db.exec(`ALTER TABLE ${tableName} ADD COLUMN ${columnName} ${definition}`);
+  }
+}
+
+function createLinkedPositionEventTransactionIndex(db) {
+  if (!tableExists(db, 'investment_position_events')) return;
+
+  // Retain every historical event. If legacy data already contains duplicate
+  // transaction links, keep the earliest event as the canonical claim and
+  // exclude only the later immutable event ids from this partial index.
+  const duplicateRows = db.prepare(`
+    SELECT duplicate_event.id
+    FROM investment_position_events duplicate_event
+    WHERE duplicate_event.linked_transaction_identifier IS NOT NULL
+      AND duplicate_event.linked_transaction_vendor IS NOT NULL
+      AND EXISTS (
+        SELECT 1
+        FROM investment_position_events canonical_event
+        WHERE canonical_event.linked_transaction_identifier = duplicate_event.linked_transaction_identifier
+          AND canonical_event.linked_transaction_vendor = duplicate_event.linked_transaction_vendor
+          AND canonical_event.id < duplicate_event.id
+      )
+    ORDER BY duplicate_event.id
+  `).all();
+  const excludedIds = duplicateRows
+    .map((row) => Number(row?.id))
+    .filter((id) => Number.isSafeInteger(id) && id > 0);
+  const legacyDuplicatePredicate = excludedIds.length > 0
+    ? `AND id NOT IN (${excludedIds.join(', ')})`
+    : '';
+
+  db.exec(`
+    DROP INDEX IF EXISTS idx_investment_position_events_linked_transaction_unique;
+    CREATE UNIQUE INDEX idx_investment_position_events_linked_transaction_unique
+    ON investment_position_events(
+      linked_transaction_identifier,
+      linked_transaction_vendor
+    )
+    WHERE linked_transaction_identifier IS NOT NULL
+      AND linked_transaction_vendor IS NOT NULL
+      ${legacyDuplicatePredicate};
+
+    DROP TRIGGER IF EXISTS trg_position_event_link_unique_insert;
+    CREATE TRIGGER trg_position_event_link_unique_insert
+    BEFORE INSERT ON investment_position_events
+    WHEN NEW.linked_transaction_identifier IS NOT NULL
+      AND NEW.linked_transaction_vendor IS NOT NULL
+      AND EXISTS (
+        SELECT 1
+        FROM investment_position_events existing_event
+        WHERE existing_event.linked_transaction_identifier = NEW.linked_transaction_identifier
+          AND existing_event.linked_transaction_vendor = NEW.linked_transaction_vendor
+      )
+    BEGIN
+      SELECT RAISE(ABORT, 'position event transaction link already exists');
+    END;
+
+    DROP TRIGGER IF EXISTS trg_position_event_link_unique_update;
+    CREATE TRIGGER trg_position_event_link_unique_update
+    BEFORE UPDATE OF linked_transaction_identifier, linked_transaction_vendor
+    ON investment_position_events
+    WHEN NEW.linked_transaction_identifier IS NOT NULL
+      AND NEW.linked_transaction_vendor IS NOT NULL
+      AND EXISTS (
+        SELECT 1
+        FROM investment_position_events existing_event
+        WHERE existing_event.linked_transaction_identifier = NEW.linked_transaction_identifier
+          AND existing_event.linked_transaction_vendor = NEW.linked_transaction_vendor
+          AND existing_event.id <> OLD.id
+      )
+    BEGIN
+      SELECT RAISE(ABORT, 'position event transaction link already exists');
+    END;
+  `);
+}
+
+function createLegacyAssetPositionMirrorTriggers(db) {
+  if (
+    !tableExists(db, 'investment_assets')
+    || !tableExists(db, 'investment_positions')
+    || !tableExists(db, 'investment_position_events')
+  ) return;
+
+  const upsertPositionSql = (assetReference) => `
+    INSERT INTO investment_positions (
+      account_id,
+      position_name,
+      asset_symbol,
+      asset_type,
+      currency,
+      status,
+      opened_at,
+      closed_at,
+      units,
+      average_cost,
+      current_price,
+      valuation_date,
+      source,
+      legacy_asset_id,
+      original_cost_basis,
+      open_cost_basis,
+      current_value,
+      notes
+    ) VALUES (
+      ${assetReference}.account_id,
+      ${assetReference}.asset_name,
+      ${assetReference}.asset_symbol,
+      ${assetReference}.asset_type,
+      COALESCE(NULLIF(TRIM(${assetReference}.currency), ''), 'USD'),
+      CASE WHEN COALESCE(${assetReference}.is_active, 1) = 1 THEN 'open' ELSE 'closed' END,
+      COALESCE(substr(${assetReference}.created_at, 1, 10), date('now')),
+      CASE WHEN COALESCE(${assetReference}.is_active, 1) = 1
+        THEN NULL
+        ELSE COALESCE(substr(${assetReference}.updated_at, 1, 10), date('now'))
+      END,
+      COALESCE(${assetReference}.units, 0),
+      ${assetReference}.average_cost,
+      COALESCE(${assetReference}.current_price,
+        CASE WHEN ${assetReference}.asset_type = 'cash' THEN 1 ELSE NULL END),
+      COALESCE(${assetReference}.valuation_date, substr(${assetReference}.updated_at, 1, 10)),
+      'legacy_asset',
+      ${assetReference}.id,
+      COALESCE(
+        ${assetReference}.cost_basis,
+        CASE
+          WHEN ${assetReference}.average_cost IS NOT NULL
+            THEN COALESCE(${assetReference}.units, 0) * ${assetReference}.average_cost
+          WHEN ${assetReference}.asset_type = 'cash' THEN COALESCE(${assetReference}.units, 0)
+          ELSE 0
+        END
+      ),
+      COALESCE(
+        ${assetReference}.cost_basis,
+        CASE
+          WHEN ${assetReference}.average_cost IS NOT NULL
+            THEN COALESCE(${assetReference}.units, 0) * ${assetReference}.average_cost
+          WHEN ${assetReference}.asset_type = 'cash' THEN COALESCE(${assetReference}.units, 0)
+          ELSE 0
+        END
+      ),
+      COALESCE(
+        ${assetReference}.current_value,
+        CASE
+          WHEN ${assetReference}.current_price IS NOT NULL
+            THEN COALESCE(${assetReference}.units, 0) * ${assetReference}.current_price
+          WHEN ${assetReference}.asset_type = 'cash' THEN COALESCE(${assetReference}.units, 0)
+          ELSE NULL
+        END
+      ),
+      ${assetReference}.notes
+    )
+    ON CONFLICT (legacy_asset_id) WHERE legacy_asset_id IS NOT NULL
+    DO UPDATE SET
+      account_id = excluded.account_id,
+      position_name = excluded.position_name,
+      asset_symbol = excluded.asset_symbol,
+      asset_type = excluded.asset_type,
+      currency = excluded.currency,
+      status = excluded.status,
+      closed_at = excluded.closed_at,
+      units = excluded.units,
+      average_cost = excluded.average_cost,
+      current_price = excluded.current_price,
+      valuation_date = excluded.valuation_date,
+      source = excluded.source,
+      original_cost_basis = excluded.original_cost_basis,
+      open_cost_basis = excluded.open_cost_basis,
+      current_value = excluded.current_value,
+      notes = excluded.notes,
+      updated_at = CURRENT_TIMESTAMP
+    WHERE NOT EXISTS (
+      SELECT 1
+      FROM investment_position_events event
+      WHERE event.position_id = investment_positions.id
+    );
+  `;
+
+  db.exec('DROP TRIGGER IF EXISTS trg_investment_assets_position_insert');
+  db.exec('DROP TRIGGER IF EXISTS trg_investment_assets_position_update');
+  db.exec('DROP TRIGGER IF EXISTS trg_investment_assets_position_delete');
+  db.exec(`
+    CREATE TRIGGER trg_investment_assets_position_insert
+    AFTER INSERT ON investment_assets
+    BEGIN
+      ${upsertPositionSql('NEW')}
+    END;
+  `);
+  db.exec(`
+    CREATE TRIGGER trg_investment_assets_position_update
+    AFTER UPDATE ON investment_assets
+    BEGIN
+      ${upsertPositionSql('NEW')}
+    END;
+  `);
+  db.exec(`
+    CREATE TRIGGER trg_investment_assets_position_delete
+    AFTER DELETE ON investment_assets
+    BEGIN
+      UPDATE investment_positions
+      SET status = 'closed',
+          closed_at = COALESCE(substr(OLD.updated_at, 1, 10), date('now')),
+          updated_at = CURRENT_TIMESTAMP
+      WHERE legacy_asset_id = OLD.id
+        AND NOT EXISTS (
+          SELECT 1
+          FROM investment_position_events event
+          WHERE event.position_id = investment_positions.id
+        );
+    END;
+  `);
+}
+
 const MIGRATIONS = [
   {
     version: 1,
@@ -29,6 +251,226 @@ const MIGRATIONS = [
     // installs), which run before this.
     mutatesSchema: false,
     up: () => {},
+  },
+  {
+    version: 2,
+    name: 'canonical-investment-position-ledger',
+    up: (db) => {
+      addColumnIfMissing(db, 'investment_assets', 'current_price', 'REAL');
+      addColumnIfMissing(db, 'investment_assets', 'current_value', 'REAL');
+      addColumnIfMissing(db, 'investment_assets', 'cost_basis', 'REAL');
+      addColumnIfMissing(db, 'investment_assets', 'valuation_date', 'TEXT');
+
+      addColumnIfMissing(db, 'investment_positions', 'asset_symbol', 'TEXT');
+      addColumnIfMissing(db, 'investment_positions', 'units', 'REAL NOT NULL DEFAULT 0');
+      addColumnIfMissing(db, 'investment_positions', 'average_cost', 'REAL');
+      addColumnIfMissing(db, 'investment_positions', 'current_price', 'REAL');
+      addColumnIfMissing(db, 'investment_positions', 'valuation_date', 'TEXT');
+      addColumnIfMissing(db, 'investment_positions', 'source', "TEXT NOT NULL DEFAULT 'manual'");
+      addColumnIfMissing(db, 'investment_positions', 'legacy_asset_id', 'INTEGER');
+
+      addColumnIfMissing(db, 'investment_position_events', 'tax_amount', 'REAL');
+      addColumnIfMissing(db, 'investment_position_events', 'proceeds_amount', 'REAL');
+      addColumnIfMissing(db, 'investment_position_events', 'disposed_cost_basis', 'REAL');
+      addColumnIfMissing(db, 'investment_position_events', 'realized_gain_loss', 'REAL');
+      addColumnIfMissing(db, 'investment_position_events', 'reinvested', 'INTEGER NOT NULL DEFAULT 0');
+      addColumnIfMissing(db, 'investment_position_events', 'deducted_from_position', 'INTEGER NOT NULL DEFAULT 0');
+      addColumnIfMissing(db, 'investment_position_events', 'current_price', 'REAL');
+
+      if (tableExists(db, 'investment_positions')) {
+        db.exec(`
+          CREATE UNIQUE INDEX IF NOT EXISTS idx_investment_positions_legacy_asset
+          ON investment_positions(legacy_asset_id)
+          WHERE legacy_asset_id IS NOT NULL
+        `);
+      }
+
+      if (
+        tableExists(db, 'investment_assets')
+        && tableExists(db, 'investment_positions')
+        && tableExists(db, 'investment_accounts')
+      ) {
+        db.exec(`
+          INSERT INTO investment_positions (
+            account_id,
+            position_name,
+            asset_symbol,
+            asset_type,
+            currency,
+            status,
+            opened_at,
+            closed_at,
+            units,
+            average_cost,
+            current_price,
+            valuation_date,
+            source,
+            legacy_asset_id,
+            original_cost_basis,
+            open_cost_basis,
+            current_value,
+            notes
+          )
+          SELECT
+            asset.account_id,
+            asset.asset_name,
+            asset.asset_symbol,
+            asset.asset_type,
+            COALESCE(NULLIF(TRIM(asset.currency), ''), account.currency, 'USD'),
+            CASE WHEN COALESCE(asset.is_active, 1) = 1 THEN 'open' ELSE 'closed' END,
+            COALESCE(substr(asset.created_at, 1, 10), date('now')),
+            CASE WHEN COALESCE(asset.is_active, 1) = 1
+              THEN NULL
+              ELSE COALESCE(substr(asset.updated_at, 1, 10), date('now'))
+            END,
+            COALESCE(asset.units, 0),
+            asset.average_cost,
+            COALESCE(asset.current_price, CASE WHEN asset.asset_type = 'cash' THEN 1 ELSE NULL END),
+            COALESCE(asset.valuation_date, substr(asset.updated_at, 1, 10)),
+            'legacy_asset',
+            asset.id,
+            COALESCE(
+              asset.cost_basis,
+              CASE
+                WHEN asset.average_cost IS NOT NULL THEN COALESCE(asset.units, 0) * asset.average_cost
+                WHEN asset.asset_type = 'cash' THEN COALESCE(asset.units, 0)
+                ELSE 0
+              END
+            ),
+            COALESCE(
+              asset.cost_basis,
+              CASE
+                WHEN asset.average_cost IS NOT NULL THEN COALESCE(asset.units, 0) * asset.average_cost
+                WHEN asset.asset_type = 'cash' THEN COALESCE(asset.units, 0)
+                ELSE 0
+              END
+            ),
+            COALESCE(
+              asset.current_value,
+              CASE
+                WHEN asset.current_price IS NOT NULL THEN COALESCE(asset.units, 0) * asset.current_price
+                WHEN asset.asset_type = 'cash' THEN COALESCE(asset.units, 0)
+                ELSE NULL
+              END
+            ),
+            asset.notes
+          FROM investment_assets asset
+          JOIN investment_accounts account ON account.id = asset.account_id
+          WHERE NOT EXISTS (
+            SELECT 1
+            FROM investment_positions position
+            WHERE position.legacy_asset_id = asset.id
+          )
+        `);
+
+        createLegacyAssetPositionMirrorTriggers(db);
+      }
+    },
+  },
+  {
+    version: 3,
+    name: 'investment-completeness-settings',
+    up: (db) => {
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS investment_allocation_targets (
+          scope TEXT NOT NULL,
+          category TEXT NOT NULL,
+          target_percentage REAL NOT NULL CHECK (target_percentage >= 0 AND target_percentage <= 100),
+          created_at TEXT NOT NULL DEFAULT (datetime('now')),
+          updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+          PRIMARY KEY (scope, category)
+        );
+
+        CREATE TABLE IF NOT EXISTS investment_liabilities (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          liability_name TEXT NOT NULL,
+          liability_type TEXT NOT NULL DEFAULT 'other',
+          balance REAL NOT NULL CHECK (balance >= 0),
+          currency TEXT NOT NULL DEFAULT 'ILS',
+          interest_rate REAL,
+          monthly_payment REAL,
+          as_of_date TEXT NOT NULL,
+          included_in_net_worth INTEGER NOT NULL DEFAULT 1 CHECK (included_in_net_worth IN (0, 1)),
+          notes TEXT,
+          is_active INTEGER NOT NULL DEFAULT 1 CHECK (is_active IN (0, 1)),
+          created_at TEXT NOT NULL DEFAULT (datetime('now')),
+          updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+        );
+
+        CREATE TABLE IF NOT EXISTS investment_fx_preferences (
+          id INTEGER PRIMARY KEY CHECK (id = 1),
+          base_currency TEXT NOT NULL DEFAULT 'ILS',
+          updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+        );
+
+        CREATE TABLE IF NOT EXISTS investment_fx_rates (
+          rate_date TEXT NOT NULL,
+          from_currency TEXT NOT NULL,
+          to_currency TEXT NOT NULL,
+          rate REAL NOT NULL CHECK (rate > 0),
+          source TEXT NOT NULL DEFAULT 'manual',
+          created_at TEXT NOT NULL DEFAULT (datetime('now')),
+          updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+          PRIMARY KEY (rate_date, from_currency, to_currency)
+        );
+
+        CREATE TABLE IF NOT EXISTS investment_benchmarks (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          name TEXT NOT NULL,
+          currency TEXT NOT NULL DEFAULT 'ILS',
+          is_total_return INTEGER NOT NULL DEFAULT 0 CHECK (is_total_return IN (0, 1)),
+          source TEXT NOT NULL,
+          source_version TEXT,
+          is_default INTEGER NOT NULL DEFAULT 0 CHECK (is_default IN (0, 1)),
+          created_at TEXT NOT NULL DEFAULT (datetime('now')),
+          updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+        );
+
+        CREATE TABLE IF NOT EXISTS investment_benchmark_points (
+          benchmark_id INTEGER NOT NULL,
+          point_date TEXT NOT NULL,
+          point_value REAL NOT NULL CHECK (point_value > 0),
+          created_at TEXT NOT NULL DEFAULT (datetime('now')),
+          PRIMARY KEY (benchmark_id, point_date),
+          FOREIGN KEY (benchmark_id) REFERENCES investment_benchmarks(id) ON DELETE CASCADE
+        );
+
+        INSERT INTO investment_fx_preferences (id, base_currency)
+        VALUES (1, 'ILS')
+        ON CONFLICT (id) DO NOTHING;
+
+        CREATE INDEX IF NOT EXISTS idx_investment_liabilities_active
+          ON investment_liabilities(is_active, as_of_date DESC);
+        CREATE INDEX IF NOT EXISTS idx_investment_fx_rates_lookup
+          ON investment_fx_rates(from_currency, to_currency, rate_date DESC);
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_investment_benchmarks_default
+          ON investment_benchmarks(is_default) WHERE is_default = 1;
+        CREATE INDEX IF NOT EXISTS idx_investment_benchmark_points_date
+          ON investment_benchmark_points(benchmark_id, point_date ASC);
+      `);
+    },
+  },
+  {
+    version: 4,
+    name: 'auditable-position-prices-and-safe-legacy-mirror',
+    up: (db) => {
+      addColumnIfMissing(db, 'investment_position_events', 'current_price', 'REAL');
+      if (tableExists(db, 'investment_position_events')) {
+        db.exec(`
+          DROP INDEX IF EXISTS idx_position_events_position;
+          CREATE INDEX IF NOT EXISTS idx_investment_position_events_position
+          ON investment_position_events(position_id, effective_date DESC);
+        `);
+      }
+      createLegacyAssetPositionMirrorTriggers(db);
+    },
+  },
+  {
+    version: 5,
+    name: 'unique-position-event-transaction-links',
+    up: (db) => {
+      createLinkedPositionEventTransactionIndex(db);
+    },
   },
 ];
 

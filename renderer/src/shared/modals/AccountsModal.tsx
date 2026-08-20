@@ -354,9 +354,16 @@ interface AccountsModalProps {
 
 export type AccountsModalTabRequest = 'bank' | 'credit' | 'banking' | 'investments';
 
+export const extractCurrentInvestmentAssets = (data: unknown): any[] => {
+  const payload = data as { assets?: unknown } | null | undefined;
+  return Array.isArray(payload?.assets) ? payload.assets : [];
+};
+
 export interface AccountsModalOpenRequest {
   tab?: AccountsModalTabRequest;
   addFlow?: boolean;
+  valuationAccountId?: number;
+  editInvestmentAccountId?: number;
 }
 
 export const getBankingAccountValidationError = (
@@ -948,8 +955,16 @@ export default function AccountsModal({ isOpen, onClose, openRequest }: Accounts
 
   // Additional modal states for new features
   const [showValueUpdateModal, setShowValueUpdateModal] = useState(false);
+  const [editingInvestmentAccount, setEditingInvestmentAccount] = useState<InvestmentAccount | null>(null);
+  const [investmentAccountEditDraft, setInvestmentAccountEditDraft] = useState({
+    accountName: '',
+    currency: '',
+    accountNumber: '',
+    notes: '',
+  });
+  const [investmentAccountEditError, setInvestmentAccountEditError] = useState<string | null>(null);
+  const [savingInvestmentAccountEdit, setSavingInvestmentAccountEdit] = useState(false);
   const [showAssetModal, setShowAssetModal] = useState(false);
-  const [assetTab, setAssetTab] = useState(0);
   const [isAddingAsset, setIsAddingAsset] = useState(false);
   const [showSmartForm, setShowSmartForm] = useState(false);
   const [selectedSuggestion, setSelectedSuggestion] = useState<any>(null);
@@ -973,10 +988,11 @@ export default function AccountsModal({ isOpen, onClose, openRequest }: Accounts
     currency: 'ILS',
     notes: '',
   });
+  const handledValuationRequestRef = useRef<number | null>(null);
+  const handledAccountEditRequestRef = useRef<number | null>(null);
 
   // Asset tracking state
   const [assets, setAssets] = useState<any[]>([]);
-  const [assetHistory, setAssetHistory] = useState<any[]>([]);
   const [newAsset, setNewAsset] = useState({
     accountId: '',
     symbol: '',
@@ -1833,8 +1849,9 @@ export default function AccountsModal({ isOpen, onClose, openRequest }: Accounts
   }, [selectedAccount, institutionMap]);
 
   // Helper to fetch last holding and calculate default values
-  const fetchLastHoldingData = async (accountId: string) => {
+  const fetchLastHoldingData = useCallback(async (accountId: string) => {
     try {
+      const account = investmentAccounts.find(acc => acc.id?.toString() === accountId);
       // Fetch last holding record
       const holdingsResponse = await apiClient.get(`/api/investments/holdings?account_id=${accountId}&includeHistory=false`);
 
@@ -1845,15 +1862,14 @@ export default function AccountsModal({ isOpen, onClose, openRequest }: Accounts
         if (lastHolding) {
           // Pre-fill with last recorded values
           return {
-            currentValue: lastHolding.current_value?.toString() || '',
-            costBasis: lastHolding.cost_basis?.toString() || '',
-            currency: lastHolding.currency || 'ILS',
+            currentValue: lastHolding.current_value == null ? '' : String(lastHolding.current_value),
+            costBasis: lastHolding.cost_basis == null ? '' : String(lastHolding.cost_basis),
+            currency: account?.currency || lastHolding.currency || 'ILS',
           };
         }
       }
 
       // If no holdings exist, calculate cost basis from linked transactions
-      const account = investmentAccounts.find(acc => acc.id?.toString() === accountId);
       if (account && account.total_invested) {
         return {
           currentValue: '',
@@ -1866,7 +1882,111 @@ export default function AccountsModal({ isOpen, onClose, openRequest }: Accounts
     }
 
     return null;
-  };
+  }, [investmentAccounts]);
+
+  const openValueUpdateForAccount = useCallback(async (account: InvestmentAccount) => {
+    const accountId = account.id?.toString() || '';
+    if (!accountId) return;
+    const lastData = await fetchLastHoldingData(accountId);
+    setValueUpdate({
+      accountId,
+      currentValue: lastData?.currentValue || '',
+      costBasis: lastData?.costBasis || '',
+      currency: account.currency || lastData?.currency || 'ILS',
+      asOfDate: new Date().toISOString().split('T')[0],
+      notes: '',
+    });
+    setShowValueUpdateModal(true);
+  }, [fetchLastHoldingData]);
+
+  const openInvestmentAccountEditor = useCallback((account: InvestmentAccount) => {
+    setEditingInvestmentAccount(account);
+    setInvestmentAccountEditDraft({
+      accountName: account.account_name || '',
+      currency: account.currency || '',
+      accountNumber: account.account_number || '',
+      notes: account.notes || '',
+    });
+    setInvestmentAccountEditError(null);
+  }, []);
+
+  const closeInvestmentAccountEditor = useCallback(() => {
+    if (savingInvestmentAccountEdit) return;
+    setEditingInvestmentAccount(null);
+    setInvestmentAccountEditError(null);
+  }, [savingInvestmentAccountEdit]);
+
+  const handleInvestmentAccountEdit = useCallback(async () => {
+    if (!editingInvestmentAccount?.id) return;
+    const accountName = investmentAccountEditDraft.accountName.trim();
+    const currency = investmentAccountEditDraft.currency.trim().toUpperCase();
+    if (!accountName) {
+      setInvestmentAccountEditError(t('investmentEdit.errors.nameRequired'));
+      return;
+    }
+    if (!/^[A-Z]{3}$/.test(currency)) {
+      setInvestmentAccountEditError(t('investmentEdit.errors.currencyInvalid'));
+      return;
+    }
+
+    setSavingInvestmentAccountEdit(true);
+    setInvestmentAccountEditError(null);
+    try {
+      const response = await apiClient.put('/api/investments/accounts', {
+        id: editingInvestmentAccount.id,
+        account_name: accountName,
+        currency,
+        account_number: investmentAccountEditDraft.accountNumber.trim() || null,
+        notes: investmentAccountEditDraft.notes.trim() || null,
+      });
+      if (!response.ok) {
+        const payload = response.data as { error?: string } | null;
+        throw new Error(payload?.error || response.statusText || t('investmentEdit.errors.saveFailed'));
+      }
+      setEditingInvestmentAccount(null);
+      await fetchInvestmentAccounts();
+      window.dispatchEvent(new CustomEvent('dataRefresh'));
+      showNotification(t('investmentEdit.updated'), 'success');
+    } catch (editError) {
+      setInvestmentAccountEditError(
+        editError instanceof Error ? editError.message : t('investmentEdit.errors.saveFailed'),
+      );
+    } finally {
+      setSavingInvestmentAccountEdit(false);
+    }
+  }, [
+    editingInvestmentAccount?.id,
+    fetchInvestmentAccounts,
+    investmentAccountEditDraft,
+    showNotification,
+    t,
+  ]);
+
+  useEffect(() => {
+    if (!isOpen) {
+      handledValuationRequestRef.current = null;
+      return;
+    }
+    const accountId = Number(openRequest?.valuationAccountId);
+    if (!Number.isFinite(accountId) || handledValuationRequestRef.current === accountId) return;
+    const account = investmentAccounts.find((item) => Number(item.id) === accountId);
+    if (!account) return;
+    handledValuationRequestRef.current = accountId;
+    void openValueUpdateForAccount(account);
+  }, [investmentAccounts, isOpen, openRequest?.valuationAccountId, openValueUpdateForAccount]);
+
+  useEffect(() => {
+    if (!isOpen) {
+      handledAccountEditRequestRef.current = null;
+      return;
+    }
+    const accountId = Number(openRequest?.editInvestmentAccountId);
+    if (!Number.isFinite(accountId) || handledAccountEditRequestRef.current === accountId) return;
+    const account = investmentAccounts.find((item) => Number(item.id) === accountId);
+    if (!account) return;
+    handledAccountEditRequestRef.current = accountId;
+    openInvestmentAccountEditor(account);
+  }, [investmentAccounts, isOpen, openInvestmentAccountEditor, openRequest?.editInvestmentAccountId]);
 
   // Handler for value update modal
   const handleValueUpdate = async () => {
@@ -1881,7 +2001,6 @@ export default function AccountsModal({ isOpen, onClose, openRequest }: Accounts
         current_value: parseFloat(valueUpdate.currentValue),
         cost_basis: valueUpdate.costBasis ? parseFloat(valueUpdate.costBasis) : null,
         as_of_date: valueUpdate.asOfDate,
-        currency: valueUpdate.currency,
         notes: valueUpdate.notes,
       });
 
@@ -1947,14 +2066,14 @@ export default function AccountsModal({ isOpen, onClose, openRequest }: Accounts
     }
   };
 
-  // Function to load assets and asset history
+  // Load the current asset inventory. The legacy assets endpoint does not
+  // provide a historical time series; account valuation history lives under
+  // the holdings workflow instead.
   const fetchAssets = async () => {
     try {
       const response = await apiClient.get('/api/investments/assets');
       if (response.ok) {
-        const data = response.data as any;
-        setAssets(Array.isArray(data?.assets) ? data.assets : []);
-        setAssetHistory(Array.isArray(data?.history) ? data.history : []);
+        setAssets(extractCurrentInvestmentAssets(response.data));
       }
     } catch (error) {
       console.error('Error fetching assets:', error);
@@ -2101,16 +2220,20 @@ export default function AccountsModal({ isOpen, onClose, openRequest }: Accounts
                 <TableCell sx={{ py: 2 }}>
                   <Box>
                     <Typography variant="body2" sx={{ fontFamily: 'monospace', fontWeight: 600 }}>
-                      {account.current_value
+                      {account.current_value !== null && account.current_value !== undefined
                         ? `${account.currency} ${account.current_value.toLocaleString()}`
                         : t('tables.investment.notSet')
                       }
                     </Typography>
-                    {account.current_value && !(account as any).current_value_explicit && (
-                      <Typography variant="caption" sx={{ color: 'text.secondary', fontSize: '0.65rem', fontStyle: 'italic' }}>
-                        {t('tables.investment.fromTransactions')}
-                      </Typography>
-                    )}
+                    {account.current_value !== null
+                      && account.current_value !== undefined
+                      && ((account as any).current_value_explicit === null
+                        || (account as any).current_value_explicit === undefined)
+                      && (
+                        <Typography variant="caption" sx={{ color: 'text.secondary', fontSize: '0.65rem', fontStyle: 'italic' }}>
+                          {t('tables.investment.fromTransactions')}
+                        </Typography>
+                      )}
                   </Box>
                 </TableCell>
                 <TableCell sx={{ py: 2 }}>
@@ -2130,22 +2253,7 @@ export default function AccountsModal({ isOpen, onClose, openRequest }: Accounts
                   <Box sx={{ display: 'flex', gap: 0.5, justifyContent: 'flex-end' }}>
                     <Tooltip title={t('tooltips.addValueUpdate')}>
                       <IconButton
-                        onClick={async () => {
-                          const accountId = account.id?.toString() || '';
-
-                          // Fetch last holding data to pre-fill the form
-                          const lastData = await fetchLastHoldingData(accountId);
-
-                          setValueUpdate({
-                            accountId,
-                            currentValue: lastData?.currentValue || '',
-                            costBasis: lastData?.costBasis || '',
-                            currency: lastData?.currency || 'ILS',
-                            asOfDate: new Date().toISOString().split('T')[0],
-                            notes: '',
-                          });
-                          setShowValueUpdateModal(true);
-                        }}
+                        onClick={() => void openValueUpdateForAccount(account)}
                         color="success"
                         size="small"
                         sx={{
@@ -2156,6 +2264,21 @@ export default function AccountsModal({ isOpen, onClose, openRequest }: Accounts
                         }}
                       >
                         <TrendingUpIcon fontSize="small" />
+                      </IconButton>
+                    </Tooltip>
+                    <Tooltip title={t('tooltips.editInvestmentAccount')}>
+                      <IconButton
+                        onClick={() => openInvestmentAccountEditor(account)}
+                        color="primary"
+                        size="small"
+                        sx={{
+                          transition: 'all 0.2s ease-in-out',
+                          '&:hover': {
+                            transform: 'scale(1.1)',
+                          },
+                        }}
+                      >
+                        <EditIcon fontSize="small" />
                       </IconButton>
                     </Tooltip>
                     {account.account_type === 'real_estate' && (
@@ -2191,7 +2314,7 @@ export default function AccountsModal({ isOpen, onClose, openRequest }: Accounts
                             },
                           }}
                         >
-                          <EditIcon fontSize="small" />
+                          <PortfolioIcon fontSize="small" />
                         </IconButton>
                       </Tooltip>
                     )}
@@ -3568,6 +3691,110 @@ export default function AccountsModal({ isOpen, onClose, openRequest }: Accounts
           )}
         </DialogContent>
       </Dialog>
+      {/* Investment Account Details Modal */}
+      <Dialog
+        open={Boolean(editingInvestmentAccount)}
+        onClose={closeInvestmentAccountEditor}
+        maxWidth="sm"
+        fullWidth
+        slotProps={{
+          paper: {
+            sx: {
+              borderRadius: '16px',
+              boxShadow: (theme) => theme.palette.mode === 'dark'
+                ? '0 20px 60px rgba(0, 0, 0, 0.7)'
+                : '0 20px 60px rgba(0, 0, 0, 0.15)',
+            },
+          },
+        }}
+      >
+        <DialogTitle>
+          {t('investmentEdit.title')}
+          <IconButton
+            onClick={closeInvestmentAccountEditor}
+            disabled={savingInvestmentAccountEdit}
+            sx={{ position: 'absolute', right: 8, top: 8 }}
+          >
+            <CloseIcon />
+          </IconButton>
+        </DialogTitle>
+        <DialogContent>
+          <Box sx={{ pt: 2 }}>
+            {investmentAccountEditError && (
+              <Alert severity="error" sx={{ mb: 2 }}>
+                {investmentAccountEditError}
+              </Alert>
+            )}
+            <Grid container spacing={2}>
+              <Grid size={{ xs: 12 }}>
+                <TextField
+                  fullWidth
+                  required
+                  autoFocus
+                  label={t('fields.accountName')}
+                  value={investmentAccountEditDraft.accountName}
+                  onChange={(event) => setInvestmentAccountEditDraft((current) => ({
+                    ...current,
+                    accountName: event.target.value,
+                  }))}
+                />
+              </Grid>
+              <Grid size={{ xs: 12, sm: 5 }}>
+                <TextField
+                  fullWidth
+                  required
+                  label={t('fields.currency')}
+                  value={investmentAccountEditDraft.currency}
+                  onChange={(event) => setInvestmentAccountEditDraft((current) => ({
+                    ...current,
+                    currency: event.target.value.toUpperCase().slice(0, 3),
+                  }))}
+                  helperText={t('investmentEdit.currencyHelper')}
+                  slotProps={{ htmlInput: { maxLength: 3 } }}
+                />
+              </Grid>
+              <Grid size={{ xs: 12, sm: 7 }}>
+                <TextField
+                  fullWidth
+                  label={t('fields.accountNumber')}
+                  value={investmentAccountEditDraft.accountNumber}
+                  onChange={(event) => setInvestmentAccountEditDraft((current) => ({
+                    ...current,
+                    accountNumber: event.target.value,
+                  }))}
+                />
+              </Grid>
+              <Grid size={{ xs: 12 }}>
+                <TextField
+                  fullWidth
+                  multiline
+                  minRows={3}
+                  label={t('fields.notes')}
+                  value={investmentAccountEditDraft.notes}
+                  onChange={(event) => setInvestmentAccountEditDraft((current) => ({
+                    ...current,
+                    notes: event.target.value,
+                  }))}
+                />
+              </Grid>
+            </Grid>
+          </Box>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={closeInvestmentAccountEditor} disabled={savingInvestmentAccountEdit}>
+            {t('actions.cancel')}
+          </Button>
+          <Button
+            onClick={() => void handleInvestmentAccountEdit()}
+            variant="contained"
+            disabled={savingInvestmentAccountEdit}
+          >
+            {savingInvestmentAccountEdit
+              ? t('investmentEdit.saving')
+              : t('investmentEdit.save')}
+          </Button>
+        </DialogActions>
+      </Dialog>
       {/* Value Update Modal */}
       <Dialog 
         open={showValueUpdateModal} 
@@ -3603,7 +3830,15 @@ export default function AccountsModal({ isOpen, onClose, openRequest }: Accounts
                   select
                   label={t('fields.investmentAccount')}
                   value={valueUpdate.accountId}
-                  onChange={(e) => setValueUpdate({ ...valueUpdate, accountId: e.target.value })}
+                  onChange={(e) => {
+                    const accountId = e.target.value;
+                    const account = investmentAccounts.find((item) => String(item.id) === String(accountId));
+                    setValueUpdate({
+                      ...valueUpdate,
+                      accountId,
+                      currency: account?.currency || 'ILS',
+                    });
+                  }}
                   required
                 >
                   {investmentAccounts.map((account) => (
@@ -3623,7 +3858,11 @@ export default function AccountsModal({ isOpen, onClose, openRequest }: Accounts
                   required
                   slotProps={{
                     input: {
-                      startAdornment: <InputAdornment position="start">₪</InputAdornment>,
+                      startAdornment: (
+                        <InputAdornment position="start">
+                          {valueUpdate.currency === 'ILS' ? '₪' : valueUpdate.currency}
+                        </InputAdornment>
+                      ),
                     }
                   }}
                 />
@@ -3651,7 +3890,11 @@ export default function AccountsModal({ isOpen, onClose, openRequest }: Accounts
                   helperText={t('valueModal.costBasisHelper')}
                   slotProps={{
                     input: {
-                      startAdornment: <InputAdornment position="start">₪</InputAdornment>,
+                      startAdornment: (
+                        <InputAdornment position="start">
+                          {valueUpdate.currency === 'ILS' ? '₪' : valueUpdate.currency}
+                        </InputAdornment>
+                      ),
                     }
                   }}
                 />
@@ -3662,7 +3905,8 @@ export default function AccountsModal({ isOpen, onClose, openRequest }: Accounts
                   select
                   label={t('fields.currency')}
                   value={valueUpdate.currency}
-                  onChange={(e) => setValueUpdate({ ...valueUpdate, currency: e.target.value })}
+                  disabled
+                  helperText={t('valueModal.accountCurrency', 'Valuations use the investment account currency.')}
                 >
                   <MenuItem value="ILS">ILS (₪)</MenuItem>
                   <MenuItem value="USD">USD ($)</MenuItem>
@@ -3722,13 +3966,7 @@ export default function AccountsModal({ isOpen, onClose, openRequest }: Accounts
         </DialogTitle>
         <DialogContent>
           <Box sx={{ pt: 2 }}>
-            <Tabs value={assetTab} onChange={(e, v) => setAssetTab(v)} sx={{ mb: 3 }}>
-                  <Tab label={t('tabs.individualAssets')} />
-                  <Tab label={t('tabs.assetHistory')} />
-            </Tabs>
-
-            {assetTab === 0 && (
-              <Box>
+            <Box>
                 <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
                   <Typography variant="h6">{t('assets.title')}</Typography>
                   <Button
@@ -3797,7 +4035,11 @@ export default function AccountsModal({ isOpen, onClose, openRequest }: Accounts
                             onChange={(e) => setNewAsset({ ...newAsset, avgPrice: e.target.value })}
                             slotProps={{
                               input: {
-                                startAdornment: <InputAdornment position="start">$</InputAdornment>,
+                                startAdornment: (
+                                  <InputAdornment position="start">
+                                    {investmentAccounts.find((item) => String(item.id) === String(newAsset.accountId))?.currency || 'USD'}
+                                  </InputAdornment>
+                                ),
                               }
                             }}
                           />
@@ -3848,14 +4090,22 @@ export default function AccountsModal({ isOpen, onClose, openRequest }: Accounts
                           <TableRow key={asset.id}>
                             <TableCell sx={{ fontWeight: 500 }}>{asset.symbol}</TableCell>
                             <TableCell align="right">{asset.quantity}</TableCell>
-                            <TableCell align="right">${asset.avg_price}</TableCell>
                             <TableCell align="right">
-                              ${(asset.quantity * asset.avg_price).toLocaleString()}
+                              {asset.avg_price == null ? '—' : `${asset.currency || ''} ${Number(asset.avg_price).toLocaleString()}`}
+                            </TableCell>
+                            <TableCell align="right">
+                              {asset.current_value == null
+                                ? t('tables.investment.notSet')
+                                : `${asset.currency || ''} ${Number(asset.current_value).toLocaleString()}`}
                             </TableCell>
                             <TableCell>
                               {investmentAccounts.find(acc => acc.id === asset.account_id)?.account_name}
                             </TableCell>
-                            <TableCell>{new Date(asset.as_of_date).toLocaleDateString()}</TableCell>
+                            <TableCell>
+                              {asset.as_of_date || asset.updated_at
+                                ? new Date(asset.as_of_date || asset.updated_at).toLocaleDateString()
+                                : '—'}
+                            </TableCell>
                           </TableRow>
                         ))}
                       </TableBody>
@@ -3866,50 +4116,7 @@ export default function AccountsModal({ isOpen, onClose, openRequest }: Accounts
                     <Typography>{t('assets.empty')}</Typography>
                   </Box>
                 )}
-              </Box>
-            )}
-
-            {assetTab === 1 && (
-              <Box>
-                <Typography variant="h6" gutterBottom>{t('assets.historyTitle')}</Typography>
-                {assetHistory.length > 0 ? (
-                  <TableContainer component={Paper}>
-                    <Table size="small">
-                      <TableHead>
-                        <TableRow>
-                          <TableCell>{t('assets.table.date')}</TableCell>
-                          <TableCell>{t('assets.table.account')}</TableCell>
-                          <TableCell>{t('assets.table.symbol')}</TableCell>
-                          <TableCell align="right">{t('assets.table.quantity')}</TableCell>
-                          <TableCell align="right">{t('assets.table.price')}</TableCell>
-                          <TableCell align="right">{t('assets.table.totalValue')}</TableCell>
-                        </TableRow>
-                      </TableHead>
-                      <TableBody>
-                        {assetHistory.map((record) => (
-                          <TableRow key={record.id}>
-                            <TableCell>{new Date(record.as_of_date).toLocaleDateString()}</TableCell>
-                            <TableCell>
-                              {investmentAccounts.find(acc => acc.id === record.account_id)?.account_name}
-                            </TableCell>
-                            <TableCell>{record.symbol}</TableCell>
-                            <TableCell align="right">{record.quantity}</TableCell>
-                            <TableCell align="right">${record.avg_price}</TableCell>
-                            <TableCell align="right">
-                              ${(record.quantity * record.avg_price).toLocaleString()}
-                            </TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                  </TableContainer>
-                ) : (
-                  <Box sx={{ textAlign: 'center', py: 4, color: 'text.secondary' }}>
-                    <Typography>{t('assets.historyEmpty')}</Typography>
-                  </Box>
-                )}
-              </Box>
-            )}
+            </Box>
           </Box>
         </DialogContent>
         <DialogActions>

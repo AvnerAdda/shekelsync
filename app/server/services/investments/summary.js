@@ -24,8 +24,93 @@ const {
   CATEGORY_KEYS,
   normalizeInvestmentCategory,
 } = require('./categories.js');
+const fxService = require('./fx.js');
 
 let dateFnsPromise = null;
+
+function coerceBoolean(value) {
+  return value === true || value === 1 || value === '1' || String(value || '').toLowerCase() === 'true';
+}
+
+async function normalizeAccountCurrencies(accounts, enabled) {
+  if (!enabled) return { accounts, fx: null };
+
+  const valuationEntries = [];
+  const costEntries = [];
+  const valuationIndexes = [];
+  const costIndexes = [];
+  accounts.forEach((account, index) => {
+    const date = account.as_of_date || new Date().toISOString().slice(0, 10);
+    const currentValue = toNumber(account.current_value);
+    const costBasis = toNumber(account.cost_basis);
+    if (currentValue !== null) {
+      valuationIndexes.push(index);
+      valuationEntries.push({ amount: currentValue, currency: account.currency || 'ILS', date });
+    }
+    if (costBasis !== null) {
+      costIndexes.push(index);
+      costEntries.push({ amount: costBasis, currency: account.currency || 'ILS', date });
+    }
+  });
+
+  const [valuationSummary, costSummary] = await Promise.all([
+    fxService.summarizeAmounts(valuationEntries),
+    fxService.summarizeAmounts(costEntries),
+  ]);
+  const valuationByIndex = new Map();
+  valuationIndexes.forEach((accountIndex, conversionIndex) => {
+    valuationByIndex.set(accountIndex, valuationSummary.conversions[conversionIndex]);
+  });
+  const costByIndex = new Map();
+  costIndexes.forEach((accountIndex, conversionIndex) => {
+    costByIndex.set(accountIndex, costSummary.conversions[conversionIndex]);
+  });
+
+  return {
+    accounts: accounts.map((account, index) => ({
+      ...account,
+      native_currency: account.currency || 'ILS',
+      native_current_value: toNumber(account.current_value),
+      native_cost_basis: toNumber(account.cost_basis),
+      current_value: valuationByIndex.has(index)
+        ? valuationByIndex.get(index).baseAmount
+        : null,
+      cost_basis: costByIndex.has(index)
+        ? costByIndex.get(index).baseAmount
+        : null,
+      base_currency: valuationSummary.baseCurrency,
+      fx_status: valuationByIndex.get(index)?.status || null,
+      fx_rate: valuationByIndex.get(index)?.rate || null,
+      fx_rate_date: valuationByIndex.get(index)?.rateDate || null,
+      cost_basis_fx_status: costByIndex.get(index)?.status || null,
+      cost_basis_fx_rate: costByIndex.get(index)?.rate || null,
+      cost_basis_fx_rate_date: costByIndex.get(index)?.rateDate || null,
+    })),
+    fx: {
+      baseCurrency: valuationSummary.baseCurrency,
+      complete: valuationSummary.complete && costSummary.complete,
+      valuationComplete: valuationSummary.complete,
+      costBasisComplete: costSummary.complete,
+      missingCount: valuationSummary.missing.length + costSummary.missing.length,
+      nativeTotals: valuationSummary.nativeTotals,
+      convertedSubtotal: valuationSummary.convertedSubtotal,
+      costBasisNativeTotals: costSummary.nativeTotals,
+      costBasisConvertedSubtotal: costSummary.convertedSubtotal,
+      valuation: {
+        complete: valuationSummary.complete,
+        missingCount: valuationSummary.missing.length,
+        nativeTotals: valuationSummary.nativeTotals,
+        convertedSubtotal: valuationSummary.convertedSubtotal,
+      },
+      costBasis: {
+        complete: costSummary.complete,
+        missingCount: costSummary.missing.length,
+        nativeTotals: costSummary.nativeTotals,
+        convertedSubtotal: costSummary.convertedSubtotal,
+      },
+    },
+  };
+}
 
 const ACCOUNT_TYPE_LABELS = {
   pension: { name: 'Pension Fund', name_he: 'קרן פנסיה', category: 'restricted' },
@@ -127,18 +212,23 @@ function buildAccountSummaries(accountsRows, bankAccountsRows) {
   const totalsByCategory = createCategoryTotals();
 
   accountsRows.forEach((account) => {
-    const value = toNumber(account.current_value) || 0;
-    const cost = toNumber(account.cost_basis) || 0;
+    const value = toNumber(account.current_value);
+    const cost = toNumber(account.cost_basis);
+    const nativeValue = Object.prototype.hasOwnProperty.call(account, 'native_current_value')
+      ? toNumber(account.native_current_value)
+      : value;
     const category = normalizeInvestmentCategory(account.investment_category, account.account_type);
 
-    if (value > 0) {
+    if (value !== null) {
       totalPortfolioValue += value;
-      accountsWithValues += 1;
       totalsByCategory[category].value += value;
+    }
+    if (nativeValue !== null) {
+      accountsWithValues += 1;
       totalsByCategory[category].accounts += 1;
     }
 
-    if (cost > 0) {
+    if (cost !== null) {
       totalCostBasis += cost;
       totalsByCategory[category].cost += cost;
     }
@@ -172,8 +262,8 @@ function buildAccountSummaries(accountsRows, bankAccountsRows) {
     };
 
     accountsByType[account.account_type].accounts.push(processedAccount);
-    accountsByType[account.account_type].totalValue += value;
-    accountsByType[account.account_type].totalCost += cost;
+    accountsByType[account.account_type].totalValue += value ?? 0;
+    accountsByType[account.account_type].totalCost += cost ?? 0;
     accountsByType[account.account_type].count += 1;
     accountsByCategory[category].push(processedAccount);
   });
@@ -295,6 +385,7 @@ async function fetchInvestmentPerformance(client, months) {
 
 async function getInvestmentSummary(params = {}) {
   const { historyMonths = 6 } = params;
+  const normalizeCurrencies = coerceBoolean(params.normalizeCurrencies);
   const client = await database.getClient();
 
   try {
@@ -341,15 +432,22 @@ async function getInvestmentSummary(params = {}) {
       }),
     );
 
-    const linkedTransactions = accountsRows.length > 0
+    const linkedTransactions = accountsRows.length > 0 && !normalizeCurrencies
       ? await fetchLinkedInvestmentTransactions(
         client,
         accountsRows.map((row) => row.id),
       )
       : [];
-    const rolledForwardAccounts = applyContributionRollforward(accountsRows, linkedTransactions, {
-      excludePikadonTransactions: true,
-    });
+    // Linked bank transactions can be denominated differently from their
+    // investment account. Do not add those amounts to a native snapshot before
+    // FX conversion; the performance service converts each flow separately on
+    // its own date. The normalized summary remains based on recorded account
+    // valuations instead of inventing a cross-currency balance adjustment.
+    const rolledForwardAccounts = normalizeCurrencies
+      ? accountsRows
+      : applyContributionRollforward(accountsRows, linkedTransactions, {
+        excludePikadonTransactions: true,
+      });
     const pikadonRollupAccountIds = rolledForwardAccounts
       .filter((account) => account.account_type === 'savings' && account.uses_pikadon_rollup)
       .map((account) => account.id);
@@ -359,10 +457,16 @@ async function getInvestmentSummary(params = {}) {
     const overlapSources = hasBankBalanceAccounts && pikadonRollupAccountIds.length > 0
       ? await fetchActivePikadonOverlapSources(client, pikadonRollupAccountIds)
       : [];
-    const adjustedAccounts = applyBankBalanceOverlapAdjustments(
+    const adjustedAccountsNative = applyBankBalanceOverlapAdjustments(
       rolledForwardAccounts,
       overlapSources,
     );
+
+    const normalizedAccountResult = await normalizeAccountCurrencies(
+      adjustedAccountsNative,
+      normalizeCurrencies,
+    );
+    const adjustedAccounts = normalizedAccountResult.accounts;
 
     const summary = buildAccountSummaries(adjustedAccounts, bankAccountsRows);
 
@@ -391,20 +495,71 @@ async function getInvestmentSummary(params = {}) {
       });
     });
 
-    const totalPortfolioValue = summary.totals.portfolioValue;
-    const totalCostBasis = summary.totals.costBasis;
-    const unrealizedGainLoss = totalPortfolioValue - totalCostBasis;
-    const roi = totalCostBasis > 0 ? (unrealizedGainLoss / totalCostBasis) * 100 : 0;
+    const valuationComplete = !normalizeCurrencies
+      || normalizedAccountResult.fx?.valuationComplete === true;
+    const costBasisComplete = !normalizeCurrencies
+      || normalizedAccountResult.fx?.costBasisComplete === true;
+    const pnlComplete = valuationComplete && costBasisComplete;
+    const totalPortfolioValue = valuationComplete ? summary.totals.portfolioValue : null;
+    const totalCostBasis = costBasisComplete ? summary.totals.costBasis : null;
+    const unrealizedGainLoss = pnlComplete
+      ? summary.totals.portfolioValue - summary.totals.costBasis
+      : null;
+    const roi = pnlComplete
+      ? (summary.totals.costBasis > 0
+        ? (unrealizedGainLoss / summary.totals.costBasis) * 100
+        : 0)
+      : null;
 
-    const categorySummary = (totals) => ({
-      totalValue: totals.value,
-      totalCost: totals.cost,
-      unrealizedGainLoss: totals.value - totals.cost,
-      roi: totals.cost > 0 ? ((totals.value - totals.cost) / totals.cost) * 100 : 0,
-      accountsCount: totals.accounts,
-    });
+    const metricAvailabilityForAccounts = (accounts) => {
+      if (!normalizeCurrencies) {
+        return { valuationComplete: true, costBasisComplete: true };
+      }
+      return {
+        valuationComplete: accounts.every((account) => (
+          toNumber(account.native_current_value) === null
+          || toNumber(account.current_value) !== null
+        )),
+        costBasisComplete: accounts.every((account) => (
+          toNumber(account.native_cost_basis) === null
+          || toNumber(account.cost_basis) !== null
+        )),
+      };
+    };
 
-    const breakdown = Object.values(summary.accountsByType)
+    const categorySummary = (totals, accounts = []) => {
+      const availability = metricAvailabilityForAccounts(accounts);
+      const categoryPnlComplete = availability.valuationComplete && availability.costBasisComplete;
+      const categoryGainLoss = categoryPnlComplete ? totals.value - totals.cost : null;
+      return {
+        totalValue: availability.valuationComplete ? totals.value : null,
+        totalCost: availability.costBasisComplete ? totals.cost : null,
+        unrealizedGainLoss: categoryGainLoss,
+        roi: categoryPnlComplete
+          ? (totals.cost > 0 ? (categoryGainLoss / totals.cost) * 100 : 0)
+          : null,
+        accountsCount: totals.accounts,
+        valuationComplete: availability.valuationComplete,
+        costBasisComplete: availability.costBasisComplete,
+      };
+    };
+
+    const normalizedGroupsByType = Object.values(summary.accountsByType)
+      .map((group) => {
+        const availability = metricAvailabilityForAccounts(group.accounts);
+        return {
+          ...group,
+          totalValue: availability.valuationComplete ? group.totalValue : null,
+          totalCost: availability.costBasisComplete ? group.totalCost : null,
+          valuationComplete: availability.valuationComplete,
+          costBasisComplete: availability.costBasisComplete,
+        };
+      });
+    const accountsByType = normalizedGroupsByType.reduce((accumulator, group) => {
+      accumulator[group.type] = group;
+      return accumulator;
+    }, {});
+    const breakdown = normalizedGroupsByType
       .map((group) => {
         const label = ACCOUNT_TYPE_LABELS[group.type] || {
           name: group.type,
@@ -416,22 +571,49 @@ async function getInvestmentSummary(params = {}) {
           ...group,
           ...label,
           category: normalizeInvestmentCategory(label.category, group.type),
-          percentage: totalPortfolioValue > 0 ? (group.totalValue / totalPortfolioValue) * 100 : 0,
+          percentage: totalPortfolioValue === null || group.totalValue === null
+            ? null
+            : totalPortfolioValue > 0
+              ? (group.totalValue / totalPortfolioValue) * 100
+              : 0,
         };
       });
 
     const categoryBuckets = CATEGORY_KEYS.reduce((accumulator, key) => {
       accumulator[key] = {
-        ...categorySummary(summary.totals.categories[key]),
+        ...categorySummary(summary.totals.categories[key], summary.accountsByCategory[key]),
         accounts: summary.accountsByCategory[key] || [],
       };
       return accumulator;
     }, {});
 
-    const performanceHistory = await fetchInvestmentPerformance(
-      client,
-      Number.parseInt(historyMonths, 10) || 6,
-    );
+    const publicCategoryTotals = CATEGORY_KEYS.reduce((accumulator, key) => {
+      const category = categoryBuckets[key];
+      accumulator[key] = {
+        value: category.totalValue,
+        cost: category.totalCost,
+        accounts: category.accountsCount,
+        valuationComplete: category.valuationComplete,
+        costBasisComplete: category.costBasisComplete,
+      };
+      return accumulator;
+    }, {});
+    const publicTotals = {
+      ...summary.totals,
+      portfolioValue: totalPortfolioValue,
+      costBasis: totalCostBasis,
+      categories: publicCategoryTotals,
+      liquid: publicCategoryTotals.liquid,
+      illiquid: publicCategoryTotals.illiquid,
+      restricted: publicCategoryTotals.restricted,
+    };
+
+    const performanceHistory = normalizeCurrencies
+      ? []
+      : await fetchInvestmentPerformance(
+        client,
+        Number.parseInt(historyMonths, 10) || 6,
+      );
 
     const timeline = performanceHistory.map((item) => {
       const monthDate = item.month instanceof Date ? item.month : new Date(item.month);
@@ -464,9 +646,9 @@ async function getInvestmentSummary(params = {}) {
         accountsWithValues: summary.totals.accountsWithValues,
         oldestUpdateDate: summary.totals.oldestDate,
         newestUpdateDate: summary.totals.newestDate,
-        liquid: categorySummary(summary.totals.liquid),
-        illiquid: categorySummary(summary.totals.illiquid),
-        restricted: categorySummary(summary.totals.restricted),
+        liquid: categorySummary(summary.totals.liquid, summary.accountsByCategory.liquid),
+        illiquid: categorySummary(summary.totals.illiquid, summary.accountsByCategory.illiquid),
+        restricted: categorySummary(summary.totals.restricted, summary.accountsByCategory.restricted),
       },
       breakdown,
       categoryBuckets,
@@ -475,11 +657,12 @@ async function getInvestmentSummary(params = {}) {
       illiquidAccounts: summary.accountsByCategory.illiquid,
       restrictedAccounts: summary.accountsByCategory.restricted,
       accounts: investmentAccounts,
-      totals: summary.totals,
-      accountsByType: summary.accountsByType,
+      totals: publicTotals,
+      accountsByType,
       accountsByCategory: summary.accountsByCategory,
       assets: normalizedAssets,
       performanceHistory,
+      fx: normalizedAccountResult.fx,
     };
 
     return response;
@@ -492,12 +675,14 @@ module.exports = {
   getInvestmentSummary,
   __setDatabase(mockDatabase) {
     database = mockDatabase || actualDatabase;
+    fxService.__setDatabase(database);
   },
   __setFetchBankAccountsForTests(fetcher) {
     fetchBankAccountsImpl = typeof fetcher === 'function' ? fetcher : fetchBankAccounts;
   },
   __resetDatabase() {
     database = actualDatabase;
+    fxService.__resetDatabase();
     fetchBankAccountsImpl = fetchBankAccounts;
   },
 };

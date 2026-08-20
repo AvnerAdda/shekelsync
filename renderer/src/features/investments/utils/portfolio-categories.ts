@@ -41,16 +41,24 @@ function emptyCategoryBucket(): PortfolioCategoryBucket {
 }
 
 function summarizeAccounts(accounts: InvestmentAccountSummary[]): PortfolioCategoryBucket {
-  const totalValue = accounts.reduce((sum, account) => sum + (Number(account.current_value) || 0), 0);
-  const totalCost = accounts.reduce((sum, account) => sum + (Number(account.cost_basis) || 0), 0);
-  const unrealizedGainLoss = totalValue - totalCost;
+  const valuationComplete = accounts.every((account) => typeof account.current_value === 'number');
+  const costBasisComplete = accounts.every((account) => typeof account.cost_basis === 'number');
+  const convertedValue = accounts.reduce((sum, account) => sum + (account.current_value ?? 0), 0);
+  const convertedCost = accounts.reduce((sum, account) => sum + (account.cost_basis ?? 0), 0);
+  const totalValue = valuationComplete ? convertedValue : null;
+  const totalCost = costBasisComplete ? convertedCost : null;
+  const unrealizedGainLoss = totalValue !== null && totalCost !== null
+    ? totalValue - totalCost
+    : null;
 
   return {
     totalValue,
     totalCost,
     unrealizedGainLoss,
-    roi: totalCost > 0 ? (unrealizedGainLoss / totalCost) * 100 : 0,
-    accountsCount: accounts.filter((account) => (Number(account.current_value) || 0) > 0).length,
+    roi: totalCost !== null && unrealizedGainLoss !== null
+      ? (totalCost > 0 ? (unrealizedGainLoss / totalCost) * 100 : 0)
+      : null,
+    accountsCount: accounts.filter((account) => typeof account.current_value === 'number').length,
     accounts,
   };
 }
@@ -125,9 +133,12 @@ export function getPortfolioAccountsForScope(
 export function getPortfolioScopeTotal(
   portfolio: PortfolioSummary | null | undefined,
   scope: PortfolioScopeKey = 'all',
-): number {
-  return getPortfolioAccountsForScope(portfolio, scope)
-    .reduce((sum, account) => sum + (Number(account.current_value) || 0), 0);
+): number | null {
+  const accounts = getPortfolioAccountsForScope(portfolio, scope);
+  if (accounts.some((account) => typeof account.current_value !== 'number')) {
+    return null;
+  }
+  return accounts.reduce((sum, account) => sum + (account.current_value ?? 0), 0);
 }
 
 export function getPortfolioCategoryBucketsForScope(

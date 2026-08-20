@@ -1,22 +1,41 @@
 import React from 'react';
 import {
+  Alert,
   Box,
+  Button,
   Chip,
-  LinearProgress,
   Paper,
   Skeleton,
   Typography,
   alpha,
   useTheme,
 } from '@mui/material';
-import { PortfolioSummary, InvestmentBalanceSheetResponse } from '@renderer/types/investments';
+import CheckCircleOutlineIcon from '@mui/icons-material/CheckCircleOutlined';
+import WarningAmberIcon from '@mui/icons-material/WarningAmber';
+import type {
+  InvestmentAccountSummary,
+  InvestmentBalanceSheetResponse,
+  PortfolioSummary,
+} from '@renderer/types/investments';
 import { useTranslation } from 'react-i18next';
 
 interface PortfolioCoveragePanelProps {
   portfolioData: PortfolioSummary | null;
   balanceSheet: InvestmentBalanceSheetResponse | null;
+  unlinkedTransactionCount?: number;
   loading: boolean;
+  error?: Error | null;
+  onRetry?: () => void;
+  onManageAccounts?: (itemId: CoverageItem['id'], accountId?: number) => void;
 }
+
+interface CoverageItem {
+  id: 'missingValuations' | 'staleValuations' | 'missingCurrency' | 'unlinkedTransactions';
+  count: number;
+  accounts: InvestmentAccountSummary[];
+}
+
+const MAX_VISIBLE_ACCOUNT_NAMES = 3;
 
 function daysSince(dateValue?: string | null): number | null {
   if (!dateValue) return null;
@@ -25,175 +44,222 @@ function daysSince(dateValue?: string | null): number | null {
   return Math.floor((Date.now() - parsed) / (1000 * 60 * 60 * 24));
 }
 
-function clamp(value: number, min: number, max: number): number {
-  return Math.min(max, Math.max(min, value));
+function hasRecordedValue(value: unknown): boolean {
+  if (value === null || value === undefined || value === '') return false;
+  return Number.isFinite(Number(value));
+}
+
+export function getPortfolioCoverageItems(
+  portfolioData: PortfolioSummary,
+  balanceSheet: InvestmentBalanceSheetResponse | null,
+  unlinkedTransactionCount = 0,
+): CoverageItem[] {
+  const accounts = portfolioData.accounts || [];
+  const recordedValueFor = (account: InvestmentAccountSummary) =>
+    account.native_current_value !== undefined
+      ? account.native_current_value
+      : account.current_value;
+  const missingValuationAccounts = accounts.filter(
+    (account) => !hasRecordedValue(recordedValueFor(account)) || !account.as_of_date,
+  );
+  const staleValuationAccounts = accounts.filter((account) => {
+    const age = daysSince(account.as_of_date);
+    return hasRecordedValue(recordedValueFor(account)) && age !== null && age > 30;
+  });
+  const missingCurrencyAccounts = accounts.filter(
+    (account) => typeof account.currency !== 'string' || account.currency.trim().length === 0,
+  );
+
+  return [
+    {
+      id: 'missingValuations',
+      count: Math.max(balanceSheet?.missingValuationsCount || 0, missingValuationAccounts.length),
+      accounts: missingValuationAccounts,
+    },
+    {
+      id: 'staleValuations',
+      count: staleValuationAccounts.length,
+      accounts: staleValuationAccounts,
+    },
+    {
+      id: 'missingCurrency',
+      count: missingCurrencyAccounts.length,
+      accounts: missingCurrencyAccounts,
+    },
+    {
+      id: 'unlinkedTransactions',
+      count: Math.max(Number(unlinkedTransactionCount) || 0, 0),
+      accounts: [],
+    },
+  ];
 }
 
 const PortfolioCoveragePanel: React.FC<PortfolioCoveragePanelProps> = ({
   portfolioData,
   balanceSheet,
+  unlinkedTransactionCount = 0,
   loading,
+  error = null,
+  onRetry,
+  onManageAccounts,
 }) => {
   const theme = useTheme();
   const { t } = useTranslation('translation', { keyPrefix: 'investmentsPage.coverage' });
 
-  if (loading) {
+  if (loading && !portfolioData) {
     return (
       <Paper sx={{ p: 2.5, height: '100%' }}>
         <Skeleton variant="text" width={180} height={30} />
         <Skeleton variant="text" width={260} height={18} sx={{ mb: 2 }} />
-        <Skeleton variant="rounded" height={12} sx={{ mb: 2.5 }} />
         <Box sx={{ display: 'grid', gap: 1.5 }}>
           {Array.from({ length: 4 }).map((_, index) => (
-            <Skeleton key={index} variant="rounded" height={68} />
+            <Skeleton key={index} variant="rounded" height={86} />
           ))}
         </Box>
       </Paper>
     );
   }
 
-  if (!portfolioData || !balanceSheet) {
+  if (!portfolioData) {
     return (
       <Paper sx={{ p: 2.5, height: '100%' }}>
-        <Typography variant="subtitle1" gutterBottom sx={{
-          fontWeight: 600
-        }}>
+        <Typography variant="subtitle1" gutterBottom sx={{ fontWeight: 600 }}>
           {t('title')}
         </Typography>
-        <Typography sx={{
-          color: "text.secondary"
-        }}>
-          {t('empty')}
-        </Typography>
+        {error ? (
+          <Alert
+            severity="warning"
+            action={onRetry ? (
+              <Button color="inherit" size="small" onClick={onRetry}>
+                {t('actions.retry')}
+              </Button>
+            ) : undefined}
+          >
+            {t('error')}
+          </Alert>
+        ) : (
+          <Typography sx={{ color: 'text.secondary' }}>{t('empty')}</Typography>
+        )}
       </Paper>
     );
   }
 
-  const accounts = portfolioData.accounts || [];
-  const staleValuations = accounts.filter((account) => {
-    const age = daysSince(account.as_of_date);
-    return age !== null && age > 30;
-  }).length;
-  const missingCurrencies = accounts.filter((account) => !account.currency).length;
-  const missingHoldings = accounts.filter(
-    (account) =>
-      (!Array.isArray(account.assets) || account.assets.length === 0)
-      && !account.as_of_date
-      && (account.current_value_explicit === null || account.current_value_explicit === undefined),
-  ).length;
-  const missingValuations = balanceSheet.missingValuationsCount || 0;
+  const items = getPortfolioCoverageItems(portfolioData, balanceSheet, unlinkedTransactionCount);
+  const issueCount = items.reduce((sum, item) => sum + item.count, 0);
+  const issueTone = issueCount === 0 ? theme.palette.success.main : theme.palette.warning.main;
 
-  const score = clamp(
-    100
-      - missingValuations * 14
-      - staleValuations * 10
-      - missingCurrencies * 8
-      - missingHoldings * 8,
-    0,
-    100,
-  );
+  const renderAffectedAccounts = (item: CoverageItem) => {
+    if (item.count === 0) {
+      return t('complete');
+    }
 
-  const statusTone =
-    score >= 85
-      ? theme.palette.success.main
-      : score >= 65
-        ? theme.palette.warning.main
-        : theme.palette.error.main;
+    if (item.id === 'unlinkedTransactions') {
+      return t('transactionsAffected', { count: item.count });
+    }
 
-  const items = [
-    {
-      label: t('items.missingValuations.label'),
-      value: missingValuations,
-      hint: t('items.missingValuations.hint'),
-    },
-    {
-      label: t('items.staleValuations.label'),
-      value: staleValuations,
-      hint: t('items.staleValuations.hint'),
-    },
-    {
-      label: t('items.missingCurrency.label'),
-      value: missingCurrencies,
-      hint: t('items.missingCurrency.hint'),
-    },
-    {
-      label: t('items.missingHoldings.label'),
-      value: missingHoldings,
-      hint: t('items.missingHoldings.hint'),
-    },
-  ];
+    const visibleNames = item.accounts
+      .slice(0, MAX_VISIBLE_ACCOUNT_NAMES)
+      .map((account) => account.account_name)
+      .filter(Boolean);
+    const unnamedCount = Math.max(item.count - visibleNames.length, 0);
+
+    if (visibleNames.length === 0) {
+      return t('affectedCount', { count: item.count });
+    }
+
+    const names = visibleNames.join(', ');
+    return unnamedCount > 0
+      ? t('affectedWithMore', { names, count: unnamedCount })
+      : t('affected', { names });
+  };
 
   return (
     <Paper sx={{ p: 2.5, height: '100%', display: 'flex', flexDirection: 'column', gap: 2 }}>
       <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 2, alignItems: 'flex-start' }}>
         <Box>
-          <Typography variant="subtitle1" sx={{
-            fontWeight: 600
-          }}>
+          <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
             {t('title')}
           </Typography>
-          <Typography variant="body2" sx={{
-            color: "text.secondary"
-          }}>
+          <Typography variant="body2" sx={{ color: 'text.secondary' }}>
             {t('subtitle')}
           </Typography>
         </Box>
         <Chip
-          label={`${score}%`}
+          icon={issueCount === 0 ? <CheckCircleOutlineIcon /> : <WarningAmberIcon />}
+          label={issueCount === 0 ? t('complete') : t('issues', { count: issueCount })}
           sx={{
             fontWeight: 700,
-            color: statusTone,
-            borderColor: alpha(statusTone, 0.4),
-            bgcolor: alpha(statusTone, 0.1),
+            color: issueTone,
+            borderColor: alpha(issueTone, 0.4),
+            bgcolor: alpha(issueTone, 0.1),
           }}
           variant="outlined"
         />
       </Box>
-      <Box>
-        <LinearProgress
-          variant="determinate"
-          value={score}
-          sx={{
-            height: 10,
-            borderRadius: 999,
-            bgcolor: alpha(statusTone, 0.12),
-            '& .MuiLinearProgress-bar': {
-              borderRadius: 999,
-              bgcolor: statusTone,
-            },
-          }}
-        />
-      </Box>
+
+      {error && (
+        <Alert
+          severity="warning"
+          action={onRetry ? (
+            <Button color="inherit" size="small" onClick={onRetry}>
+              {t('actions.retry')}
+            </Button>
+          ) : undefined}
+        >
+          {t('staleError')}
+        </Alert>
+      )}
+
       <Box sx={{ display: 'grid', gap: 1.25 }}>
-        {items.map((item) => (
-          <Box
-            key={item.label}
-            sx={{
-              p: 1.5,
-              borderRadius: 2,
-              border: `1px solid ${alpha(theme.palette.divider, 0.7)}`,
-              bgcolor: alpha(theme.palette.background.default, 0.5),
-            }}
-          >
-            <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 2, alignItems: 'center' }}>
-              <Typography variant="body2" sx={{
-                fontWeight: 600
-              }}>
-                {item.label}
-              </Typography>
-              <Typography variant="body2" sx={{
-                fontWeight: 700
-              }}>
-                {item.value}
-              </Typography>
+        {items.map((item) => {
+          const hasIssue = item.count > 0;
+          const tone = hasIssue ? theme.palette.warning.main : theme.palette.success.main;
+
+          return (
+            <Box
+              key={item.id}
+              sx={{
+                p: 1.5,
+                borderRadius: 2,
+                border: `1px solid ${alpha(tone, 0.35)}`,
+                bgcolor: alpha(tone, 0.06),
+              }}
+            >
+              <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 2, alignItems: 'center' }}>
+                <Box sx={{ minWidth: 0 }}>
+                  <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                    {t(`items.${item.id}.label`)}
+                  </Typography>
+                  <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block' }}>
+                    {t(`items.${item.id}.hint`)}
+                  </Typography>
+                </Box>
+                <Chip
+                  size="small"
+                  label={hasIssue ? item.count : t('complete')}
+                  color={hasIssue ? 'warning' : 'success'}
+                  variant="outlined"
+                />
+              </Box>
+              <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 1.5, alignItems: 'center', mt: 1 }}>
+                <Typography variant="caption" sx={{ color: hasIssue ? 'text.primary' : 'text.secondary' }}>
+                  {renderAffectedAccounts(item)}
+                </Typography>
+                {hasIssue && onManageAccounts && (
+                  <Button
+                    size="small"
+                    onClick={() => onManageAccounts(item.id, item.accounts[0]?.id)}
+                    sx={{ flexShrink: 0 }}
+                  >
+                    {item.id === 'unlinkedTransactions'
+                      ? t('actions.reviewTransactions')
+                      : t('actions.reviewAccounts')}
+                  </Button>
+                )}
+              </Box>
             </Box>
-            <Typography variant="caption" sx={{
-              color: "text.secondary"
-            }}>
-              {item.hint}
-            </Typography>
-          </Box>
-        ))}
+          );
+        })}
       </Box>
     </Paper>
   );

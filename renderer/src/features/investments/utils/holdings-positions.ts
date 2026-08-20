@@ -1,4 +1,5 @@
 import type {
+  InvestmentAccountSummary,
   InvestmentCategoryKey,
   InvestmentHoldingsPositionRow,
   InvestmentHoldingsRowKind,
@@ -36,9 +37,13 @@ function buildPositionRow(position: InvestmentPosition): InvestmentHoldingsPosit
     basisValue,
     unrealizedPnL:
       currentValue !== null && basisValue !== null ? currentValue - basisValue : null,
-    displayDate: position.updated_at || position.opened_at || null,
-    rawDate: position.updated_at || position.opened_at || null,
+    displayDate: position.valuation_date || position.updated_at || position.opened_at || null,
+    rawDate: position.valuation_date || position.updated_at || position.opened_at || null,
     institution: position.institution ?? null,
+    position,
+    symbol: position.asset_symbol || position.symbol || null,
+    units: toNullableNumber(position.units),
+    currentPrice: toNullableNumber(position.current_price),
   };
 }
 
@@ -48,8 +53,8 @@ function buildFallbackHoldingRow(portfolio: PortfolioSummary, accountId: number)
     return null;
   }
 
-  const currentValue = toNullableNumber(account.current_value);
-  const basisValue = toNullableNumber(account.cost_basis);
+  const currentValue = toNullableNumber(account.native_current_value ?? account.current_value);
+  const basisValue = toNullableNumber(account.native_cost_basis ?? account.cost_basis);
   const assets = Array.isArray(account.assets) ? account.assets : [];
   const singleAsset = assets.length === 1 ? assets[0] : null;
 
@@ -62,7 +67,7 @@ function buildFallbackHoldingRow(portfolio: PortfolioSummary, accountId: number)
     accountName: account.account_name,
     category: normalizeInvestmentCategory(account.investment_category, account.account_type),
     itemType: singleAsset?.asset_type || account.account_type || 'holding',
-    currency: account.currency || null,
+    currency: account.native_currency || account.currency || null,
     currentValue,
     basisValue,
     unrealizedPnL:
@@ -70,6 +75,78 @@ function buildFallbackHoldingRow(portfolio: PortfolioSummary, accountId: number)
     displayDate: account.as_of_date || null,
     rawDate: account.as_of_date || null,
     institution: account.institution ?? null,
+  };
+}
+
+const RECONCILIATION_TOLERANCE = 0.005;
+
+function buildReconciliationRow(
+  account: InvestmentAccountSummary,
+  positionRows: InvestmentHoldingsPositionRow[],
+): InvestmentHoldingsPositionRow | null {
+  const accountCurrency = String(account.native_currency || account.currency || '').toUpperCase();
+  const hasCurrencyMismatch = positionRows.some(
+    (row) => !row.currency || String(row.currency).toUpperCase() !== accountCurrency,
+  );
+  const snapshotValue = toNullableNumber(account.native_current_value ?? account.current_value);
+  const positionValuesComplete = positionRows.every((row) => row.currentValue !== null);
+  const category = normalizeInvestmentCategory(account.investment_category, account.account_type);
+
+  if (hasCurrencyMismatch || snapshotValue === null || !positionValuesComplete) {
+    return {
+      rowId: `reconciliation-${account.id}`,
+      rowKind: 'reconciliation',
+      status: 'needs_valuation',
+      accountId: Number(account.id),
+      name: 'Reconciliation unavailable',
+      accountName: account.account_name,
+      category,
+      itemType: 'reconciliation',
+      currency: account.native_currency || account.currency || null,
+      currentValue: null,
+      basisValue: null,
+      unrealizedPnL: null,
+      displayDate: account.as_of_date || null,
+      rawDate: account.as_of_date || null,
+      institution: account.institution ?? null,
+      reconciliationState: 'unavailable',
+      reconciliationReason: hasCurrencyMismatch ? 'currency_mismatch' : 'missing_values',
+    };
+  }
+
+  const positionValue = positionRows.reduce((total, row) => total + (row.currentValue ?? 0), 0);
+  const currentRemainder = snapshotValue - positionValue;
+  const snapshotBasis = toNullableNumber(account.native_cost_basis ?? account.cost_basis);
+  const positionBasesComplete = positionRows.every((row) => row.basisValue !== null);
+  const basisRemainder = snapshotBasis !== null && positionBasesComplete
+    ? snapshotBasis - positionRows.reduce((total, row) => total + (row.basisValue ?? 0), 0)
+    : null;
+  const valueMatches = Math.abs(currentRemainder) <= RECONCILIATION_TOLERANCE;
+  const basisMatches = basisRemainder === null || Math.abs(basisRemainder) <= RECONCILIATION_TOLERANCE;
+
+  if (valueMatches && basisMatches) {
+    return null;
+  }
+
+  return {
+    rowId: `reconciliation-${account.id}`,
+    rowKind: 'reconciliation',
+    status: 'valued',
+    accountId: Number(account.id),
+    name: 'Reconciliation remainder',
+    accountName: account.account_name,
+    category,
+    itemType: 'reconciliation',
+    currency: account.native_currency || account.currency || null,
+    currentValue: valueMatches ? 0 : currentRemainder,
+    basisValue: basisRemainder === null || basisMatches ? 0 : basisRemainder,
+    unrealizedPnL:
+      basisRemainder === null ? null : currentRemainder - basisRemainder,
+    displayDate: account.as_of_date || null,
+    rawDate: account.as_of_date || null,
+    institution: account.institution ?? null,
+    reconciliationState: 'remainder',
+    reconciliationReason: positionBasesComplete ? null : 'missing_values',
   };
 }
 
@@ -92,7 +169,19 @@ export function buildHybridHoldingsPositionRows(
     .map((account) => buildFallbackHoldingRow(portfolio, Number(account.id)))
     .filter((row): row is InvestmentHoldingsPositionRow => row !== null);
 
-  return sortHybridHoldingsPositionRows([...positionRows, ...holdingRows]);
+  const reconciliationRows = (portfolio.accounts || [])
+    .filter((account) => positionAccountIds.has(Number(account.id)))
+    .map((account) => buildReconciliationRow(
+      account,
+      positionRows.filter((row) => row.accountId === Number(account.id)),
+    ))
+    .filter((row): row is InvestmentHoldingsPositionRow => row !== null);
+
+  return sortHybridHoldingsPositionRows([
+    ...positionRows,
+    ...reconciliationRows,
+    ...holdingRows,
+  ]);
 }
 
 export function filterHybridHoldingsPositionRows(
@@ -122,6 +211,7 @@ export function filterHybridHoldingsPositionRows(
       row.name,
       row.accountName,
       row.itemType,
+      row.symbol,
       row.currency,
       row.category,
     ].some((value) => String(value || '').toLowerCase().includes(searchValue));

@@ -140,10 +140,15 @@ const positions: InvestmentPosition[] = [
     investment_category: 'liquid',
     institution: 'Demo Broker',
     position_name: 'Core ETF Position',
+    asset_symbol: 'CORE',
     asset_type: 'etf',
     currency: 'ILS',
     status: 'open',
     opened_at: '2026-01-01',
+    units: 10,
+    average_cost: 100,
+    current_price: 120,
+    valuation_date: '2026-01-03',
     original_cost_basis: 1000,
     open_cost_basis: 1000,
     current_value: 1200,
@@ -161,6 +166,46 @@ describe('holdings-positions utilities', () => {
       'holding-3',
     ]);
     expect(rows.find((row) => row.rowId === 'holding-1')).toBeUndefined();
+    expect(rows.find((row) => row.rowId === 'position-55')).toMatchObject({
+      symbol: 'CORE',
+      units: 10,
+      currentPrice: 120,
+      displayDate: '2026-01-03',
+    });
+  });
+
+  it('shows the remainder without replacing the account snapshot', () => {
+    const rows = buildHybridHoldingsPositionRows(portfolio, [{
+      ...positions[0],
+      current_value: 950,
+      open_cost_basis: 900,
+    }]);
+
+    expect(rows.find((row) => row.rowId === 'reconciliation-1')).toMatchObject({
+      rowKind: 'reconciliation',
+      reconciliationState: 'remainder',
+      currency: 'ILS',
+      currentValue: 250,
+      basisValue: 100,
+      unrealizedPnL: 150,
+    });
+    expect(portfolio.accounts[0].current_value).toBe(1200);
+    expect(portfolio.accounts[0].cost_basis).toBe(1000);
+  });
+
+  it('flags reconciliation as unavailable instead of adding different currencies', () => {
+    const rows = buildHybridHoldingsPositionRows(portfolio, [{
+      ...positions[0],
+      currency: 'USD',
+    }]);
+
+    expect(rows.find((row) => row.rowId === 'reconciliation-1')).toMatchObject({
+      rowKind: 'reconciliation',
+      status: 'needs_valuation',
+      reconciliationState: 'unavailable',
+      reconciliationReason: 'currency_mismatch',
+      currentValue: null,
+    });
   });
 
   it('builds fallback holding rows with asset naming and needs-valuation status', () => {
@@ -207,6 +252,18 @@ describe('holdings-positions utilities', () => {
         rowKind: 'all',
       }).map((row) => row.rowId),
     ).toEqual(['holding-3']);
+
+    const rowsWithRemainder = buildHybridHoldingsPositionRows(portfolio, [{
+      ...positions[0],
+      current_value: 1000,
+    }]);
+    expect(
+      filterHybridHoldingsPositionRows(rowsWithRemainder, {
+        search: '',
+        category: 'all',
+        rowKind: 'reconciliation',
+      }).map((row) => row.rowId),
+    ).toEqual(['reconciliation-1']);
   });
 
   it('normalizes real estate holdings into the illiquid category', () => {

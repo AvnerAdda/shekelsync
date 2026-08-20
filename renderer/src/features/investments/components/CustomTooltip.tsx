@@ -16,6 +16,7 @@ interface CustomTooltipProps {
   items?: TooltipDataItem[];
   title?: string;
   valueFormatter?: (value: number) => string;
+  currencySymbol?: string;
 }
 
 const CustomTooltip: React.FC<CustomTooltipProps> = ({
@@ -25,6 +26,7 @@ const CustomTooltip: React.FC<CustomTooltipProps> = ({
   items,
   title,
   valueFormatter,
+  currencySymbol,
 }) => {
   const theme = useTheme();
   const { formatCurrency, maskAmounts } = useFinancePrivacy();
@@ -50,11 +52,11 @@ const CustomTooltip: React.FC<CustomTooltipProps> = ({
       case 'percentage':
         return `${value.toFixed(2)}%`;
       case 'currency':
-        return formatCurrency(value, { absolute: true, maximumFractionDigits: 0 });
+        return formatCurrency(value, { absolute: true, maximumFractionDigits: 0, currencySymbol });
       case 'text':
         return String(value);
       default:
-        return formatCurrency(value, { absolute: true, maximumFractionDigits: 0 });
+        return formatCurrency(value, { absolute: true, maximumFractionDigits: 0, currencySymbol });
     }
   };
 

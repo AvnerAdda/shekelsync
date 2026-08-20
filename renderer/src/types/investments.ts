@@ -9,17 +9,17 @@ export type InvestmentCategoryKey = 'cash' | 'liquid' | 'illiquid' | 'restricted
 export type InvestmentInstitution = string | Record<string, unknown> | null;
 
 export interface InvestmentSummaryTotals {
-  totalPortfolioValue?: number;
-  liquid?: { totalValue?: number };
-  illiquid?: { totalValue?: number };
-  restricted?: { totalValue?: number };
+  totalPortfolioValue?: number | null;
+  liquid?: { totalValue?: number | null };
+  illiquid?: { totalValue?: number | null };
+  restricted?: { totalValue?: number | null };
 }
 
 export interface InvestmentBreakdownEntry {
   category: string;
   name?: string;
   type?: string;
-  totalValue: number;
+  totalValue: number | null;
 }
 
 export interface InvestmentSummaryResponse {
@@ -77,11 +77,20 @@ export interface PortfolioHistoryPoint {
 }
 
 export interface InvestmentAccountAsset {
+  id?: number;
+  account_id?: number;
+  asset_symbol?: string | null;
   asset_name: string;
   asset_type?: string;
   units?: number;
+  average_cost?: number | null;
+  current_price?: number | null;
   current_value?: number;
   cost_basis?: number;
+  currency?: string | null;
+  valuation_date?: string | null;
+  updated_at?: string | null;
+  status?: string | null;
 }
 
 export interface InvestmentAccountSummary {
@@ -91,8 +100,15 @@ export interface InvestmentAccountSummary {
   institution?: InvestmentInstitution;
   investment_category?: InvestmentCategoryKey | null;
   currency: string;
-  current_value: number;
-  cost_basis: number;
+  current_value: number | null;
+  cost_basis: number | null;
+  native_currency?: string | null;
+  native_current_value?: number | null;
+  native_cost_basis?: number | null;
+  base_currency?: string | null;
+  fx_status?: 'exact' | 'prior' | 'identity' | 'missing' | 'stale' | null;
+  fx_rate?: number | null;
+  fx_rate_date?: string | null;
   as_of_date?: string | null;
   current_value_explicit?: number | null;
   account_value_history?: PortfolioHistoryPoint[];
@@ -103,50 +119,54 @@ export interface PortfolioBreakdownGroup {
   type: string;
   name: string;
   name_he: string;
-  totalValue: number;
-  totalCost: number;
+  totalValue: number | null;
+  totalCost: number | null;
   count: number;
-  percentage: number;
+  percentage: number | null;
+  valuationComplete?: boolean;
+  costBasisComplete?: boolean;
   accounts: InvestmentAccountSummary[];
 }
 
 export interface PortfolioCategoryBucket {
-  totalValue: number;
-  totalCost: number;
-  unrealizedGainLoss: number;
-  roi: number;
+  totalValue: number | null;
+  totalCost: number | null;
+  unrealizedGainLoss: number | null;
+  roi: number | null;
   accountsCount: number;
+  valuationComplete?: boolean;
+  costBasisComplete?: boolean;
   accounts: InvestmentAccountSummary[];
 }
 
 export interface PortfolioSummary {
   summary: {
-    totalPortfolioValue: number;
-    totalCostBasis: number;
-    unrealizedGainLoss: number;
-    roi: number;
+    totalPortfolioValue: number | null;
+    totalCostBasis: number | null;
+    unrealizedGainLoss: number | null;
+    roi: number | null;
     totalAccounts: number;
     accountsWithValues: number;
     newestUpdateDate: string | null;
     liquid: {
-      totalValue: number;
-      totalCost: number;
-      unrealizedGainLoss: number;
-      roi: number;
+      totalValue: number | null;
+      totalCost: number | null;
+      unrealizedGainLoss: number | null;
+      roi: number | null;
       accountsCount: number;
     };
     illiquid: {
-      totalValue: number;
-      totalCost: number;
-      unrealizedGainLoss: number;
-      roi: number;
+      totalValue: number | null;
+      totalCost: number | null;
+      unrealizedGainLoss: number | null;
+      roi: number | null;
       accountsCount: number;
     };
     restricted: {
-      totalValue: number;
-      totalCost: number;
-      unrealizedGainLoss: number;
-      roi: number;
+      totalValue: number | null;
+      totalCost: number | null;
+      unrealizedGainLoss: number | null;
+      roi: number | null;
       accountsCount: number;
     };
   };
@@ -157,6 +177,29 @@ export interface PortfolioSummary {
   liquidAccounts: InvestmentAccountSummary[];
   illiquidAccounts: InvestmentAccountSummary[];
   restrictedAccounts: InvestmentAccountSummary[];
+  fx?: {
+    baseCurrency: string;
+    complete: boolean;
+    valuationComplete: boolean;
+    costBasisComplete: boolean;
+    missingCount: number;
+    nativeTotals: Array<{ currency: string; total: number; count: number }>;
+    convertedSubtotal: number;
+    costBasisNativeTotals?: Array<{ currency: string; total: number; count: number }>;
+    costBasisConvertedSubtotal?: number;
+    valuation?: {
+      complete: boolean;
+      missingCount: number;
+      nativeTotals: Array<{ currency: string; total: number; count: number }>;
+      convertedSubtotal: number;
+    };
+    costBasis?: {
+      complete: boolean;
+      missingCount: number;
+      nativeTotals: Array<{ currency: string; total: number; count: number }>;
+      convertedSubtotal: number;
+    };
+  } | null;
 }
 
 export interface PortfolioHistoryResponse {
@@ -165,6 +208,17 @@ export interface PortfolioHistoryResponse {
     accountId: number;
     history?: PortfolioHistoryPoint[];
   }>;
+  fx?: {
+    baseCurrency: string;
+    complete: boolean;
+    missingCount: number;
+    missing?: Array<{
+      accountId: number;
+      date: string;
+      currency: string;
+      status: string;
+    }>;
+  } | null;
 }
 
 export interface InvestmentBalanceSheetAccount {
@@ -178,7 +232,10 @@ export interface InvestmentBalanceSheetAccount {
 }
 
 export interface InvestmentBalanceSheetBucket {
-  totalValue: number;
+  totalValue: number | null;
+  convertedSubtotal?: number;
+  fxComplete?: boolean;
+  missingFxCount?: number;
   accountsCount: number;
   accountsWithValue: number;
   missingValueCount: number;
@@ -189,7 +246,8 @@ export interface InvestmentBalanceSheetBucket {
 export interface InvestmentBalanceSheetResponse {
   generatedAt: string;
   assets: {
-    total: number;
+    total: number | null;
+    convertedSubtotal?: number;
     newestUpdateDate: string | null;
     buckets: {
       cash: InvestmentBalanceSheetBucket;
@@ -203,16 +261,97 @@ export interface InvestmentBalanceSheetResponse {
       distinct: string[];
       hasMultiple: boolean;
     };
+    nativeTotals?: Array<{ currency: string; total: number; count: number }>;
   };
   liabilities: {
     pendingCreditCardDebt: number | null;
     pendingCreditCardDebtStatus: 'ok' | 'no_pairings' | 'missing_repayment_baseline';
     lastCreditCardRepaymentDate: string | null;
     creditCardVendorCount: number;
+    manual?: InvestmentLiability[];
+    manualTotal?: number | null;
+    total?: number | null;
+    nativeTotals?: Array<{ currency: string; total: number; count: number }>;
+    convertedSubtotal?: number;
   };
   netWorth: number | null;
   netWorthStatus: 'ok' | 'partial';
   missingValuationsCount: number;
+  baseCurrency?: string;
+  fx?: {
+    complete: boolean;
+    missingCount: number;
+    convertedSubtotal?: number;
+    assets?: {
+      complete: boolean;
+      missingCount: number;
+      convertedSubtotal: number;
+      nativeTotals: Array<{ currency: string; total: number; count: number }>;
+    };
+    liabilities?: {
+      complete: boolean;
+      missingCount: number;
+      convertedSubtotal: number;
+      nativeTotals: Array<{ currency: string; total: number; count: number }>;
+    };
+  };
+}
+
+export interface InvestmentLiability {
+  id: number;
+  liability_name: string;
+  liability_type: 'loan' | 'credit_line' | 'tax' | 'other';
+  balance: number;
+  currency: string;
+  interest_rate: number | null;
+  monthly_payment: number | null;
+  as_of_date: string;
+  included_in_net_worth: boolean;
+  notes?: string | null;
+  is_active: boolean;
+}
+
+export interface InvestmentAllocationTarget {
+  scope: 'exclude_real_estate' | 'all';
+  category: InvestmentCategoryKey;
+  targetPercentage: number;
+  updatedAt: string | null;
+}
+
+export interface InvestmentAllocationTargetsResponse {
+  scope: 'exclude_real_estate' | 'all';
+  configured: boolean;
+  totalPercentage: number;
+  targets: InvestmentAllocationTarget[];
+}
+
+export interface InvestmentFxRate {
+  rateDate: string;
+  fromCurrency: string;
+  toCurrency: string;
+  rate: number;
+  source: string;
+}
+
+export interface InvestmentFxSettingsResponse {
+  baseCurrency: string;
+  rates: InvestmentFxRate[];
+}
+
+export interface InvestmentBenchmarkPoint {
+  date: string;
+  value: number;
+}
+
+export interface InvestmentBenchmark {
+  id: number;
+  name: string;
+  currency: string;
+  isTotalReturn: boolean;
+  source: string;
+  sourceVersion: string | null;
+  isDefault: boolean;
+  points?: InvestmentBenchmarkPoint[];
 }
 
 export interface RealEstateOverviewProperty {
@@ -281,6 +420,9 @@ export interface InvestmentPerformanceTimelinePoint {
   capitalReturns: number;
   income: number;
   fees: number;
+  taxes?: number;
+  dividends?: number;
+  interest?: number;
   valueChange: number;
   marketMove: number;
   netFlow: number;
@@ -290,9 +432,20 @@ export interface InvestmentPerformanceResponse {
   range: string;
   startDate: string | null;
   endDate: string | null;
-  startValue: number;
-  endValue: number;
-  valueChange: number;
+  requestedStartDate?: string | null;
+  baseCurrency?: string | null;
+  fx?: PortfolioHistoryResponse['fx'];
+  flowCoverage?: {
+    linkedTransactionCount: number;
+    includedLinkedTransactionCount: number;
+    duplicateLinkedTransactionCount: number;
+    positionEventCount: number;
+    duplicatePositionEventCount?: number;
+    missingFxCount: number;
+  };
+  startValue: number | null;
+  endValue: number | null;
+  valueChange: number | null;
   netFlows: {
     contributions: number;
     withdrawals: number;
@@ -301,9 +454,38 @@ export interface InvestmentPerformanceResponse {
   capitalReturns: number;
   income: number;
   fees: number;
-  marketMove: number;
-  twr: number;
+  taxes?: number;
+  dividends?: number;
+  interest?: number;
+  marketMove: number | null;
+  twr: number | null;
   mwr: number | null;
+  method?: string;
+  metricSemantics?: {
+    outputField: string;
+    isTrueTwr: boolean;
+    description: string;
+  };
+  quality?: 'observed' | 'estimated' | 'unavailable';
+  confidence?: {
+    level: string;
+    score: number | null;
+    reasons: string[];
+    historyPoints: number;
+    actualValuationPoints: number | null;
+    cashFlowDays: number;
+    flowBoundaryCoverage: number | null;
+  };
+  attribution?: {
+    returnBasis?: 'gross_of_linked_fees_and_taxes' | string;
+    formula?: string;
+    realizedGainGross: number | null;
+    realizedGainNet: number | null;
+    realizedStatus: string;
+    unrealizedGain: number | null;
+    unrealizedStatus: string;
+    [key: string]: unknown;
+  };
   timeline: InvestmentPerformanceTimelinePoint[];
 }
 
@@ -315,13 +497,24 @@ export interface InvestmentPosition {
   investment_category?: InvestmentCategoryKey | null;
   institution?: InvestmentInstitution;
   position_name: string;
+  asset_symbol?: string | null;
+  /** Compatibility alias returned by the canonical positions API. */
+  symbol?: string | null;
   asset_type?: string | null;
   currency: string;
   status: 'open' | 'closed';
   opened_at: string;
   closed_at?: string | null;
+  units?: number;
+  average_cost?: number | null;
+  current_price?: number | null;
+  valuation_date?: string | null;
+  source?: string;
+  legacy_asset_id?: number | null;
   original_cost_basis: number;
   open_cost_basis: number;
+  /** Compatibility alias returned by the canonical positions API. */
+  cost_basis?: number;
   current_value?: number | null;
   notes?: string | null;
   created_at?: string;
@@ -332,8 +525,9 @@ export interface InvestmentPositionsResponse {
   positions: InvestmentPosition[];
 }
 
-export type InvestmentHoldingsRowKind = 'position' | 'holding';
+export type InvestmentHoldingsRowKind = 'position' | 'holding' | 'reconciliation';
 export type InvestmentHoldingsRowStatus = 'valued' | 'needs_valuation';
+export type InvestmentReconciliationState = 'remainder' | 'unavailable';
 
 export interface InvestmentHoldingsPositionRow {
   rowId: string;
@@ -351,31 +545,83 @@ export interface InvestmentHoldingsPositionRow {
   displayDate: string | null;
   rawDate: string | null;
   institution?: InvestmentInstitution;
+  position?: InvestmentPosition;
+  symbol?: string | null;
+  units?: number | null;
+  currentPrice?: number | null;
+  reconciliationState?: InvestmentReconciliationState;
+  reconciliationReason?: 'missing_values' | 'currency_mismatch' | null;
 }
+
+export type InvestmentPositionEventType =
+  | 'deposit'
+  | 'buy'
+  | 'sell'
+  | 'capital_return'
+  | 'dividend'
+  | 'interest'
+  | 'fee'
+  | 'tax'
+  | 'valuation'
+  | 'rollover';
 
 export interface InvestmentPositionEvent {
   id: number;
   position_id: number;
-  event_type:
-    | 'deposit'
-    | 'buy'
-    | 'sell'
-    | 'capital_return'
-    | 'dividend'
-    | 'interest'
-    | 'fee'
-    | 'valuation'
-    | 'rollover';
+  event_type: InvestmentPositionEventType;
   effective_date: string;
   amount?: number | null;
   principal_amount?: number | null;
   income_amount?: number | null;
   fee_amount?: number | null;
+  tax_amount?: number | null;
+  proceeds_amount?: number | null;
+  disposed_cost_basis?: number | null;
+  realized_gain_loss?: number | null;
+  reinvested?: boolean;
+  deducted_from_position?: boolean;
   units?: number | null;
+  current_price?: number | null;
   current_value?: number | null;
   close_action?: 'keep_open' | 'partial_close' | 'full_close' | null;
   linked_transaction_identifier?: string | null;
   linked_transaction_vendor?: string | null;
+  notes?: string | null;
+}
+
+export interface InvestmentPositionMutationRequest {
+  id?: number;
+  account_id: number;
+  position_name: string;
+  asset_symbol?: string | null;
+  asset_type?: string | null;
+  currency: string;
+  units: number;
+  average_cost?: number | null;
+  current_price?: number | null;
+  valuation_date?: string | null;
+  notes?: string | null;
+}
+
+export interface InvestmentPositionEventRequest {
+  position_id: number;
+  event_type: Extract<
+    InvestmentPositionEventType,
+    'buy' | 'sell' | 'dividend' | 'interest' | 'fee' | 'tax' | 'valuation'
+  >;
+  effective_date: string;
+  principal_amount?: number;
+  income_amount?: number;
+  fee_amount?: number;
+  tax_amount?: number;
+  proceeds_amount?: number;
+  disposed_cost_basis?: number;
+  units?: number;
+  current_price?: number;
+  current_value?: number;
+  reinvested?: boolean;
+  deducted_from_position?: boolean;
+  close_action?: 'keep_open' | 'partial_close' | 'full_close';
   notes?: string | null;
 }
 

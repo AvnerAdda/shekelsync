@@ -6,6 +6,8 @@ const createSqlitePool = require('../sqlite-pool.js');
 describe('sqlite-pool additional coverage', () => {
   beforeEach(() => {
     vi.spyOn(fs, 'existsSync').mockReturnValue(true);
+    vi.spyOn(fs, 'mkdirSync').mockImplementation(() => undefined);
+    vi.spyOn(fs, 'copyFileSync').mockImplementation(() => undefined);
   });
 
   afterEach(() => {
@@ -23,6 +25,9 @@ describe('sqlite-pool additional coverage', () => {
             all(params) {
               captured.params = params;
               return [];
+            },
+            get() {
+              return undefined;
             },
           };
         }
@@ -45,6 +50,9 @@ describe('sqlite-pool additional coverage', () => {
           return {
             run(params) {
               return { changes: params.length };
+            },
+            get() {
+              return undefined;
             },
           };
         }
@@ -70,6 +78,9 @@ describe('sqlite-pool additional coverage', () => {
             run() {
               return { changes: 0 };
             },
+            get() {
+              return undefined;
+            },
           };
         }
         pragma() {}
@@ -89,6 +100,9 @@ describe('sqlite-pool additional coverage', () => {
           return {
             all() {
               return [];
+            },
+            get() {
+              return undefined;
             },
           };
         }

@@ -18,7 +18,7 @@ import {
 } from '@mui/material';
 import CloseIcon from '@mui/icons-material/Close';
 import { useFinancePrivacy } from '@app/contexts/FinancePrivacyContext';
-import { PortfolioSummary } from '@renderer/types/investments';
+import type { InvestmentAccountSummary, PortfolioSummary } from '@renderer/types/investments';
 import { useTranslation } from 'react-i18next';
 import {
   getPortfolioAccountsForScope,
@@ -26,6 +26,7 @@ import {
   PortfolioScopeKey,
 } from '../utils/portfolio-categories';
 import { resolvePortfolioInstitutionName } from './portfolio-breakdown-helpers';
+import { getCurrencyDisplaySymbol } from '../utils/currency-format';
 
 interface AccountAllocationModalProps {
   open: boolean;
@@ -53,8 +54,12 @@ const AccountAllocationModal: React.FC<AccountAllocationModalProps> = ({
   const [sortField, setSortField] = useState<SortField>('value');
   const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
 
-  const formatCurrencyValue = (value: number) =>
-    formatCurrency(value, { absolute: true, maximumFractionDigits: 0 });
+  const formatCurrencyValue = (value: number | null) =>
+    value === null ? t('na', 'N/A') : formatCurrency(value, {
+      absolute: true,
+      maximumFractionDigits: 0,
+      currencySymbol: getCurrencyDisplaySymbol(portfolioData.fx?.baseCurrency),
+    });
 
   // Combine all accounts
   const allAccounts = useMemo(() => {
@@ -69,11 +74,14 @@ const AccountAllocationModal: React.FC<AccountAllocationModalProps> = ({
   // Sort accounts
   const sortedAccounts = useMemo(() => {
     const accounts = allAccounts
-      .filter(account => account.current_value > 0)
       .map((account, index) => ({
         ...account,
         color: colors[index % colors.length],
-        percentage: totalValue > 0 ? (account.current_value / totalValue) * 100 : 0,
+        percentage: totalValue !== null
+          && totalValue > 0
+          && typeof account.current_value === 'number'
+          ? (account.current_value / totalValue) * 100
+          : null,
       }));
 
     return accounts.sort((a, b) => {
@@ -83,10 +91,12 @@ const AccountAllocationModal: React.FC<AccountAllocationModalProps> = ({
           comparison = a.account_name.localeCompare(b.account_name);
           break;
         case 'value':
-          comparison = a.current_value - b.current_value;
+          comparison = (a.current_value ?? Number.NEGATIVE_INFINITY)
+            - (b.current_value ?? Number.NEGATIVE_INFINITY);
           break;
         case 'percentage':
-          comparison = a.percentage - b.percentage;
+          comparison = (a.percentage ?? Number.NEGATIVE_INFINITY)
+            - (b.percentage ?? Number.NEGATIVE_INFINITY);
           break;
       }
       return sortDirection === 'asc' ? comparison : -comparison;
@@ -94,12 +104,17 @@ const AccountAllocationModal: React.FC<AccountAllocationModalProps> = ({
   }, [allAccounts, colors, totalValue, sortField, sortDirection]);
 
   // Calculate concentration metrics
-  const topAccountPercentage = sortedAccounts.length > 0
-    ? Math.max(...sortedAccounts.map(a => a.percentage))
-    : 0;
+  const availablePercentages = sortedAccounts
+    .map((account) => account.percentage)
+    .filter((value): value is number => value !== null);
+  const topAccountPercentage = availablePercentages.length > 0
+    ? Math.max(...availablePercentages)
+    : null;
   const top3Percentage = sortedAccounts
     .slice(0, 3)
-    .reduce((sum, a) => sum + a.percentage, 0);
+    .reduce<number | null>((sum, account) => (
+      sum === null || account.percentage === null ? null : sum + account.percentage
+    ), 0);
 
   const handleSort = (field: SortField) => {
     if (sortField === field) {
@@ -136,7 +151,7 @@ const AccountAllocationModal: React.FC<AccountAllocationModalProps> = ({
         <Typography variant="h6" component="span" sx={{
           fontWeight: 600
         }}>
-          {t('title', 'Portfolio Allocation')}
+          {t('title', 'Account Allocation')}
         </Typography>
         <IconButton onClick={onClose} size="small">
           <CloseIcon />
@@ -198,7 +213,7 @@ const AccountAllocationModal: React.FC<AccountAllocationModalProps> = ({
                 fontWeight: 700,
                 mt: 0.5
               }}>
-              {topAccountPercentage.toFixed(1)}%
+              {topAccountPercentage === null ? t('na', 'N/A') : `${topAccountPercentage.toFixed(1)}%`}
             </Typography>
           </Box>
 
@@ -223,7 +238,7 @@ const AccountAllocationModal: React.FC<AccountAllocationModalProps> = ({
                 fontWeight: 700,
                 mt: 0.5
               }}>
-              {top3Percentage.toFixed(1)}%
+              {top3Percentage === null ? t('na', 'N/A') : `${top3Percentage.toFixed(1)}%`}
             </Typography>
           </Box>
         </Box>
@@ -308,14 +323,16 @@ const AccountAllocationModal: React.FC<AccountAllocationModalProps> = ({
                   <Typography variant="body2" sx={{
                     fontWeight: 600
                   }}>
-                    {maskAmounts ? '***' : formatCurrencyValue(account.current_value)}
+                    {maskAmounts && account.current_value !== null
+                      ? '***'
+                      : formatCurrencyValue(account.current_value)}
                   </Typography>
                 </TableCell>
 
                 {/* Percentage */}
                 <TableCell align="right">
                   <Chip
-                    label={`${account.percentage.toFixed(1)}%`}
+                    label={account.percentage === null ? t('na', 'N/A') : `${account.percentage.toFixed(1)}%`}
                     size="small"
                     sx={{
                       bgcolor: alpha(account.color, 0.15),
@@ -331,7 +348,7 @@ const AccountAllocationModal: React.FC<AccountAllocationModalProps> = ({
         </Table>
 
         {/* Concentration Warning */}
-        {topAccountPercentage > 50 && (
+        {topAccountPercentage !== null && topAccountPercentage > 50 && (
           <Box
             sx={{
               mt: 3,

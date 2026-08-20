@@ -299,6 +299,28 @@ async function getUnlinkedInvestmentTransactions(thresholdDays = 90) {
   return result.rows;
 }
 
+async function countUnlinkedInvestmentTransactions(thresholdDays = 90) {
+  const parsedDays = Number.parseInt(thresholdDays, 10);
+  const days = Number.isFinite(parsedDays) ? Math.max(1, Math.min(parsedDays, 3650)) : 90;
+  const result = await database.query(
+    `SELECT COUNT(*) AS count
+       FROM transactions t
+       LEFT JOIN category_definitions cd ON t.category_definition_id = cd.id
+       LEFT JOIN transaction_account_links tal
+         ON t.identifier = tal.transaction_identifier
+        AND t.vendor = tal.transaction_vendor
+      WHERE (t.category_type = 'investment' OR cd.category_type = 'investment')
+        AND tal.id IS NULL
+        AND (t.status IS NULL OR t.status != 'canceled')
+        AND date(t.date) >= date('now', '-' || $1 || ' days')`,
+    [days],
+  );
+  return {
+    count: Number(result.rows?.[0]?.count || 0),
+    thresholdDays: days,
+  };
+}
+
 /**
  * Group transactions by category name from database
  * This shows ALL unlinked investment transactions grouped by their actual category
@@ -373,6 +395,7 @@ async function analyzeInvestmentTransactions(thresholdDays = 90) {
 
 module.exports = {
   analyzeInvestmentTransactions,
+  countUnlinkedInvestmentTransactions,
   getUnlinkedInvestmentTransactions,
   detectAccountType,
   analyzeTransaction

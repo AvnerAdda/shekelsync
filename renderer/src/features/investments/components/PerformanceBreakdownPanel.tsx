@@ -27,6 +27,7 @@ import {
 } from '@renderer/types/investments';
 import { useTranslation } from 'react-i18next';
 import CustomTooltip, { TooltipDataItem } from './CustomTooltip';
+import { getCurrencyDisplaySymbol } from '../utils/currency-format';
 
 interface PerformanceBreakdownPanelProps {
   data: InvestmentPerformanceResponse | null;
@@ -48,8 +49,14 @@ const PerformanceBreakdownPanel: React.FC<PerformanceBreakdownPanelProps> = ({
   const { formatCurrency, maskAmounts } = useFinancePrivacy();
   const { t } = useTranslation('translation', { keyPrefix: 'investmentsPage.performanceBreakdown' });
 
-  const formatCurrencyValue = (value: number) =>
-    formatCurrency(value, { absolute: true, maximumFractionDigits: 0 });
+  const formatCurrencyValue = (value: number | null | undefined) =>
+    value === null || value === undefined
+      ? t('na')
+      : formatCurrency(value, {
+        absolute: true,
+        maximumFractionDigits: 0,
+        currencySymbol: getCurrencyDisplaySymbol(data?.baseCurrency),
+      });
 
   const chartData = React.useMemo(() => {
     if (!data?.timeline?.length) return [];
@@ -63,6 +70,7 @@ const PerformanceBreakdownPanel: React.FC<PerformanceBreakdownPanelProps> = ({
       chartCapitalReturns: point.capitalReturns * -1,
       chartIncome: point.income * -1,
       chartFees: point.fees * -1,
+      chartTaxes: (point.taxes || 0) * -1,
     }));
   }, [data]);
 
@@ -112,13 +120,34 @@ const PerformanceBreakdownPanel: React.FC<PerformanceBreakdownPanelProps> = ({
           </Typography>
         </Box>
         <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
-          <Chip label={t('metrics.twr', { value: formatPercent(data.twr) })} size="small" />
+          <Chip
+            label={t(
+              data.method === 'modified_dietz' ? 'metrics.estimatedReturn' : 'metrics.twr',
+              { value: formatPercent(data.twr) },
+            )}
+            size="small"
+          />
           <Chip
             label={t('metrics.mwr', {
               value: data.mwr === null ? t('na') : `${(data.mwr * 100).toFixed(2)}%`,
             })}
             size="small"
           />
+          {data.quality && (
+            <Chip
+              label={t(`quality.${data.quality}`, data.quality)}
+              color={data.quality === 'observed' ? 'success' : data.quality === 'estimated' ? 'warning' : 'default'}
+              size="small"
+              variant="outlined"
+            />
+          )}
+          {data.attribution?.returnBasis === 'gross_of_linked_fees_and_taxes' && (
+            <Chip
+              label={t('basis.gross', 'Before tracked fees and taxes')}
+              size="small"
+              variant="outlined"
+            />
+          )}
         </Box>
       </Box>
       {multiCurrencyWarning && (
@@ -126,14 +155,36 @@ const PerformanceBreakdownPanel: React.FC<PerformanceBreakdownPanelProps> = ({
           {t('mixedCurrencyWarning')}
         </Alert>
       )}
+      {data.confidence?.reasons?.length ? (
+        <Alert severity={data.quality === 'unavailable' ? 'warning' : 'info'} sx={{ borderRadius: 2 }}>
+          {t('confidence', {
+            points: data.confidence.historyPoints,
+            fallback: `Return quality is based on ${data.confidence.historyPoints} history points.`,
+          })}
+        </Alert>
+      ) : null}
       <Box sx={{ display: 'grid', gridTemplateColumns: { xs: 'repeat(2, 1fr)', lg: 'repeat(3, 1fr)' }, gap: 1.5 }}>
         {[
           { label: t('cards.valueChange'), value: data.valueChange, color: 'primary.main' },
           { label: t('cards.contributions'), value: data.netFlows.contributions, color: 'success.main' },
           { label: t('cards.withdrawals'), value: data.netFlows.withdrawals * -1, color: 'error.main' },
-          { label: t('cards.capitalReturns'), value: data.capitalReturns * -1, color: 'warning.main' },
-          { label: t('cards.distributedIncome'), value: data.income * -1, color: 'info.main' },
-          { label: t('cards.marketMove'), value: data.marketMove, color: data.marketMove >= 0 ? 'success.main' : 'error.main' },
+          { label: t('cards.capitalReturns'), value: data.capitalReturns, color: 'warning.main' },
+          { label: t('cards.distributedIncome'), value: data.income, color: 'info.main' },
+          { label: t('cards.dividends'), value: data.dividends ?? 0, color: 'info.main' },
+          { label: t('cards.interest'), value: data.interest ?? 0, color: 'info.main' },
+          { label: t('cards.fees'), value: data.fees ? data.fees * -1 : 0, color: 'error.main' },
+          { label: t('cards.taxes'), value: data.taxes ? data.taxes * -1 : 0, color: 'error.main' },
+          {
+            label: t('cards.realizedGain'),
+            value: data.attribution?.realizedGainNet ?? null,
+            color: 'text.secondary',
+          },
+          {
+            label: t('cards.unrealizedGain'),
+            value: data.attribution?.unrealizedGain ?? null,
+            color: (data.attribution?.unrealizedGain || 0) >= 0 ? 'success.main' : 'error.main',
+          },
+          { label: t('cards.marketMove'), value: data.marketMove, color: (data.marketMove || 0) >= 0 ? 'success.main' : 'error.main' },
         ].map((item) => (
           <Box
             key={item.label}
@@ -155,7 +206,7 @@ const PerformanceBreakdownPanel: React.FC<PerformanceBreakdownPanelProps> = ({
                 fontWeight: 700,
                 color: item.color
               }}>
-              {maskAmounts ? '***' : formatCurrencyValue(item.value)}
+              {maskAmounts && item.value !== null ? '***' : formatCurrencyValue(item.value)}
             </Typography>
           </Box>
         ))}
@@ -179,6 +230,8 @@ const PerformanceBreakdownPanel: React.FC<PerformanceBreakdownPanelProps> = ({
                     { label: t('cards.withdrawals'), value: (row?.withdrawals || 0) * -1, type: 'currency', color: '#ef4444' },
                     { label: t('cards.capitalReturns'), value: (row?.capitalReturns || 0) * -1, type: 'currency', color: '#f59e0b' },
                     { label: t('cards.distributedIncome'), value: (row?.income || 0) * -1, type: 'currency', color: '#0ea5e9' },
+                    { label: t('cards.fees'), value: (row?.fees || 0) * -1, type: 'currency', color: '#64748b' },
+                    { label: t('cards.taxes'), value: (row?.taxes || 0) * -1, type: 'currency', color: '#991b1b' },
                     { label: t('cards.marketMove'), value: row?.marketMove || 0, type: 'currency', color: '#8b5cf6' },
                   ];
 
@@ -187,6 +240,7 @@ const PerformanceBreakdownPanel: React.FC<PerformanceBreakdownPanelProps> = ({
                       active={active}
                       items={items}
                       title={row?.date || String(label)}
+                      currencySymbol={getCurrencyDisplaySymbol(data?.baseCurrency)}
                     />
                   );
                 }}
@@ -197,6 +251,7 @@ const PerformanceBreakdownPanel: React.FC<PerformanceBreakdownPanelProps> = ({
               <Bar dataKey="chartCapitalReturns" stackId="flows" fill="#f59e0b" name={t('cards.capitalReturns')} />
               <Bar dataKey="chartIncome" stackId="flows" fill="#0ea5e9" name={t('cards.distributedIncome')} />
               <Bar dataKey="chartFees" stackId="flows" fill="#64748b" name={t('cards.fees')} />
+              <Bar dataKey="chartTaxes" stackId="flows" fill="#991b1b" name={t('cards.taxes')} />
               <Line type="monotone" dataKey="marketMove" stroke="#8b5cf6" strokeWidth={2} dot={false} name={t('cards.marketMove')} />
             </ComposedChart>
           </ResponsiveContainer>

@@ -2,10 +2,11 @@ import React, { useState } from 'react';
 import { Box, Chip, Typography, Paper } from '@mui/material';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
 import { useFinancePrivacy } from '@app/contexts/FinancePrivacyContext';
-import { PortfolioSummary } from '@renderer/types/investments';
+import type { InvestmentAccountSummary, PortfolioSummary } from '@renderer/types/investments';
 import { useTranslation } from 'react-i18next';
 import CustomTooltip, { TooltipDataItem } from './CustomTooltip';
 import AccountAllocationModal from './AccountAllocationModal';
+import { getCurrencyDisplaySymbol } from '../utils/currency-format';
 import {
   getPortfolioAccountsForScope,
   getPortfolioCategoryBucketsForScope,
@@ -38,12 +39,19 @@ const AllocationDonutChart: React.FC<AllocationDonutChartProps> = ({ portfolioDa
   const [modalOpen, setModalOpen] = useState(false);
 
   const formatCurrencyValue = (value: number) =>
-    formatCurrency(value, { absolute: true, maximumFractionDigits: 0 });
+    formatCurrency(value, {
+      absolute: true,
+      maximumFractionDigits: 0,
+      currencySymbol: getCurrencyDisplaySymbol(portfolioData.fx?.baseCurrency),
+    });
 
   const allAccounts = getPortfolioAccountsForScope(portfolioData, scope);
 
+  const totalValue = getPortfolioScopeTotal(portfolioData, scope);
+  const allocationAvailable = totalValue !== null;
   const chartData = allAccounts
-    .filter((account) => account.current_value > 0)
+    .filter((account): account is InvestmentAccountSummary & { current_value: number } =>
+      allocationAvailable && typeof account.current_value === 'number' && account.current_value > 0)
     .map((account, index) => ({
       name: account.account_name,
       value: account.current_value,
@@ -51,9 +59,8 @@ const AllocationDonutChart: React.FC<AllocationDonutChartProps> = ({ portfolioDa
       category: normalizeInvestmentCategory(account.investment_category, account.account_type),
     }));
 
-  const totalValue = getPortfolioScopeTotal(portfolioData, scope);
   const categoryChips = getPortfolioCategoryBucketsForScope(portfolioData, scope)
-    .filter(({ bucket }) => bucket.totalValue > 0);
+    .filter(({ bucket }) => typeof bucket.totalValue === 'number' && bucket.totalValue > 0);
 
   return (
     <Paper
@@ -70,7 +77,7 @@ const AllocationDonutChart: React.FC<AllocationDonutChartProps> = ({ portfolioDa
         <Typography variant="subtitle1" sx={{
           fontWeight: 600
         }}>
-          {t('investmentsPage.allocation.title')}
+          {t('investmentsPage.allocation.title', 'Account allocation')}
         </Typography>
         <Typography
           variant="caption"
@@ -111,7 +118,9 @@ const AllocationDonutChart: React.FC<AllocationDonutChartProps> = ({ portfolioDa
                 if (!active || !payload || payload.length === 0) return null;
 
                 const data = payload[0].payload;
-                const percentage = (data.value / totalValue) * 100;
+                const percentage = totalValue !== null && totalValue > 0
+                  ? (data.value / totalValue) * 100
+                  : 0;
 
                 const items: TooltipDataItem[] = [
                   {
@@ -138,6 +147,7 @@ const AllocationDonutChart: React.FC<AllocationDonutChartProps> = ({ portfolioDa
                     active={active}
                     items={items}
                     title={data.name}
+                    currencySymbol={getCurrencyDisplaySymbol(portfolioData.fx?.baseCurrency)}
                   />
                 );
               }}
@@ -162,7 +172,9 @@ const AllocationDonutChart: React.FC<AllocationDonutChartProps> = ({ portfolioDa
               color: 'text.primary',
               lineHeight: 1.2
             }}>
-            {maskAmounts ? '***' : formatCurrencyValue(totalValue)}
+            {totalValue === null
+              ? t('investmentsPage.allocation.unavailable', 'N/A')
+              : maskAmounts ? '***' : formatCurrencyValue(totalValue)}
           </Typography>
           <Typography variant="caption" sx={{
             color: "text.secondary"
@@ -223,11 +235,11 @@ const AllocationDonutChart: React.FC<AllocationDonutChartProps> = ({ portfolioDa
             flexWrap: 'wrap',
           }}
         >
-          {categoryChips.map(({ key, bucket }) => (
+          {allocationAvailable && categoryChips.map(({ key, bucket }) => (
             <Chip
               key={key}
               size="small"
-              label={`${t(`investmentsPage.balanceSheet.buckets.${key}`)} • ${maskAmounts ? '***' : formatCurrencyValue(bucket.totalValue)}`}
+              label={`${t(`investmentsPage.balanceSheet.buckets.${key}`)} • ${maskAmounts ? '***' : formatCurrencyValue(bucket.totalValue ?? 0)}`}
               variant="outlined"
             />
           ))}

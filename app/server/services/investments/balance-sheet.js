@@ -8,6 +8,10 @@ const {
   CATEGORY_KEYS,
   normalizeInvestmentCategory,
 } = require('./categories.js');
+const fxService = require('./fx.js');
+const {
+  getCreditCardRepaymentCategoryCondition,
+} = require('../accounts/repayment-category.js');
 
 let database = actualDatabase;
 
@@ -53,6 +57,7 @@ function createBucket() {
     accountsCount: 0,
     accountsWithValue: 0,
     missingValueCount: 0,
+    missingFxCount: 0,
     newestUpdateDate: null,
   };
 }
@@ -87,11 +92,12 @@ async function fetchPendingCreditCardDebt() {
     };
   }
 
+  const repaymentCondition = getCreditCardRepaymentCategoryCondition('cd');
   const lastRepaymentResult = await database.query(
     `SELECT MAX(t.date) as last_date
      FROM transactions t
      JOIN category_definitions cd ON t.category_definition_id = cd.id
-     WHERE cd.name = 'פרעון כרטיס אשראי'
+     WHERE ${repaymentCondition}
        AND t.status = 'completed'`,
     [],
   );
@@ -128,12 +134,15 @@ async function fetchPendingCreditCardDebt() {
 }
 
 /**
- * Unified balance sheet snapshot (tracked assets + limited liabilities).
- * Note: standalone loan liabilities are not modeled yet. Real estate simulator
- * valuations are stored as net equity when a mortgage balance is known.
+ * Unified balance sheet snapshot (tracked assets + pending card debt and
+ * explicitly entered standalone liabilities). Real-estate simulator valuations
+ * are stored as net equity when a mortgage balance is known, so those embedded
+ * mortgages must not be entered again as standalone debt.
  */
 async function getInvestmentBalanceSheet(query = {}) {
   const includeAccounts = coerceBoolean(query.includeAccounts);
+  const includeManualLiabilities = coerceBoolean(query.includeLiabilities);
+  const normalizeCurrencies = coerceBoolean(query.normalizeCurrencies);
   const booleanTrue = dialect.useSqlite ? 1 : true;
 
   const accountsResult = await database.query(
@@ -197,6 +206,46 @@ async function getInvestmentBalanceSheet(query = {}) {
     overlapSources,
   );
 
+  let manualLiabilities = [];
+  if (includeManualLiabilities) {
+    const manualLiabilitiesResult = await database.query(
+      `SELECT *
+         FROM investment_liabilities
+        WHERE is_active = $1
+        ORDER BY as_of_date DESC, liability_name ASC`,
+      [booleanTrue],
+    );
+    manualLiabilities = (manualLiabilitiesResult.rows || []).map((row) => ({
+      ...row,
+      id: Number(row.id),
+      balance: toNumber(row.balance) ?? 0,
+      interest_rate: toNumber(row.interest_rate),
+      monthly_payment: toNumber(row.monthly_payment),
+      included_in_net_worth: coerceBoolean(row.included_in_net_worth),
+      is_active: coerceBoolean(row.is_active),
+    }));
+  }
+
+  const valuedAccountEntries = adjustedAccounts
+    .map((row) => ({
+      amount: toNumber(row.current_value),
+      currency: row.currency || 'ILS',
+      date: row.as_of_date || new Date().toISOString().slice(0, 10),
+    }))
+    .filter((entry) => entry.amount !== null);
+  const assetFxSummary = normalizeCurrencies
+    ? await fxService.summarizeAmounts(valuedAccountEntries)
+    : null;
+  const convertedAccountValues = new Map();
+  if (assetFxSummary) {
+    let convertedIndex = 0;
+    adjustedAccounts.forEach((row) => {
+      if (toNumber(row.current_value) === null) return;
+      convertedAccountValues.set(Number(row.id), assetFxSummary.conversions[convertedIndex]?.baseAmount ?? null);
+      convertedIndex += 1;
+    });
+  }
+
   const buckets = CATEGORY_KEYS.reduce((accumulator, key) => {
     accumulator[key] = { ...createBucket(), accounts: includeAccounts ? [] : undefined };
     return accumulator;
@@ -213,13 +262,20 @@ async function getInvestmentBalanceSheet(query = {}) {
 
     bucket.accountsCount += 1;
 
-    const value = toNumber(row.current_value);
-    if (value === null) {
+    const nativeValue = toNumber(row.current_value);
+    const value = normalizeCurrencies
+      ? (convertedAccountValues.get(Number(row.id)) ?? null)
+      : nativeValue;
+    if (nativeValue === null) {
       bucket.missingValueCount += 1;
       missingValuationsCount += 1;
     } else {
-      bucket.totalValue += value;
       bucket.accountsWithValue += 1;
+      if (value !== null) {
+        bucket.totalValue += value;
+      } else if (normalizeCurrencies) {
+        bucket.missingFxCount += 1;
+      }
     }
 
     if (row.as_of_date) {
@@ -240,24 +296,72 @@ async function getInvestmentBalanceSheet(query = {}) {
         investmentCategory: row.investment_category,
         currency,
         currentValue: value,
+        nativeCurrentValue: nativeValue,
         asOfDate: row.as_of_date || null,
       });
     }
   });
 
   Object.values(buckets).forEach((bucket) => {
-    totalAssets += bucket.totalValue || 0;
+    const convertedSubtotal = bucket.totalValue;
+    totalAssets += convertedSubtotal;
+    if (normalizeCurrencies) {
+      bucket.convertedSubtotal = convertedSubtotal;
+      bucket.fxComplete = bucket.missingFxCount === 0;
+      if (!bucket.fxComplete) bucket.totalValue = null;
+    }
   });
+  const assetsConvertedSubtotal = totalAssets;
+  const assetsTotal = normalizeCurrencies && assetFxSummary?.complete !== true
+    ? null
+    : assetsConvertedSubtotal;
 
   const pendingDebtInfo = await fetchPendingCreditCardDebt();
   const pendingCreditCardDebt = pendingDebtInfo.pendingDebt;
-
-  const netWorth = pendingCreditCardDebt === null ? null : totalAssets - pendingCreditCardDebt;
+  const includedManualLiabilities = manualLiabilities.filter((liability) => liability.included_in_net_worth);
+  const liabilityFxSummary = normalizeCurrencies
+    ? await fxService.summarizeAmounts(includedManualLiabilities.map((liability) => ({
+        amount: liability.balance,
+        currency: liability.currency || 'ILS',
+        date: liability.as_of_date,
+      })))
+    : null;
+  const manualLiabilityTotal = normalizeCurrencies
+    ? liabilityFxSummary.baseTotal
+    : includedManualLiabilities.length > 0
+      ? includedManualLiabilities.reduce((sum, liability) => sum + liability.balance, 0)
+      : 0;
+  const manualLiabilityConvertedSubtotal = normalizeCurrencies
+    ? liabilityFxSummary.convertedSubtotal
+    : manualLiabilityTotal;
+  const normalizedPendingDebt = pendingCreditCardDebt === null
+    ? null
+    : normalizeCurrencies
+      ? (await fxService.convertAmount({
+          amount: pendingCreditCardDebt,
+          currency: 'ILS',
+          date: new Date().toISOString().slice(0, 10),
+        })).baseAmount
+      : pendingCreditCardDebt;
+  const totalLiabilities = normalizedPendingDebt === null || manualLiabilityTotal === null
+    ? null
+    : normalizedPendingDebt + manualLiabilityTotal;
+  const liabilitiesConvertedSubtotal = (normalizedPendingDebt ?? 0)
+    + manualLiabilityConvertedSubtotal;
+  const fxComplete = !normalizeCurrencies
+    || (assetFxSummary?.complete === true && liabilityFxSummary?.complete !== false);
+  const netWorth = assetsTotal === null
+    || totalLiabilities === null
+    || !fxComplete
+    || missingValuationsCount > 0
+    ? null
+    : assetsTotal - totalLiabilities;
 
   return {
     generatedAt: new Date().toISOString(),
     assets: {
-      total: totalAssets,
+      total: assetsTotal,
+      convertedSubtotal: normalizeCurrencies ? assetsConvertedSubtotal : undefined,
       newestUpdateDate: newestAssetsUpdateDate,
       buckets: {
         cash: buckets.cash,
@@ -271,16 +375,42 @@ async function getInvestmentBalanceSheet(query = {}) {
         distinct: Array.from(currencyCounts.keys()).sort(),
         hasMultiple: currencyCounts.size > 1,
       },
+      nativeTotals: assetFxSummary?.nativeTotals,
     },
     liabilities: {
       pendingCreditCardDebt,
       pendingCreditCardDebtStatus: pendingDebtInfo.status,
       lastCreditCardRepaymentDate: pendingDebtInfo.lastRepaymentDate,
       creditCardVendorCount: pendingDebtInfo.creditCardVendorCount,
+      manual: manualLiabilities,
+      manualTotal: manualLiabilityTotal,
+      total: totalLiabilities,
+      convertedSubtotal: normalizeCurrencies ? liabilitiesConvertedSubtotal : undefined,
+      nativeTotals: liabilityFxSummary?.nativeTotals,
     },
     netWorth,
     netWorthStatus: netWorth === null ? 'partial' : 'ok',
     missingValuationsCount,
+    baseCurrency: assetFxSummary?.baseCurrency || liabilityFxSummary?.baseCurrency || 'ILS',
+    fx: normalizeCurrencies
+      ? {
+          complete: fxComplete,
+          missingCount: (assetFxSummary?.missing.length || 0) + (liabilityFxSummary?.missing.length || 0),
+          convertedSubtotal: assetsConvertedSubtotal,
+          assets: {
+            complete: assetFxSummary?.complete === true,
+            missingCount: assetFxSummary?.missing.length || 0,
+            convertedSubtotal: assetsConvertedSubtotal,
+            nativeTotals: assetFxSummary?.nativeTotals || [],
+          },
+          liabilities: {
+            complete: liabilityFxSummary?.complete !== false,
+            missingCount: liabilityFxSummary?.missing.length || 0,
+            convertedSubtotal: manualLiabilityConvertedSubtotal,
+            nativeTotals: liabilityFxSummary?.nativeTotals || [],
+          },
+        }
+      : undefined,
   };
 }
 
@@ -288,9 +418,11 @@ module.exports = {
   getInvestmentBalanceSheet,
   __setDatabase(mock) {
     database = mock || actualDatabase;
+    fxService.__setDatabase(database);
   },
   __resetDatabase() {
     database = actualDatabase;
+    fxService.__resetDatabase();
   },
 };
 module.exports.default = module.exports;
