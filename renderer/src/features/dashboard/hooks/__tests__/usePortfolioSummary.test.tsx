@@ -96,7 +96,7 @@ describe('usePortfolioSummary', () => {
     const { result } = renderHook(() => usePortfolioSummary());
 
     await waitFor(() => {
-      expect(result.current.portfolioValue).toBe(0);
+      expect(result.current.portfolioValue).toBeNull();
       expect(result.current.liquidPortfolio).toEqual([]);
       expect(result.current.illiquidPortfolio).toEqual([]);
       expect(result.current.restrictedPortfolio).toEqual([]);

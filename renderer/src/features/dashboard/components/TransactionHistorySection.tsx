@@ -34,6 +34,7 @@ import { useDashboardFilters } from '../DashboardFiltersContext';
 import { useTranslation } from 'react-i18next';
 import TransactionDetailModal, { TransactionForModal } from '@renderer/shared/modals/TransactionDetailModal';
 import type { DashboardForecastData } from '@renderer/features/dashboard/hooks/useDashboardInsights';
+import { getIncomeExpenseYAxisConfig } from './transaction-history-axis';
 import { grossNumber, hasPairedCardData, preferOperatingNumber } from '../utils/cashflow';
 
 interface TransactionHistorySectionProps {
@@ -159,6 +160,23 @@ const TransactionHistorySection: React.FC<TransactionHistorySectionProps> = ({
       })),
     [data.history, getDisplayExpenses, getDisplayIncome],
   );
+  const hasForecastSeries = React.useMemo(() => {
+    if (aggregationPeriod !== 'daily' || !Array.isArray(forecastData?.dailyForecasts)) {
+      return false;
+    }
+
+    const today = format(new Date(), 'yyyy-MM-dd');
+    return forecastData.dailyForecasts.some((item: any) => {
+      const hasNumericValue = [item?.income, item?.expenses, item?.cashFlow]
+        .some((value) => value !== null
+          && value !== undefined
+          && value !== ''
+          && Number.isFinite(Number(value)));
+
+      return typeof item?.date === 'string' && item.date > today && hasNumericValue;
+    });
+  }, [aggregationPeriod, forecastData]);
+  const incomeExpenseYAxisConfig = getIncomeExpenseYAxisConfig(yAxisScale);
 
   const anomalies = detectAnomalies(chartHistory);
   const chartTotalIncome = chartHistory.reduce((sum: number, item: any) => sum + (item.income || 0), 0);
@@ -579,7 +597,7 @@ const TransactionHistorySection: React.FC<TransactionHistorySectionProps> = ({
   return (
     <Paper
       sx={(theme) => ({
-        p: 3,
+        p: 2,
         mb: 3,
         background: theme.palette.mode === 'dark'
           ? 'linear-gradient(135deg, rgba(30, 30, 30, 0.6) 0%, rgba(20, 20, 20, 0.4) 100%)'
@@ -599,7 +617,7 @@ const TransactionHistorySection: React.FC<TransactionHistorySectionProps> = ({
         },
       })}
     >
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3, flexWrap: 'wrap', gap: 2 }}>
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1.5, flexWrap: 'wrap', gap: 1 }}>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
           {/* <Typography variant="h6">{t('title')}</Typography> */}
 
@@ -667,20 +685,31 @@ const TransactionHistorySection: React.FC<TransactionHistorySectionProps> = ({
 
         </Box>
         {activeTab === TAB_HISTORY && (
-          <Box sx={{ display: 'flex', gap: 2, alignItems: 'center', flexWrap: 'wrap' }}>
+          <Box
+            aria-label={t('settings.toolbar', { defaultValue: 'Chart controls' })}
+            sx={{
+              display: 'flex',
+              gap: 0.5,
+              alignItems: 'center',
+              flexWrap: 'wrap',
+              p: 0.5,
+              borderRadius: '12px',
+              bgcolor: (theme) => theme.palette.mode === 'dark'
+                ? 'rgba(255,255,255,0.05)'
+                : 'rgba(0,0,0,0.03)',
+            }}
+          >
             <ToggleButtonGroup 
               value={yAxisScale} 
               exclusive 
               onChange={(_, newScale) => newScale && setYAxisScale(newScale)} 
               size="small"
               sx={{
-                bgcolor: (theme) => theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.03)',
-                borderRadius: '12px',
-                p: 0.5,
+                borderRadius: '9px',
                 '& .MuiToggleButton-root': {
                   border: 'none',
-                  borderRadius: '8px !important',
-                  px: 2,
+                  borderRadius: '7px !important',
+                  px: 1.25,
                   py: 0.5,
                   color: 'text.secondary',
                   '&.Mui-selected': {
@@ -733,13 +762,11 @@ const TransactionHistorySection: React.FC<TransactionHistorySectionProps> = ({
               }}
               size="small"
               sx={{
-                bgcolor: (theme) => theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.03)',
-                borderRadius: '12px',
-                p: 0.5,
+                borderRadius: '9px',
                 '& .MuiToggleButton-root': {
                   border: 'none',
-                  borderRadius: '8px !important',
-                  px: 2,
+                  borderRadius: '7px !important',
+                  px: 1.25,
                   py: 0.5,
                   color: 'text.secondary',
                   '&.Mui-selected': {
@@ -770,13 +797,11 @@ const TransactionHistorySection: React.FC<TransactionHistorySectionProps> = ({
               }}
               size="small"
               sx={{
-                bgcolor: (theme) => theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.03)',
-                borderRadius: '12px',
-                p: 0.5,
+                borderRadius: '9px',
                 '& .MuiToggleButton-root': {
                   border: 'none',
-                  borderRadius: '8px !important',
-                  px: 2,
+                  borderRadius: '7px !important',
+                  px: 1.25,
                   py: 0.5,
                   color: 'text.secondary',
                   '&.Mui-selected': {
@@ -801,7 +826,7 @@ const TransactionHistorySection: React.FC<TransactionHistorySectionProps> = ({
                 size="small"
                 onClick={(event) => setSettingsAnchorEl(event.currentTarget)}
                 sx={{
-                  bgcolor: (theme) => theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.03)',
+                  bgcolor: 'transparent',
                   color: 'text.secondary',
                   borderRadius: '10px',
                   '&:hover': {
@@ -874,7 +899,7 @@ const TransactionHistorySection: React.FC<TransactionHistorySectionProps> = ({
                 size="small"
                 checked={showForecastLines}
                 onChange={(_, checked) => setShowForecastLines(checked)}
-                disabled={aggregationPeriod !== 'daily'}
+                disabled={!hasForecastSeries}
               />
             }
             label={t('settings.forecastLines', { defaultValue: 'Show forecast lines' })}
@@ -884,7 +909,7 @@ const TransactionHistorySection: React.FC<TransactionHistorySectionProps> = ({
       {/* Tab 0: Daily Income vs Expenses with Forecast */}
       {activeTab === TAB_HISTORY && (
         <>
-          {aggregationPeriod === 'daily' && forecastData && (
+          {hasForecastSeries && (
             <Typography
               variant="body2"
               sx={{
@@ -896,7 +921,7 @@ const TransactionHistorySection: React.FC<TransactionHistorySectionProps> = ({
               {` — ${t('settings.forecastLines')}: ${showForecastLines ? t('settings.on', { defaultValue: 'On' }) : t('settings.off', { defaultValue: 'Off' })}`}
             </Typography>
           )}
-          {aggregationPeriod !== 'daily' && (
+          {aggregationPeriod !== 'daily' && hasForecastSeries && (
             <Typography
               variant="body2"
               sx={{
@@ -933,11 +958,12 @@ const TransactionHistorySection: React.FC<TransactionHistorySectionProps> = ({
             tickLine={false}
             dy={10}
           />
+          {/* Net Position has a separate axis; this income/expense axis must stay at zero. */}
           <YAxis
             tick={{ fill: theme.palette.text.secondary, fontSize: 12 }}
             tickFormatter={yAxisScale === 'log' ? formatYAxisLog : formatCurrencyValue}
-            domain={yAxisScale === 'log' ? [0, 'dataMax'] : ['auto', 'auto']}
-            allowDataOverflow={false}
+            domain={incomeExpenseYAxisConfig.domain}
+            allowDataOverflow={incomeExpenseYAxisConfig.allowDataOverflow}
             scale="linear"
             allowDecimals={yAxisScale === 'log'}
             axisLine={false}
@@ -1062,7 +1088,7 @@ const TransactionHistorySection: React.FC<TransactionHistorySectionProps> = ({
             />
           )}
           {/* Forecast lines (dashed) - connect through nulls to draw continuous line from bridge point */}
-          {showForecastLines && (
+          {showForecastLines && hasForecastSeries && (
             <Line 
               type="monotone" 
               dataKey="forecastIncome" 
@@ -1078,7 +1104,7 @@ const TransactionHistorySection: React.FC<TransactionHistorySectionProps> = ({
               connectNulls={true}
             />
           )}
-          {showForecastLines && (
+          {showForecastLines && hasForecastSeries && (
             <Line 
               type="monotone" 
               dataKey="forecastExpenses" 

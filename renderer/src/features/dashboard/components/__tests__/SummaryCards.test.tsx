@@ -1,7 +1,7 @@
 import React from 'react';
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import SummaryCards from '../SummaryCards';
 import {
   computeEffectiveNetInvestments,
@@ -17,9 +17,13 @@ vi.mock('@app/contexts/FinancePrivacyContext', () => ({
   }),
 }));
 
+const spendingCategoriesMock = vi.hoisted(() => ({
+  breakdown: null as any,
+}));
+
 vi.mock('@renderer/features/budgets/hooks/useSpendingCategories', () => ({
   useSpendingCategories: () => ({
-    breakdown: null,
+    breakdown: spendingCategoriesMock.breakdown,
     fetchBreakdown: () => undefined,
   }),
 }));
@@ -48,6 +52,9 @@ vi.mock('react-i18next', () => ({
         'summary.cards.finance.pendingBreakdownFallback': 'No future settlement date breakdown available',
         'summary.cards.finance.pendingIncludedNote': 'Already included in Expenses above; shown separately by settlement date.',
         'summary.cards.portfolio.title': 'Investment Portfolio',
+        'summary.cards.portfolio.emptyTitle': 'No investments yet',
+        'summary.cards.portfolio.emptyDescription': 'Add an investment account to track your portfolio here.',
+        'summary.cards.portfolio.addAccount': 'Add investment account',
         'summary.cards.analysis.title': 'Financial Health',
         'summary.budgets.utilization': 'Budget Utilization ({{count}} categories)',
         'summary.allocation.actual': 'Actual Allocation',
@@ -127,6 +134,10 @@ describe('SummaryCards helpers', () => {
 });
 
 describe('SummaryCards component', () => {
+  beforeEach(() => {
+    spendingCategoriesMock.breakdown = null;
+  });
+
   it('shows pending expenses grouped by processed date on hover', async () => {
     const user = userEvent.setup();
 
@@ -155,5 +166,92 @@ describe('SummaryCards component', () => {
     expect(screen.getByText('₪500 (2 tx)')).toBeInTheDocument();
     expect(screen.getByText('Jul 25')).toBeInTheDocument();
     expect(screen.getByText('₪250 (1 tx)')).toBeInTheDocument();
+  });
+
+  it('uses a compact portfolio empty state and keeps health labels visible', async () => {
+    const user = userEvent.setup();
+    const openAccounts = vi.fn();
+    const handleOpenAccounts = (event: Event) => {
+      openAccounts((event as CustomEvent).detail);
+    };
+    window.addEventListener('openAccountsModal', handleOpenAccounts);
+
+    render(
+      <SummaryCards
+        totalIncome={5000}
+        totalExpenses={2500}
+        currentBankBalance={7500}
+        portfolioValue={0}
+      />,
+    );
+
+    expect(screen.getByText('No investments yet')).toBeInTheDocument();
+    expect(screen.queryByText(/Budget Utilization/)).not.toBeInTheDocument();
+    expect(screen.getByRole('group', { name: /Savings:/ })).toBeInTheDocument();
+    expect(screen.getByRole('group', { name: /Diversity:/ })).toBeInTheDocument();
+    expect(screen.getByRole('group', { name: /Impulse:/ })).toBeInTheDocument();
+    expect(screen.getByRole('group', { name: /Runway:/ })).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Add investment account' }));
+    expect(openAccounts).toHaveBeenCalledWith({ tab: 'investments', addFlow: true });
+
+    window.removeEventListener('openAccountsModal', handleOpenAccounts);
+  });
+
+  it('does not claim the portfolio is empty while its value is unavailable', () => {
+    render(
+      <SummaryCards
+        totalIncome={5000}
+        totalExpenses={2500}
+        currentBankBalance={7500}
+        portfolioValue={null}
+      />,
+    );
+
+    expect(screen.getByText('—')).toBeInTheDocument();
+    expect(screen.queryByText('No investments yet')).not.toBeInTheDocument();
+  });
+
+  it('keeps the allocation target and health metrics in one compact row', () => {
+    spendingCategoriesMock.breakdown = {
+      targets: {
+        essential: 50,
+        growth: 20,
+        stability: 10,
+        reward: 15,
+      },
+      breakdown: [
+        { spending_category: 'essential', actual_percentage: 50 },
+        { spending_category: 'growth', actual_percentage: 20 },
+        { spending_category: 'stability', actual_percentage: 10 },
+        { spending_category: 'reward', actual_percentage: 20 },
+      ],
+    };
+
+    render(
+      <SummaryCards
+        totalIncome={10_000}
+        totalExpenses={2_000}
+        currentBankBalance={20_000}
+        portfolioValue={10_000}
+        healthSnapshot={{
+          overallHealthScore: 91,
+          healthBreakdown: {
+            savingsScore: 100,
+            diversityScore: 80,
+            impulseScore: 84,
+            runwayScore: 92,
+          },
+        }}
+      />,
+    );
+
+    const summaryRow = screen.getByTestId('health-summary-row');
+    expect(summaryRow.children).toHaveLength(5);
+    expect(within(summaryRow).getByText('Target: 50 / 20 / 10 / 15%')).toBeInTheDocument();
+    expect(within(summaryRow).getByRole('group', { name: 'Savings: 100' })).toBeInTheDocument();
+    expect(within(summaryRow).getByRole('group', { name: 'Diversity: 80' })).toBeInTheDocument();
+    expect(within(summaryRow).getByRole('group', { name: 'Impulse: 84' })).toBeInTheDocument();
+    expect(within(summaryRow).getByRole('group', { name: 'Runway: 92' })).toBeInTheDocument();
   });
 });

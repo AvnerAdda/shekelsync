@@ -87,7 +87,7 @@ const DashboardSummarySection: React.FC<DashboardSummarySectionProps> = ({
           pendingExpenses={data.summary.pendingExpenses}
           pendingCount={data.summary.pendingCount}
           pendingByProcessedDate={data.summary.pendingByProcessedDate}
-          portfolioValue={portfolioValue ?? 0}
+          portfolioValue={portfolioValue}
           portfolioGains={undefined}
           monthlyPortfolioChange={undefined}
           assetBreakdown={[...liquidPortfolio, ...illiquidPortfolio, ...restrictedPortfolio].map(item => ({

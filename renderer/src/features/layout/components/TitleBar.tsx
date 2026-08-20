@@ -39,6 +39,7 @@ import LightModeIcon from '@mui/icons-material/LightMode';
 import MaximizeIcon from '@mui/icons-material/CropSquare';
 import MenuIcon from '@mui/icons-material/Menu';
 import MinimizeIcon from '@mui/icons-material/Minimize';
+import MoreVertIcon from '@mui/icons-material/MoreVert';
 import NewIcon from '@mui/icons-material/FiberNew';
 import PasteIcon from '@mui/icons-material/ContentPaste';
 import RedoIcon from '@mui/icons-material/Redo';
@@ -46,6 +47,7 @@ import ResetIcon from '@mui/icons-material/SettingsBackupRestore';
 import SaveIcon from '@mui/icons-material/Save';
 import SearchIcon from '@mui/icons-material/Search';
 import SettingsIcon from '@mui/icons-material/Settings';
+import ShieldIcon from '@mui/icons-material/Shield';
 import TranslateIcon from '@mui/icons-material/Translate';
 import UndoIcon from '@mui/icons-material/Undo';
 import ViewIcon from '@mui/icons-material/Visibility';
@@ -61,8 +63,8 @@ import { useUpdateManager } from '../hooks/useUpdateManager';
 import { useThemeMode } from '@renderer/contexts/ThemeContext';
 import { useLocaleSettings } from '@renderer/i18n/I18nProvider';
 import type { SupportedLocale } from '@renderer/i18n';
-import SecurityIndicator from '@renderer/features/security/components/SecurityIndicator';
 import SecurityDetailsModal from '@renderer/features/security/components/SecurityDetailsModal';
+import { useSecurity } from '@renderer/features/security/contexts/SecurityContext';
 import {
   DONATION_OPEN_MODAL_EVENT,
   DonationModal,
@@ -83,9 +85,11 @@ const TitleBar: React.FC<TitleBarProps> = ({ sessionDisplayName, authLoading }) 
   const [isMaximized, setIsMaximized] = useState(false);
   const [windowClassesApplied, setWindowClassesApplied] = useState(false);
   const [langMenuAnchor, setLangMenuAnchor] = useState<null | HTMLElement>(null);
+  const [moreActionsAnchor, setMoreActionsAnchor] = useState<null | HTMLElement>(null);
   const [securityDetailsOpen, setSecurityDetailsOpen] = useState(false);
   const [donationModalOpen, setDonationModalOpen] = useState(false);
   const { status: donationStatus } = useDonationStatus();
+  const { summary: securitySummary, error: securityError } = useSecurity();
 
   // Theme and language hooks
   const { mode, setMode, actualTheme } = useThemeMode();
@@ -499,6 +503,16 @@ const TitleBar: React.FC<TitleBarProps> = ({ sessionDisplayName, authLoading }) 
     : donationStatus?.supportStatus === 'pending'
       ? '#ed6c02'
       : '#6f4e37';
+  const securityNeedsAttention = Boolean(securityError)
+    || securitySummary?.level === 'warning'
+    || securitySummary?.level === 'error';
+  const securityMenuColor = securitySummary?.level === 'secure'
+    ? theme.palette.success.main
+    : securitySummary?.level === 'warning'
+      ? theme.palette.warning.main
+      : securitySummary?.level === 'error'
+        ? theme.palette.error.main
+        : theme.palette.text.disabled;
 
   return (
     <Box
@@ -778,7 +792,7 @@ const TitleBar: React.FC<TitleBarProps> = ({ sessionDisplayName, authLoading }) 
         </Box>
       </Box>
       {/* Right section: Status + Notifications + Window Controls */}
-      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, WebkitAppRegion: 'no-drag' }}>
+      <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75, WebkitAppRegion: 'no-drag' }}>
         {sessionDisplayName && (
           <Chip
             size="small"
@@ -898,39 +912,95 @@ const TitleBar: React.FC<TitleBarProps> = ({ sessionDisplayName, authLoading }) 
 
         <SmartNotifications />
 
-        <Tooltip title={t('titleBar.tooltips.sendFeedback')}>
+        <Tooltip title={t('titleBar.tooltips.moreActions', { defaultValue: 'More actions' })}>
           <IconButton
-            color="inherit"
             size="small"
-            onClick={openFeedbackPage}
+            aria-label={t('titleBar.tooltips.moreActions', { defaultValue: 'More actions' })}
+            onClick={(event) => setMoreActionsAnchor(event.currentTarget)}
             sx={{
-              color: theme.palette.info.main,
+              width: 36,
+              height: 36,
+              color: theme.palette.text.secondary,
+              borderRadius: 2,
               '&:hover': {
-                backgroundColor: 'action.hover',
+                backgroundColor: alpha(theme.palette.text.primary, 0.05),
+                color: theme.palette.text.primary,
               },
             }}
           >
-            <FeedbackIcon sx={{ fontSize: 20 }} />
+            {securityNeedsAttention && (
+              <Box
+                component="span"
+                sx={{
+                  position: 'absolute',
+                  width: 7,
+                  height: 7,
+                  borderRadius: '50%',
+                  top: 5,
+                  right: 5,
+                  bgcolor: theme.palette.error.main,
+                }}
+              />
+            )}
+            <MoreVertIcon sx={{ fontSize: 20 }} />
           </IconButton>
         </Tooltip>
-
-        <Tooltip title={buyMeCoffeeTooltip}>
-          <IconButton
-            color="inherit"
-            size="small"
-            onClick={() => setDonationModalOpen(true)}
-            sx={{
-              color: supportButtonColor,
-              '&:hover': {
-                backgroundColor: 'action.hover',
+        <Menu
+          anchorEl={moreActionsAnchor}
+          open={Boolean(moreActionsAnchor)}
+          onClose={() => setMoreActionsAnchor(null)}
+          anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+          transformOrigin={{ vertical: 'top', horizontal: 'right' }}
+          slotProps={{
+            paper: {
+              elevation: 8,
+              sx: {
+                mt: 1,
+                minWidth: 230,
+                borderRadius: 2.5,
+                bgcolor: alpha(theme.palette.background.paper, 0.96),
+                backdropFilter: 'blur(12px)',
+                border: `1px solid ${alpha(theme.palette.divider, 0.12)}`,
               },
+            },
+          }}
+        >
+          <MenuItem
+            onClick={() => {
+              setMoreActionsAnchor(null);
+              void openFeedbackPage();
             }}
           >
-            <CoffeeIcon sx={{ fontSize: 20 }} />
-          </IconButton>
-        </Tooltip>
-
-        <SecurityIndicator onClick={() => setSecurityDetailsOpen(true)} />
+            <ListItemIcon><FeedbackIcon fontSize="small" color="info" /></ListItemIcon>
+            <ListItemText>{t('titleBar.tooltips.sendFeedback')}</ListItemText>
+          </MenuItem>
+          <MenuItem
+            onClick={() => {
+              setMoreActionsAnchor(null);
+              setDonationModalOpen(true);
+            }}
+          >
+            <ListItemIcon><CoffeeIcon fontSize="small" sx={{ color: supportButtonColor }} /></ListItemIcon>
+            <ListItemText>{buyMeCoffeeTooltip}</ListItemText>
+          </MenuItem>
+          <Divider />
+          <MenuItem
+            onClick={() => {
+              setMoreActionsAnchor(null);
+              setSecurityDetailsOpen(true);
+            }}
+          >
+            <ListItemIcon><ShieldIcon fontSize="small" sx={{ color: securityMenuColor }} /></ListItemIcon>
+            <ListItemText
+              primary={t('titleBar.moreActions.security', { defaultValue: 'Security status' })}
+              secondary={securitySummary?.level
+                ? t(`titleBar.moreActions.securityLevels.${securitySummary.level}`, {
+                    defaultValue: securitySummary.level,
+                  })
+                : t('titleBar.moreActions.securityLevels.unknown', { defaultValue: 'Unknown' })}
+            />
+          </MenuItem>
+        </Menu>
 
         {/* Window Controls - Hide on macOS as we use native traffic lights */}
         {!isMacOS && (

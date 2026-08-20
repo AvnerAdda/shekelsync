@@ -108,7 +108,9 @@ export function usePortfolioSummary(): UsePortfolioSummaryResult {
         return;
       }
 
-      setPortfolioValue(0);
+      // Preserve the distinction between a confirmed empty portfolio (0)
+      // and a summary that could not be loaded (null).
+      setPortfolioValue(null);
       setLiquidPortfolio([]);
       setIlliquidPortfolio([]);
       setRestrictedPortfolio([]);
