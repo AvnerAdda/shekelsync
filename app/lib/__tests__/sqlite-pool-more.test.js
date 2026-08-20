@@ -6,6 +6,8 @@ const createSqlitePool = require('../sqlite-pool.js');
 describe('sqlite-pool additional coverage', () => {
   beforeEach(() => {
     vi.spyOn(fs, 'existsSync').mockReturnValue(true);
+    vi.spyOn(fs, 'mkdirSync').mockImplementation(() => undefined);
+    vi.spyOn(fs, 'copyFileSync').mockImplementation(() => undefined);
   });
 
   afterEach(() => {

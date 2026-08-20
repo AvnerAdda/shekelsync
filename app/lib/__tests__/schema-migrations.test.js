@@ -56,4 +56,10 @@ describe('schema migrations (PRAGMA user_version)', () => {
     expect(result.status, result.stderr || result.stdout).toBe(0);
     expect(result.stdout).toContain('schema-migrations:default-registry:ok');
   });
+
+  it('upgrades legacy user_version 5 databases with the optimizer v2 schema', () => {
+    const result = runScenario('optimizer-v2-from-legacy-v5');
+    expect(result.status, result.stderr || result.stdout).toBe(0);
+    expect(result.stdout).toContain('schema-migrations:optimizer-v2-from-legacy-v5:ok');
+  });
 });

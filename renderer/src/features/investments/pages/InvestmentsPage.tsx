@@ -66,6 +66,7 @@ import {
   getPortfolioAccountsForScope,
   getPortfolioScopeTotal,
 } from '../utils/portfolio-categories';
+import { resolveInvestmentTabFromSearch } from '../utils/investment-tab-route';
 
 const TIME_RANGES: { value: HistoryTimeRangeOption; label: string }[] = [
   { value: '1w', label: '1W' },
@@ -185,13 +186,11 @@ const InvestmentsPageContent: React.FC = () => {
   const [selectedRealEstateAccount, setSelectedRealEstateAccount] = useState<InvestmentAccountSummary | null>(null);
 
   useEffect(() => {
-    const searchParams = new URLSearchParams(location.search);
-    const requestedTab = searchParams.get('tab');
-
-    if (requestedTab === 'holdings' && activeTab !== 1) {
-      setActiveTab(1);
+    const requestedTab = resolveInvestmentTabFromSearch(location.search);
+    if (requestedTab !== null) {
+      setActiveTab(requestedTab);
     }
-  }, [activeTab, location.search]);
+  }, [location.search]);
 
   const {
     data: balanceSheetData,

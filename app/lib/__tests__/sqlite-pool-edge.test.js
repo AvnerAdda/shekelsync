@@ -1,7 +1,12 @@
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const createSqlitePool = require('../sqlite-pool.js');
 const fs = require('fs');
+
+beforeEach(() => {
+  vi.spyOn(fs, 'mkdirSync').mockImplementation(() => undefined);
+  vi.spyOn(fs, 'copyFileSync').mockImplementation(() => undefined);
+});
 
 afterEach(() => {
   vi.restoreAllMocks();
