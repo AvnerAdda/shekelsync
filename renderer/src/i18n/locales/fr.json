@@ -232,7 +232,10 @@
           "pendingIncludedNote": "Déjà inclus dans les dépenses ci-dessus ; affiché séparément par date de règlement."
         },
         "portfolio": {
-          "title": "Portefeuille d'investissement"
+          "title": "Portefeuille d'investissement",
+          "emptyTitle": "Aucun investissement pour le moment",
+          "emptyDescription": "Ajoutez un compte d'investissement pour suivre votre portefeuille ici.",
+          "addAccount": "Ajouter un compte d'investissement"
         },
         "analysis": {
           "title": "Santé financière"
@@ -841,6 +844,7 @@
       "historicalData": "Historique",
       "forecastData": "Prévision",
       "next30Days": "Prévision 30 jours",
+      "basedOnPatterns": "Basé sur les habitudes de dépenses historiques",
       "scenarioSummary": "Projection de fin de mois basée sur {{simulations}} simulations Monte Carlo",
       "daysRemaining": "{{count}} jours restants dans le mois",
       "actualNet": "Position nette réelle",
@@ -884,6 +888,7 @@
       "peakIncome": "Jour de revenu record"
     },
     "transactionsOn": "Transactions du {{date}} ({{count}} transactions) :",
+    "predictedTransactionsOn": "Transactions prévues le {{date}} ({{count}})",
     "noTransactionsForDate": "Aucune transaction pour cette date."
   },
   "analysisPage": {
@@ -3174,7 +3179,17 @@
       "maximizeWindow": "Agrandir la fenêtre",
       "restoreWindow": "Restaurer la fenêtre",
       "closeWindow": "Fermer la fenêtre",
-      "sendFeedback": "Envoyer un commentaire"
+      "sendFeedback": "Envoyer un commentaire",
+      "moreActions": "Plus d'actions"
+    },
+    "moreActions": {
+      "security": "État de sécurité",
+      "securityLevels": {
+        "secure": "Sécurisé",
+        "warning": "Attention requise",
+        "error": "Problèmes détectés",
+        "unknown": "Inconnu"
+      }
     },
     "update": {
       "tooltip": {
