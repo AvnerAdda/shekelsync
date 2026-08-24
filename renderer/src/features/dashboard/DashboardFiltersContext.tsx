@@ -1,8 +1,8 @@
 import React, { createContext, useContext, useMemo, useState, useCallback } from 'react';
-import { subDays, addDays } from 'date-fns';
+import { subDays, addDays, startOfMonth } from 'date-fns';
 import { AggregationPeriod } from '@renderer/types/dashboard';
 
-export type PeriodDays = 30 | 60 | 90;
+export type DashboardPeriodPreset = 'mtd' | '30d' | 'custom';
 
 interface DashboardFiltersContextValue {
   startDate: Date;
@@ -12,9 +12,8 @@ interface DashboardFiltersContextValue {
   setAggregationPeriod: (period: AggregationPeriod) => void;
   hoveredDate: string | null;
   setHoveredDate: (value: string | null) => void;
-  /** Number of days to look back for historical data */
-  periodDays: PeriodDays;
-  setPeriodDays: (days: PeriodDays) => void;
+  periodPreset: DashboardPeriodPreset;
+  setPeriodPreset: (preset: Exclude<DashboardPeriodPreset, 'custom'>) => void;
   /** Forecast is always 30 days ahead from today */
   forecastEndDate: Date;
 }
@@ -22,8 +21,8 @@ interface DashboardFiltersContextValue {
 const DashboardFiltersContext = createContext<DashboardFiltersContextValue | undefined>(undefined);
 
 export const DashboardFiltersProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [periodDays, setPeriodDaysState] = useState<PeriodDays>(30);
-  const [startDate, setStartDate] = useState(() => subDays(new Date(), 30));
+  const [periodPreset, setPeriodPresetState] = useState<DashboardPeriodPreset>('mtd');
+  const [startDate, setStartDate] = useState(() => startOfMonth(new Date()));
   const [endDate, setEndDate] = useState(() => new Date());
   const [aggregationPeriod, setAggregationPeriod] = useState<AggregationPeriod>('daily');
   const [hoveredDate, setHoveredDate] = useState<string | null>(null);
@@ -31,15 +30,17 @@ export const DashboardFiltersProvider: React.FC<{ children: React.ReactNode }> =
   // Forecast always 30 days ahead from today
   const forecastEndDate = useMemo(() => addDays(new Date(), 30), []);
 
-  const setDateRange = (start: Date, end: Date) => {
+  const setDateRange = useCallback((start: Date, end: Date) => {
     setStartDate(start);
     setEndDate(end);
-  };
+    setPeriodPresetState('custom');
+  }, []);
 
-  const setPeriodDays = useCallback((days: PeriodDays) => {
-    setPeriodDaysState(days);
-    setStartDate(subDays(new Date(), days));
-    setEndDate(new Date());
+  const setPeriodPreset = useCallback((preset: Exclude<DashboardPeriodPreset, 'custom'>) => {
+    const now = new Date();
+    setPeriodPresetState(preset);
+    setStartDate(preset === 'mtd' ? startOfMonth(now) : subDays(now, 30));
+    setEndDate(now);
   }, []);
 
   const value = useMemo(
@@ -51,11 +52,20 @@ export const DashboardFiltersProvider: React.FC<{ children: React.ReactNode }> =
       setAggregationPeriod,
       hoveredDate,
       setHoveredDate,
-      periodDays,
-      setPeriodDays,
+      periodPreset,
+      setPeriodPreset,
       forecastEndDate,
     }),
-    [aggregationPeriod, endDate, hoveredDate, startDate, periodDays, setPeriodDays, forecastEndDate]
+    [
+      aggregationPeriod,
+      endDate,
+      hoveredDate,
+      startDate,
+      periodPreset,
+      setDateRange,
+      setPeriodPreset,
+      forecastEndDate,
+    ]
   );
 
   return <DashboardFiltersContext.Provider value={value}>{children}</DashboardFiltersContext.Provider>;

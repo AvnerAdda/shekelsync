@@ -10,6 +10,16 @@
     "or": "or",
     "close": "Close"
   },
+  "dashboardPeriod": {
+    "ariaLabel": "Dashboard period",
+    "mtd": "MTD",
+    "last30": "30D",
+    "custom": "Custom",
+    "startDate": "Start date",
+    "endDate": "End date",
+    "cancel": "Cancel",
+    "apply": "Apply"
+  },
   "routeError": {
     "titles": {
       "notFound": "Page not found",
@@ -740,10 +750,9 @@
       "investment": "Investment"
     },
     "periodDays": {
-      "last30": "30d",
-      "last60": "60d",
-      "last90": "90d",
-      "lastXDays": "Last {{count}} days"
+      "mtdLong": "Month to date",
+      "last30Long": "Last 30 days",
+      "customLong": "{{start}} – {{end}}"
     },
     "overall": {
       "totalIncome": "Total Income: {{amount}}",
@@ -801,10 +810,9 @@
       "monthly": "Monthly"
     },
     "periodDays": {
-      "last30": "30d",
-      "last60": "60d",
-      "last90": "90d",
-      "showingLast": "Last {{count}} days"
+      "showingMtd": "Month to date",
+      "showingLast30": "Last 30 days",
+      "showingCustom": "{{start}} – {{end}}"
     },
     "settings": {
       "button": "Chart options",

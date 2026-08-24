@@ -30,6 +30,7 @@ import TuneIcon from '@mui/icons-material/Tune';
 import InstitutionBadge from '@renderer/shared/components/InstitutionBadge';
 import CategoryIcon from '@renderer/features/breakdown/components/CategoryIcon';
 import IncomeExpenseCalendar from './IncomeExpenseCalendar';
+import DashboardPeriodSelector from './DashboardPeriodSelector';
 import { useDashboardFilters } from '../DashboardFiltersContext';
 import { useTranslation } from 'react-i18next';
 import TransactionDetailModal, { TransactionForModal } from '@renderer/shared/modals/TransactionDetailModal';
@@ -104,8 +105,14 @@ const TransactionHistorySection: React.FC<TransactionHistorySectionProps> = ({
   refreshForecast = () => undefined,
 }) => {
   const theme = useTheme();
-  const { aggregationPeriod, setAggregationPeriod, periodDays, setPeriodDays } = useDashboardFilters();
-  const { t } = useTranslation('translation', { keyPrefix: 'transactionHistory' });
+  const {
+    aggregationPeriod,
+    setAggregationPeriod,
+    startDate,
+    endDate,
+    periodPreset,
+  } = useDashboardFilters();
+  const { t, i18n } = useTranslation('translation', { keyPrefix: 'transactionHistory' });
   const TAB_HISTORY = 0;
   const TAB_CALENDAR = 1;
   const TAB_NET_POSITION = 2;
@@ -160,8 +167,24 @@ const TransactionHistorySection: React.FC<TransactionHistorySectionProps> = ({
       })),
     [data.history, getDisplayExpenses, getDisplayIncome],
   );
+  const rangeEndsToday = format(endDate, 'yyyy-MM-dd') === format(new Date(), 'yyyy-MM-dd');
+  const selectedPeriodLabel = React.useMemo(() => {
+    if (periodPreset === 'mtd') return t('periodDays.showingMtd');
+    if (periodPreset === '30d') return t('periodDays.showingLast30');
+
+    const formatter = new Intl.DateTimeFormat(i18n.language || undefined, {
+      month: 'short',
+      day: 'numeric',
+      year: startDate.getFullYear() === endDate.getFullYear() ? undefined : 'numeric',
+    });
+    return t('periodDays.showingCustom', {
+      start: formatter.format(startDate),
+      end: formatter.format(endDate),
+    });
+  }, [endDate, i18n.language, periodPreset, startDate, t]);
+
   const hasForecastSeries = React.useMemo(() => {
-    if (aggregationPeriod !== 'daily' || !Array.isArray(forecastData?.dailyForecasts)) {
+    if (!rangeEndsToday || aggregationPeriod !== 'daily' || !Array.isArray(forecastData?.dailyForecasts)) {
       return false;
     }
 
@@ -175,7 +198,7 @@ const TransactionHistorySection: React.FC<TransactionHistorySectionProps> = ({
 
       return typeof item?.date === 'string' && item.date > today && hasNumericValue;
     });
-  }, [aggregationPeriod, forecastData]);
+  }, [aggregationPeriod, forecastData, rangeEndsToday]);
   const incomeExpenseYAxisConfig = getIncomeExpenseYAxisConfig(yAxisScale);
 
   const anomalies = detectAnomalies(chartHistory);
@@ -294,7 +317,7 @@ const TransactionHistorySection: React.FC<TransactionHistorySectionProps> = ({
     setDetailModalOpen(true);
   };
 
-  // Calculate cumulative net position data (historical only, filtered by periodDays)
+  // Calculate cumulative net position data for the selected historical range.
   // The operating basis strips paired credit-card repayments to avoid double
   // counting. Without any paired card data those repayments ARE the visible
   // spending, so the chart must stay on the gross basis (history and forecast
@@ -307,13 +330,11 @@ const TransactionHistorySection: React.FC<TransactionHistorySectionProps> = ({
   const getNetPositionData = useCallback(() => {
     if (!data.history || data.history.length === 0) return [];
 
-    // Filter to last X days based on periodDays
-    const today = new Date();
-    const todayStr = format(today, 'yyyy-MM-dd');
-    const periodStartDate = format(subDays(today, periodDays), 'yyyy-MM-dd');
+    const periodStartDate = format(startDate, 'yyyy-MM-dd');
+    const periodEndDate = format(endDate, 'yyyy-MM-dd');
 
     const filteredHistory = (data.history || []).filter((item: any) =>
-      item.date >= periodStartDate && item.date <= todayStr
+      item.date >= periodStartDate && item.date <= periodEndDate
     );
 
     let cumulative = 0;
@@ -329,16 +350,15 @@ const TransactionHistorySection: React.FC<TransactionHistorySectionProps> = ({
         isForecast: false,
       };
     });
-  }, [data.history, periodDays, useOperatingBasis]);
+  }, [data.history, endDate, startDate, useOperatingBasis]);
 
   // Detect gap period (no data zone) - from last scraped data to today
   const gapPeriodInfo = React.useMemo(() => {
-    const today = new Date();
-    const todayStr = format(today, 'yyyy-MM-dd');
-    const periodStartDate = format(subDays(today, periodDays), 'yyyy-MM-dd');
+    const periodStartDate = format(startDate, 'yyyy-MM-dd');
+    const periodEndDate = format(endDate, 'yyyy-MM-dd');
     
     const baseHistoricalData = (data.history || []).filter((item: any) => 
-      item.date >= periodStartDate && item.date <= todayStr
+      item.date >= periodStartDate && item.date <= periodEndDate
     );
     
     // Find the last date with ACTUAL data (income or expenses > 0)
@@ -352,31 +372,31 @@ const TransactionHistorySection: React.FC<TransactionHistorySectionProps> = ({
     }
     
     // Gap exists if last real data is before today
-    const hasGap = lastRealDataDate && lastRealDataDate < todayStr;
+    const hasGap = rangeEndsToday && lastRealDataDate && lastRealDataDate < periodEndDate;
     
     return {
       hasGap,
       gapStartDate: lastRealDataDate,
-      gapEndDate: todayStr,
+      gapEndDate: periodEndDate,
     };
-  }, [data.history, periodDays]);
+  }, [data.history, endDate, rangeEndsToday, startDate]);
 
   // Get combined data for Daily Income vs Expenses (historical + forecast)
-  // Shows last X days of historical data + 30 days of forecast
+  // Current ranges include the next 30 forecast days; past custom ranges stay historical.
   const getDailyIncomeExpenseData = useCallback(() => {
-    // Filter historical data to last X days based on periodDays
     const today = new Date();
     const todayStr = format(today, 'yyyy-MM-dd');
-    const periodStartDate = format(subDays(today, periodDays), 'yyyy-MM-dd');
+    const periodStartDate = format(startDate, 'yyyy-MM-dd');
+    const periodEndDate = format(endDate, 'yyyy-MM-dd');
     const forecastEndDate = format(addDays(today, 30), 'yyyy-MM-dd');
     
     // Filter base historical data to the selected period
     const baseHistoricalData = chartHistory.filter((item: any) => 
-      item.date >= periodStartDate && item.date <= todayStr
+      item.date >= periodStartDate && item.date <= periodEndDate
     );
 
     // Only add forecast data in daily aggregation mode
-    if (aggregationPeriod !== 'daily' || !forecastData?.dailyForecasts) {
+    if (!rangeEndsToday || aggregationPeriod !== 'daily' || !forecastData?.dailyForecasts) {
       const transformedData = yAxisScale === 'log' ? getLogScaleData(baseHistoricalData) : baseHistoricalData;
       return transformedData.map((item: any) => ({
         ...item,
@@ -480,10 +500,20 @@ const TransactionHistorySection: React.FC<TransactionHistorySectionProps> = ({
     }
 
     return combinedData;
-  }, [chartHistory, forecastData, yAxisScale, getLogScaleData, aggregationPeriod, periodDays, gapPeriodInfo]);
+  }, [
+    aggregationPeriod,
+    chartHistory,
+    endDate,
+    forecastData,
+    gapPeriodInfo,
+    getLogScaleData,
+    rangeEndsToday,
+    startDate,
+    yAxisScale,
+  ]);
 
   // Get combined net position data (historical + forecast with P10/P50/P90 scenarios)
-  // Shows last X days historical + 30 days forecast
+  // Current ranges include the next 30 forecast days; past custom ranges stay historical.
   const getCombinedNetPositionData = useCallback(() => {
     const baseHistoricalData = getNetPositionData();
     
@@ -493,7 +523,7 @@ const TransactionHistorySection: React.FC<TransactionHistorySectionProps> = ({
     const forecastEndDateStr = format(addDays(today, 30), 'yyyy-MM-dd');
 
     // Only add forecast data in daily aggregation mode
-    if (aggregationPeriod !== 'daily' || !forecastData?.dailyForecasts || baseHistoricalData.length === 0) {
+    if (!rangeEndsToday || aggregationPeriod !== 'daily' || !forecastData?.dailyForecasts || baseHistoricalData.length === 0) {
       return baseHistoricalData.map((item: any) => ({
         ...item,
         forecastCumulative: undefined,
@@ -592,7 +622,7 @@ const TransactionHistorySection: React.FC<TransactionHistorySectionProps> = ({
       });
 
     return [...historicalData, ...forecastEntries];
-  }, [getNetPositionData, forecastData, aggregationPeriod, gapPeriodInfo, useOperatingBasis]);
+  }, [getNetPositionData, forecastData, aggregationPeriod, gapPeriodInfo, rangeEndsToday, useOperatingBasis]);
 
   return (
     <Paper
@@ -786,16 +816,7 @@ const TransactionHistorySection: React.FC<TransactionHistorySectionProps> = ({
               <ToggleButton value="monthly">{t('periods.monthly')}</ToggleButton>
             </ToggleButtonGroup>
 
-            {/* Period selector: last 30/60/90 days */}
-            <ToggleButtonGroup
-              value={periodDays}
-              exclusive
-              onChange={(_, newPeriod) => {
-                if (newPeriod) {
-                  setPeriodDays(newPeriod);
-                }
-              }}
-              size="small"
+            <DashboardPeriodSelector
               sx={{
                 borderRadius: '9px',
                 '& .MuiToggleButton-root': {
@@ -815,11 +836,7 @@ const TransactionHistorySection: React.FC<TransactionHistorySectionProps> = ({
                   }
                 }
               }}
-            >
-              <ToggleButton value={30}>{t('periodDays.last30', { defaultValue: '30d' })}</ToggleButton>
-              <ToggleButton value={60}>{t('periodDays.last60', { defaultValue: '60d' })}</ToggleButton>
-              <ToggleButton value={90}>{t('periodDays.last90', { defaultValue: '90d' })}</ToggleButton>
-            </ToggleButtonGroup>
+            />
 
             <MuiTooltip title={t('settings.button', { defaultValue: 'Chart options' })}>
               <IconButton
@@ -917,7 +934,7 @@ const TransactionHistorySection: React.FC<TransactionHistorySectionProps> = ({
                 mb: 1,
                 textAlign: 'center'
               }}>
-              {t('periodDays.showingLast', { count: periodDays, defaultValue: `Last ${periodDays} days` })} + {t('forecast.next30Days', { defaultValue: '30 day forecast' })}
+              {selectedPeriodLabel} + {t('forecast.next30Days', { defaultValue: '30 day forecast' })}
               {` — ${t('settings.forecastLines')}: ${showForecastLines ? t('settings.on', { defaultValue: 'On' }) : t('settings.off', { defaultValue: 'Off' })}`}
             </Typography>
           )}
@@ -1463,7 +1480,7 @@ const TransactionHistorySection: React.FC<TransactionHistorySectionProps> = ({
           )}
           {!forecastLoading && !forecastError && (
             <>
-              {aggregationPeriod === 'daily' && forecastData && (
+              {aggregationPeriod === 'daily' && forecastData && rangeEndsToday && (
                 <Typography
                   variant="body2"
                   sx={{
@@ -1471,7 +1488,7 @@ const TransactionHistorySection: React.FC<TransactionHistorySectionProps> = ({
                     mb: 2,
                     textAlign: 'center'
                   }}>
-                  {t('periodDays.showingLast', { count: periodDays, defaultValue: `Last ${periodDays} days` })} + {t('forecast.next30Days', { defaultValue: '30 day forecast' })} • {t('forecast.forecastData')} shown in orange
+                  {selectedPeriodLabel} + {t('forecast.next30Days', { defaultValue: '30 day forecast' })} • {t('forecast.forecastData')} shown in orange
                 </Typography>
               )}
               {aggregationPeriod !== 'daily' && (

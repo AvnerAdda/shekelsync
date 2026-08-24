@@ -83,7 +83,7 @@ vi.mock('@renderer/features/dashboard/DashboardFiltersContext', () => ({
     aggregationPeriod: 'daily',
     hoveredDate: null,
     setHoveredDate: mockSetHoveredDate,
-    periodDays: 31,
+    periodPreset: 'custom',
   }),
 }));
 

@@ -10,6 +10,16 @@
     "or": "ou",
     "close": "Fermer"
   },
+  "dashboardPeriod": {
+    "ariaLabel": "Période du tableau de bord",
+    "mtd": "MTD",
+    "last30": "30J",
+    "custom": "Personnalisé",
+    "startDate": "Date de début",
+    "endDate": "Date de fin",
+    "cancel": "Annuler",
+    "apply": "Appliquer"
+  },
   "routeError": {
     "titles": {
       "notFound": "Page introuvable",
@@ -735,10 +745,9 @@
       "investment": "Investissements"
     },
     "periodDays": {
-      "last30": "30j",
-      "last60": "60j",
-      "last90": "90j",
-      "lastXDays": "{{count}} derniers jours"
+      "mtdLong": "Depuis le début du mois",
+      "last30Long": "30 derniers jours",
+      "customLong": "{{start}} – {{end}}"
     },
     "overall": {
       "totalIncome": "Revenus totaux : {{amount}}",
@@ -796,10 +805,9 @@
       "monthly": "Mensuel"
     },
     "periodDays": {
-      "last30": "30j",
-      "last60": "60j",
-      "last90": "90j",
-      "showingLast": "{{count}} derniers jours"
+      "showingMtd": "Depuis le début du mois",
+      "showingLast30": "30 derniers jours",
+      "showingCustom": "{{start}} – {{end}}"
     },
     "settings": {
       "button": "Options du graphique",
