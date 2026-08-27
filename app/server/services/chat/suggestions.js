@@ -67,7 +67,7 @@ async function getDataVersion(db) {
   // Per-table queries stay isolated (a missing table must not blank the whole
   // version) and include the mutable tables behind the top-ranked suggestions,
   // so dismissing a quest or editing a target invalidates the cache.
-  const [transactionRows, scrapeRows, actionRows, subscriptionRows, targetRows, budgetRows] = await Promise.all([
+  const [transactionRows, scrapeRows, actionRows, subscriptionRows, targetRows, budgetRows, truthRows] = await Promise.all([
     optionalQuery(db, `
       SELECT COUNT(*) as transaction_count, MAX(date) as latest_transaction_date
       FROM transactions
@@ -80,6 +80,7 @@ async function getDataVersion(db) {
     optionalQuery(db, 'SELECT MAX(updated_at) as latest_change_at FROM subscriptions'),
     optionalQuery(db, 'SELECT MAX(updated_at) as latest_change_at FROM spending_category_targets'),
     optionalQuery(db, 'SELECT MAX(updated_at) as latest_change_at FROM category_budgets'),
+    optionalQuery(db, 'SELECT revision FROM financial_truth_state WHERE id = 1'),
   ]);
   const tx = transactionRows[0] || {};
   const scrape = scrapeRows[0] || {};
@@ -91,6 +92,7 @@ async function getDataVersion(db) {
     subscriptionRows[0]?.latest_change_at || '',
     targetRows[0]?.latest_change_at || '',
     budgetRows[0]?.latest_change_at || '',
+    normalizeInt(truthRows[0]?.revision) || 0,
   ].join(':');
 }
 

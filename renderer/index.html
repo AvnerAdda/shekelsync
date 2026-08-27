@@ -84,6 +84,7 @@
       #startup-shell {
         position: fixed;
         inset: 0;
+        z-index: 2147483647;
         display: flex;
         align-items: center;
         justify-content: center;
@@ -328,7 +329,7 @@
     </style>
   </head>
   <body>
-    <div id="startup-shell" aria-hidden="true">
+    <div id="startup-shell" role="status" aria-live="polite" aria-label="ShekelSync is starting">
       <div class="startup-shell__panel">
         <div class="startup-shell__content">
           <div class="startup-shell__logo-frame">
@@ -346,11 +347,11 @@
           </div>
           <div class="startup-shell__eyebrow">Personal finance, in sync</div>
           <div class="startup-shell__label">ShekelSync</div>
-          <div class="startup-shell__status">Launching your workspace with the latest accounts, budgets, and insights.</div>
+          <div class="startup-shell__status" data-startup-status>Launching your workspace with the latest accounts, budgets, and insights.</div>
           <div class="startup-shell__loader"></div>
           <div class="startup-shell__caption">
             <span class="startup-shell__caption-dot"></span>
-            <span>Opening your dashboard...</span>
+            <span data-startup-caption>Opening your dashboard...</span>
           </div>
         </div>
       </div>

@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import {
   Paper,
   Box,
@@ -16,6 +16,7 @@ import {
   FormControlLabel,
   Switch,
   Divider,
+  Stack,
 } from '@mui/material';
 import MuiTooltip from '@mui/material/Tooltip';
 import { ResponsiveContainer, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ReferenceLine, ReferenceArea, ComposedChart, Area } from 'recharts';
@@ -36,6 +37,8 @@ import TransactionDetailModal, { TransactionForModal } from '@renderer/shared/mo
 import type { DashboardForecastData } from '@renderer/features/dashboard/hooks/useDashboardInsights';
 import { getIncomeExpenseYAxisConfig } from './transaction-history-axis';
 import { grossNumber, hasPairedCardData, preferOperatingNumber } from '../utils/cashflow';
+import FinancialCorrectionDialog from '@renderer/features/financial-truth/FinancialCorrectionDialog';
+import type { CorrectionTarget } from '@renderer/features/financial-truth/types';
 
 interface TransactionHistorySectionProps {
   data: any;
@@ -106,6 +109,7 @@ const TransactionHistorySection: React.FC<TransactionHistorySectionProps> = ({
   const theme = useTheme();
   const { aggregationPeriod, setAggregationPeriod, periodDays, setPeriodDays } = useDashboardFilters();
   const { t } = useTranslation('translation', { keyPrefix: 'transactionHistory' });
+  const { t: tRoot } = useTranslation('translation');
   const TAB_HISTORY = 0;
   const TAB_CALENDAR = 1;
   const TAB_NET_POSITION = 2;
@@ -123,6 +127,14 @@ const TransactionHistorySection: React.FC<TransactionHistorySectionProps> = ({
   // Transaction Detail Modal state
   const [detailModalOpen, setDetailModalOpen] = useState(false);
   const [selectedTransaction, setSelectedTransaction] = useState<TransactionForModal | null>(null);
+  const [correctionTarget, setCorrectionTarget] = useState<CorrectionTarget | null>(null);
+  const [hiddenPredictionIds, setHiddenPredictionIds] = useState<Set<string>>(() => new Set());
+  const [hiddenPatternIds, setHiddenPatternIds] = useState<Set<number>>(() => new Set());
+
+  useEffect(() => {
+    setHiddenPredictionIds(new Set());
+    setHiddenPatternIds(new Set());
+  }, [forecastData?.truthRevision]);
 
   const settingsOpen = Boolean(settingsAnchorEl);
 
@@ -1628,7 +1640,10 @@ const TransactionHistorySection: React.FC<TransactionHistorySectionProps> = ({
 
         // Determine what to show
         const showingForecast = isForecastDate && forecastDayData;
-        const predictions = forecastDayData?.topPredictions || [];
+        const predictions = (forecastDayData?.topPredictions || []).filter((prediction: any) => (
+          (!prediction.occurrenceId || !hiddenPredictionIds.has(prediction.occurrenceId))
+          && (!prediction.patternId || !hiddenPatternIds.has(prediction.patternId))
+        ));
 
         return (
           <Box sx={(theme) => ({ 
@@ -1694,15 +1709,34 @@ const TransactionHistorySection: React.FC<TransactionHistorySectionProps> = ({
                         </Typography>
                       </Box>
                     </Box>
-                    <Typography
-                      variant="body2"
-                      sx={{
-                        fontWeight: "bold",
-                        color: "text.secondary",
-                        ml: 2
-                      }}>
-                      ~{formatCurrency(Math.abs(prediction.amount), { maximumFractionDigits: 0 })}
-                    </Typography>
+                    <Stack direction="row" spacing={1} sx={{ alignItems: 'center', ml: 2 }}>
+                      <Typography
+                        variant="body2"
+                        sx={{
+                          fontWeight: "bold",
+                          color: "text.secondary",
+                        }}>
+                        ~{formatCurrency(Math.abs(prediction.amount), { maximumFractionDigits: 0 })}
+                      </Typography>
+                      {(prediction.patternId || prediction.categoryDefinitionId) && (
+                        <Button
+                          size="small"
+                          variant="text"
+                          onClick={() => setCorrectionTarget({
+                            kind: prediction.patternId ? 'occurrence' : 'category',
+                            patternId: prediction.patternId || undefined,
+                            occurrenceId: prediction.occurrenceId || undefined,
+                            categoryDefinitionId: prediction.categoryDefinitionId || undefined,
+                            title: prediction.category,
+                            amount: Math.abs(Number(prediction.amount) || 0),
+                            nextExpectedDate: hoveredDate,
+                            capabilities: prediction.correctionCapabilities,
+                          })}
+                        >
+                          {tRoot('financialTruth.notAccurate', { defaultValue: 'Not accurate' })}
+                        </Button>
+                      )}
+                    </Stack>
                   </Box>
                 ))}
                 <Typography
@@ -1864,6 +1898,21 @@ const TransactionHistorySection: React.FC<TransactionHistorySectionProps> = ({
           if (hoveredDate) {
             fetchTransactionsByDate(hoveredDate);
           }
+        }}
+      />
+      <FinancialCorrectionDialog
+        open={Boolean(correctionTarget)}
+        target={correctionTarget}
+        sourceFeature="dashboard_forecast"
+        sourceKey={correctionTarget?.occurrenceId || (correctionTarget?.patternId ? `financial_pattern:${correctionTarget.patternId}` : undefined)}
+        onClose={() => setCorrectionTarget(null)}
+        onApplied={(patternId, action) => {
+          if (action === 'skip_occurrence' && correctionTarget?.occurrenceId) {
+            setHiddenPredictionIds((current) => new Set(current).add(correctionTarget.occurrenceId!));
+          } else if (patternId) {
+            setHiddenPatternIds((current) => new Set(current).add(patternId));
+          }
+          refreshForecast();
         }}
       />
     </Paper>

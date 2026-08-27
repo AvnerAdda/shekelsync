@@ -271,8 +271,8 @@ export const OnboardingProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       };
     }
 
-    // Analysis, Investments, and Budgets require first scrape
-    if (['analysis', 'investments', 'budgets'].includes(page)) {
+    // Review, Analysis, Investments, and Budgets require first scrape
+    if (['review', 'analysis', 'investments', 'budgets'].includes(page)) {
       if (!status.completedSteps.firstScrape) {
         return {
           isLocked: true,
