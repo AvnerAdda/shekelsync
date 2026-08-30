@@ -29,6 +29,13 @@ test('primary navigation routes render without Next.js', async ({ page }) => {
   await goHome(page);
   await openAnalysisPage(page);
 
+  await page.getByRole('button', { name: 'Overview' }).click();
+  await page.getByRole('button', { name: 'Review all' }).click();
+  const reviewDialog = page.getByRole('dialog');
+  await expect(reviewDialog.getByRole('heading', { name: 'Money Review' })).toBeVisible({ timeout: 30_000 });
+  await expect(reviewDialog.getByText("You're all caught up")).toBeVisible({ timeout: 30_000 });
+  await reviewDialog.getByRole('button', { name: 'Close Money Review' }).click();
+
   await page.getByRole('button', { name: 'Settings' }).click();
   await expect(page.getByRole('heading', { name: /^Settings$/i })).toBeVisible({ timeout: 30_000 });
   await expect(page.getByRole('tab', { name: 'Appearance' })).toBeVisible({ timeout: 30_000 });

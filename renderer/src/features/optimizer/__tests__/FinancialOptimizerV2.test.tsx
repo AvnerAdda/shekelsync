@@ -137,7 +137,7 @@ describe('FinancialOptimizerV2', { timeout: 20_000 }, () => {
     expect(screen.queryByRole('spinbutton')).not.toBeInTheDocument();
   });
 
-  it('opens a valid owning area from Fix at source for all five review groups', async () => {
+  it('opens a valid owning area from Correct source fact for all five review groups', async () => {
     const user = userEvent.setup();
     const navigationEvents: Array<{ path: string; search?: string; hash?: string }> = [];
     const handleNavigate = (event: Event) => {
@@ -154,7 +154,7 @@ describe('FinancialOptimizerV2', { timeout: 20_000 }, () => {
         const heading = await screen.findByText(groupTitles[index]);
         const card = heading.closest('.MuiPaper-root');
         expect(card).not.toBeNull();
-        await user.click(within(card as HTMLElement).getByRole('button', { name: 'Fix at source' }));
+        await user.click(within(card as HTMLElement).getByRole('button', { name: 'Correct source fact' }));
         expect(navigationEvents.at(-1)).toEqual(groupSourceRoutes[index]);
         await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
       }

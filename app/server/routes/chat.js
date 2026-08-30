@@ -92,7 +92,14 @@ function createChatRouter() {
         },
         locale: req.query.locale || 'en',
       });
-      res.json({ suggestions });
+      let truthRevision = 0;
+      try {
+        truthRevision = require('../services/financial-truth.js')
+          .getProjectionSnapshot({ materialize: false }).truthRevision;
+      } catch {
+        // Older profiles can still use deterministic suggestions while startup migrates.
+      }
+      res.json({ suggestions, truthRevision });
     } catch (error) {
       console.error('[chat-route] Suggestions error:', error);
       res.status(error?.status || 500).json({

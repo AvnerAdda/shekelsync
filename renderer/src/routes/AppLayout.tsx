@@ -23,6 +23,11 @@ import TransactionDetailModal, {
 import { apiClient, invalidateApiCache } from '@renderer/lib/api-client';
 import { useNotification } from '@renderer/features/notifications/NotificationContext';
 import { useTranslation } from 'react-i18next';
+import {
+  onStartupReady,
+  scheduleStartupIdleWork,
+  signalStartupReady,
+} from '@renderer/app/startup/startup-readiness';
 
 const DRAWER_WIDTH_COLLAPSED = 65;
 const FinancialChatbot = lazy(() => import('@renderer/features/chatbot/components/FinancialChatbot'));
@@ -58,17 +63,26 @@ const DeferredFinancialChatbot = () => {
   }, []);
 
   useEffect(() => {
+    let cancelIdleLoad = () => {};
     const loadChatbot = () => setShouldLoad(true);
+    const scheduleChatbot = () => {
+      cancelIdleLoad = scheduleStartupIdleWork(loadChatbot, {
+        timeoutMs: 5_000,
+        fallbackDelayMs: 2_000,
+      });
+    };
     const handleOpenChatbot = () => {
       if (chatbotLoadedRef.current) return;
+      cancelIdleLoad();
       setOpenOnLoad(true);
       loadChatbot();
     };
-    const deferredLoad = window.setTimeout(loadChatbot, 750);
+    const unsubscribeFromStartup = onStartupReady(scheduleChatbot);
 
     window.addEventListener('openChatbotDrawer', handleOpenChatbot);
     return () => {
-      window.clearTimeout(deferredLoad);
+      unsubscribeFromStartup();
+      cancelIdleLoad();
       window.removeEventListener('openChatbotDrawer', handleOpenChatbot);
     };
   }, []);
@@ -116,17 +130,26 @@ const DeferredFinancialOptimizer = () => {
   }, []);
 
   useEffect(() => {
+    let cancelIdleLoad = () => {};
     const loadOptimizer = () => setShouldLoad(true);
+    const scheduleOptimizer = () => {
+      cancelIdleLoad = scheduleStartupIdleWork(loadOptimizer, {
+        timeoutMs: 4_000,
+        fallbackDelayMs: 1_200,
+      });
+    };
     const handleOpenOptimizer = () => {
       if (optimizerLoadedRef.current) return;
+      cancelIdleLoad();
       setOpenOnLoad(true);
       loadOptimizer();
     };
-    const deferredLoad = window.setTimeout(loadOptimizer, 750);
+    const unsubscribeFromStartup = onStartupReady(scheduleOptimizer);
 
     window.addEventListener('openOptimizerDrawer', handleOpenOptimizer);
     return () => {
-      window.clearTimeout(deferredLoad);
+      unsubscribeFromStartup();
+      cancelIdleLoad();
       window.removeEventListener('openOptimizerDrawer', handleOpenOptimizer);
     };
   }, []);
@@ -258,7 +281,7 @@ const AppLayoutContent: React.FC<AppLayoutContentProps> = ({ authLoading, sessio
         setSearchOpen(true);
       }
       
-      // Cmd/Ctrl + 1-4: Navigate between pages
+      // Cmd/Ctrl + 1-4: Navigate between primary pages
       if (isModifierPressed(event)) {
         let handledDigitShortcut = false;
         switch (event.code) {
@@ -536,6 +559,7 @@ const AppLayoutContent: React.FC<AppLayoutContentProps> = ({ authLoading, sessio
 };
 
 const AppLayout: React.FC = () => {
+  const location = useLocation();
   const {
     session,
     loading: authLoading,
@@ -543,6 +567,13 @@ const AppLayout: React.FC = () => {
     refreshSession,
   } = useAuth();
   const { t } = useTranslation('translation', { keyPrefix: 'sessionRecovery' });
+
+  useEffect(() => {
+    if (authLoading || (!sessionLoadError && location.pathname === '/')) return;
+
+    const frameId = window.requestAnimationFrame(() => signalStartupReady());
+    return () => window.cancelAnimationFrame(frameId);
+  }, [authLoading, location.pathname, sessionLoadError]);
 
   if (sessionLoadError) {
     return (

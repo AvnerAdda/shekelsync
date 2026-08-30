@@ -47,6 +47,7 @@ import ResetIcon from '@mui/icons-material/SettingsBackupRestore';
 import SaveIcon from '@mui/icons-material/Save';
 import SearchIcon from '@mui/icons-material/Search';
 import SettingsIcon from '@mui/icons-material/Settings';
+import ReviewIcon from '@mui/icons-material/AssignmentTurnedIn';
 import ShieldIcon from '@mui/icons-material/Shield';
 import TranslateIcon from '@mui/icons-material/Translate';
 import UndoIcon from '@mui/icons-material/Undo';
@@ -146,6 +147,12 @@ const TitleBar: React.FC<TitleBarProps> = ({ sessionDisplayName, authLoading }) 
         icon: <HomeIcon fontSize="small" />,
         shortcut: `${modifierKeyLabel}1`,
         keywords: getKeywords('dashboard', ['home', 'overview', 'main', 'summary']),
+      },
+      {
+        label: t('titleBar.search.options.review'),
+        path: '/?moneyReview=all',
+        icon: <ReviewIcon fontSize="small" />,
+        keywords: getKeywords('review', ['actions', 'inbox', 'alerts', 'tasks', 'money review']),
       },
       {
         label: t('titleBar.search.options.analysis'),

@@ -34,6 +34,8 @@ import type {
   AddSubscriptionRequest,
   UpdateSubscriptionRequest,
 } from '@renderer/types/subscriptions';
+import FinancialCorrectionDialog from '@renderer/features/financial-truth/FinancialCorrectionDialog';
+import type { CorrectionTarget } from '@renderer/features/financial-truth/types';
 
 const SubscriptionsTab: React.FC = () => {
   const theme = useTheme();
@@ -74,6 +76,7 @@ const SubscriptionsTab: React.FC = () => {
   const [modalOpen, setModalOpen] = useState(false);
   const [editingSubscription, setEditingSubscription] = useState<Subscription | null>(null);
   const [filterAnchorEl, setFilterAnchorEl] = useState<HTMLElement | null>(null);
+  const [correctionTarget, setCorrectionTarget] = useState<CorrectionTarget | null>(null);
 
   const handleOpenAddModal = () => {
     setEditingSubscription(null);
@@ -284,6 +287,29 @@ const SubscriptionsTab: React.FC = () => {
         subscription={editingSubscription}
         onSave={handleSaveSubscription}
         isEditing={!!editingSubscription}
+        onCorrect={(subscription) => {
+          setModalOpen(false);
+          setCorrectionTarget({
+            kind: 'pattern',
+            patternId: subscription.patternId || subscription.financial_pattern_id || undefined,
+            title: subscription.display_name,
+            amount: subscription.user_amount || subscription.detected_amount,
+            frequency: subscription.user_frequency || subscription.detected_frequency,
+            nextExpectedDate: subscription.next_expected_date || undefined,
+            capabilities: subscription.correctionCapabilities,
+          });
+        }}
+      />
+      <FinancialCorrectionDialog
+        open={Boolean(correctionTarget)}
+        target={correctionTarget}
+        sourceFeature="subscriptions"
+        sourceKey={correctionTarget?.patternId ? `financial_pattern:${correctionTarget.patternId}` : undefined}
+        onClose={() => {
+          setCorrectionTarget(null);
+          setEditingSubscription(null);
+        }}
+        onApplied={() => void fetchAll()}
       />
       {/* Category filter popover */}
       <SubscriptionCategoryFilterPopover

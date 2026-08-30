@@ -506,18 +506,20 @@ describe('forecast service integration', () => {
     expect(result.monteCarloResults.numSimulations).toBeGreaterThan(0);
   });
 
-  it('throws a clear error when no transactions are available', async () => {
+  it('returns a valid insufficient-history forecast when no transactions are available', async () => {
     const forecast = await loadForecastModule(buildEmptyDataset());
 
-    await expect(
-      forecast.generateDailyForecast({
-        includeToday: true,
-        forecastDays: 2,
-        historyMonths: 12,
-        monteCarloRuns: 3,
-        noCache: true,
-      }),
-    ).rejects.toThrow('No transactions found in database');
+    const result = await forecast.generateDailyForecast({
+      includeToday: true,
+      forecastDays: 2,
+      historyMonths: 12,
+      monteCarloRuns: 3,
+      noCache: true,
+    });
+
+    expect(result.analysisInfo).toMatchObject({ totalTransactions: 0, insufficientHistory: true });
+    expect(result.dailyForecasts).toHaveLength(2);
+    expect(result.dailyForecasts.every((day: any) => day.expectedCashFlow === 0)).toBe(true);
   });
 
   it('logs the month-end rollover note when forecasting from the last day of month', async () => {

@@ -5,6 +5,7 @@ import HomeOutlinedIcon from '@mui/icons-material/HomeOutlined';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import { isRouteErrorResponse, useNavigate, useRouteError } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
+import { signalStartupReady } from '@renderer/app/startup/startup-readiness';
 
 interface ErrorContent {
   title: string;
@@ -62,6 +63,10 @@ const RouteErrorBoundary: React.FC = () => {
   const navigate = useNavigate();
   const { t } = useTranslation('translation', { keyPrefix: 'routeError' });
   const { title, message, debugInfo } = getErrorContent(error, t);
+
+  React.useEffect(() => {
+    signalStartupReady();
+  }, []);
 
   return (
     <Container maxWidth="md">
@@ -162,6 +167,10 @@ export class RouteErrorBoundaryShell extends React.Component<Record<string, neve
 
   static getDerivedStateFromError(): ShellState {
     return { crashed: true };
+  }
+
+  componentDidCatch() {
+    signalStartupReady();
   }
 
   render() {

@@ -244,12 +244,19 @@ function createForecastRouter({ sqliteDb = null, generateForecast = forecastServ
           topCategory: d.topPredictions?.[0]?.category || null,
           topProbability: d.topPredictions?.[0]?.probability || null,
           topPredictions: (d.topPredictions || []).map(p => ({
+            patternId: p.patternId || null,
+            occurrenceId: p.occurrenceId || null,
+            predictionKind: p.predictionKind || (p.categoryType === 'income' ? 'category_income' : 'category_expense'),
             category: p.category,
             categoryDefinitionId: p.categoryDefinitionId || null,
             incomeType: p.incomeType || null,
             expenseType: p.expenseType || null,
             amount: p.expectedAmount,
-            probability: p.probability
+            probability: p.probability,
+            explanation: p.explanation || 'Based on historical spending patterns',
+            correctionCapabilities: p.correctionCapabilities || (
+              p.categoryDefinitionId ? ['set_category_expectation'] : []
+            )
           }))
         };
       });
@@ -550,6 +557,8 @@ function createForecastRouter({ sqliteDb = null, generateForecast = forecastServ
       };
 
       const response = {
+        truthRevision: result.truthRevision || 0,
+        refreshState: 'ready',
         forecastPeriod: result.forecastPeriod,
         dailyForecasts: dailyMinimal,
         scenarios: {
@@ -565,6 +574,22 @@ function createForecastRouter({ sqliteDb = null, generateForecast = forecastServ
         budgetOutlook,
         budgetSummary
       };
+
+      let currentTruthRevision = response.truthRevision;
+      try {
+        currentTruthRevision = Number(
+          getDbInstance().prepare('SELECT revision FROM financial_truth_state WHERE id = 1').get()?.revision,
+        ) || 0;
+      } catch {
+        // Compatibility for databases still completing migration and route test doubles.
+      }
+      if (Number(response.truthRevision) !== Number(currentTruthRevision)) {
+        return res.status(409).json({
+          error: 'Financial truth changed while this forecast was updating',
+          truthRevision: currentTruthRevision,
+          refreshState: 'pending',
+        });
+      }
 
       // Cache the response
       if (!skipCache) {

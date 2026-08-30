@@ -1176,8 +1176,10 @@ async function getOptimizerV2Status() {
   const client = await databaseAdapter.getClient();
   try {
     const snapshot = await applyStoredReviewStatus(client, await buildReviewSnapshot(client));
+    const truthRows = await optionalQuery(client, 'SELECT revision FROM financial_truth_state WHERE id = 1');
     return {
       success: true,
+      truthRevision: integer(truthRows[0]?.revision),
       feature: { name: 'optimizerV2', enabled: true, version: 2 },
       review: {
         groups: snapshot.groups,

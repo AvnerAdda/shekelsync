@@ -1291,4 +1291,23 @@ describe('forecast service internals', () => {
     expect(monteCarlo.worst).toBeUndefined();
     expect(Array.isArray(monteCarlo.allScenarios)).toBe(true);
   });
+
+  it('materializes a manual category expectation even without a detected baseline', () => {
+    const { applyCategoryExpectations } = forecastModule._internal;
+    const result = applyCategoryExpectations({}, [{
+      action: 'set_category_expectation',
+      scope: 'ongoing',
+      categoryDefinitionId: 12,
+      categoryName: 'Groceries',
+      overrides: { monthlyAmount: 800 },
+    }], '2026-09');
+
+    expect(result['financial_truth_category:12']).toMatchObject({
+      category: 'Groceries',
+      categoryDefinitionId: 12,
+      monthlyBaseline: 800,
+      monthlyStdDev: 0,
+      isUserExpectation: true,
+    });
+  });
 });

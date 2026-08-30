@@ -12,6 +12,20 @@ Release binaries are published at
 
 ## [Unreleased]
 
+### Added
+- Money Review: a local-first, prioritized action queue that unifies data-quality
+  fixes, cash-flow and subscription alerts, optimizer recommendations, and
+  financial challenges with durable start, snooze, complete, dismiss, and
+  reopen workflows. Open work appears in a compact dashboard carousel and the
+  full review runs in a focused modal instead of occupying primary navigation.
+  Selecting a dashboard card opens a minimal item-only explanation with relevant
+  comparisons, metrics, priority context, and local-data provenance.
+
+### Changed
+- Startup now keeps the lightweight launch screen visible until the first usable
+  Dashboard or error state is rendered. Money Review, Optimizer, and chatbot
+  initialization is staggered into idle time to reduce first-paint contention.
+
 ## [0.1.34] - 2026-08-20
 
 ### Added

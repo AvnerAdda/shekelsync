@@ -1,5 +1,6 @@
 const database = require('../database.js');
 const forecastService = require('../forecast.js');
+const financialTruthService = require('../financial-truth.js');
 const { createTtlCache } = require('../../../lib/server/ttl-cache.js');
 
 const extendedForecastCache = createTtlCache({ maxEntries: 5, defaultTtlMs: 60 * 1000 });
@@ -297,6 +298,8 @@ async function getExtendedForecast(params = {}) {
   combinedData.sort((a, b) => a.date.localeCompare(b.date));
 
   const response = {
+    truthRevision: forecastData.truthRevision || 0,
+    refreshState: 'ready',
     combinedData,
     scenarios: {
       p10: p10Data,
@@ -321,6 +324,18 @@ async function getExtendedForecast(params = {}) {
       }
     }
   };
+  let currentTruthRevision = response.truthRevision;
+  try {
+    currentTruthRevision = financialTruthService.getProjectionSnapshot({ materialize: false }).truthRevision;
+  } catch {
+    // Compatibility for pre-migration databases and isolated test fixtures.
+  }
+  if (Number(response.truthRevision) !== Number(currentTruthRevision)) {
+    if (!params.__revisionRetry) {
+      return getExtendedForecast({ ...params, noCache: true, __revisionRetry: true });
+    }
+    throw new Error('Financial truth changed while the extended forecast was updating');
+  }
   if (!skipCache) {
     extendedForecastCache.set(cacheKey, response);
   }
@@ -328,5 +343,8 @@ async function getExtendedForecast(params = {}) {
 }
 
 module.exports = {
-  getExtendedForecast
+  getExtendedForecast,
+  clearCache() {
+    extendedForecastCache.clear();
+  },
 };

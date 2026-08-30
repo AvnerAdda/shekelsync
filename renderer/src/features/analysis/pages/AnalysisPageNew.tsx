@@ -61,6 +61,10 @@ import { useFinancePrivacy } from '@app/contexts/FinancePrivacyContext';
 import LockedPagePlaceholder from '@renderer/shared/empty-state/LockedPagePlaceholder';
 import LoadingState from '@renderer/components/LoadingState';
 import { resolveOnboardingGate } from '@renderer/features/layout/components/onboarding-gate';
+import {
+  FINANCIAL_TRUTH_CHANGED_EVENT,
+  financialTruthChangeAffects,
+} from '@renderer/features/financial-truth/types';
 import QuestsPanel from '../components/QuestsPanel';
 import SpendingCategoriesChart from '../components/SpendingCategoriesChart';
 import SpendingCategoryTargetsMinimal from '../components/SpendingCategoryTargetsMinimal';
@@ -822,8 +826,17 @@ const AnalysisPageNew: React.FC = () => {
     const handleDataRefresh = () => {
       runRefreshAll(false);
     };
+    const handleTruthChange = (event: Event) => {
+      if (financialTruthChangeAffects(event, ['forecast', 'budget', 'subscriptions'])) {
+        runRefreshAll(false);
+      }
+    };
     window.addEventListener('dataRefresh', handleDataRefresh);
-    return () => window.removeEventListener('dataRefresh', handleDataRefresh);
+    window.addEventListener(FINANCIAL_TRUTH_CHANGED_EVENT, handleTruthChange);
+    return () => {
+      window.removeEventListener('dataRefresh', handleDataRefresh);
+      window.removeEventListener(FINANCIAL_TRUTH_CHANGED_EVENT, handleTruthChange);
+    };
   }, [runRefreshAll]);
 
   useEffect(() => {

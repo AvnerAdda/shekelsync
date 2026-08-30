@@ -123,6 +123,10 @@ function renderAppLayout(initialEntries: string[] = ['/']) {
           element: <LocationIndicator />,
         },
         {
+          path: 'review',
+          element: <LocationIndicator />,
+        },
+        {
           path: 'settings',
           element: <LocationIndicator />,
         },
@@ -136,6 +140,7 @@ function renderAppLayout(initialEntries: string[] = ['/']) {
 
 describe('AppLayout', () => {
   beforeEach(() => {
+    delete document.body.dataset.appReady;
     mockGet.mockReset();
     showNotification.mockReset();
     refreshSession.mockReset();
@@ -147,6 +152,20 @@ describe('AppLayout', () => {
       sessionLoadError: null,
       refreshSession,
     };
+  });
+
+  it('keeps startup pending on the dashboard but releases it for a ready secondary route', async () => {
+    const router = renderAppLayout(['/']);
+    await new Promise<void>((resolve) => window.requestAnimationFrame(() => resolve()));
+    expect(document.body.dataset.appReady).toBeUndefined();
+
+    await act(async () => {
+      await router.navigate('/analysis');
+    });
+
+    await waitFor(() => {
+      expect(document.body.dataset.appReady).toBe('true');
+    });
   });
 
   it('blocks the application and retries when the persisted session cannot be loaded', () => {
@@ -254,6 +273,14 @@ describe('AppLayout', () => {
     await waitFor(() => {
       expect(screen.getByTestId('location')).toHaveTextContent('/analysis');
     });
+  });
+
+  it('does not reserve the fifth navigation shortcut for a hidden page', async () => {
+    renderAppLayout();
+
+    fireEvent.keyDown(window, { key: '5', code: 'Digit5', ctrlKey: true });
+
+    expect(screen.getByTestId('location')).toHaveTextContent('/');
   });
 
   it('loads and opens the global transaction detail modal from events', async () => {

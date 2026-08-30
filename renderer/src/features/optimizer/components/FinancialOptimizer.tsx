@@ -44,6 +44,10 @@ import { apiClient } from '@renderer/lib/api-client';
 import { useChatbotPermissions, MODEL_TIERS } from '@app/contexts/ChatbotPermissionsContext';
 import { useFinancePrivacy } from '@app/contexts/FinancePrivacyContext';
 import { maskFinancialText } from '@renderer/shared/utils/finance-privacy';
+import {
+  FINANCIAL_TRUTH_CHANGED_EVENT,
+  financialTruthChangeAffects,
+} from '@renderer/features/financial-truth/types';
 import type {
   OptimizerFact,
   OptimizerHistoryResponse,
@@ -112,6 +116,7 @@ function parseOptimizerDate(value: string): Date {
 export const FinancialOptimizerV1: React.FC = () => {
   const theme = useTheme();
   const { t, i18n } = useTranslation('translation', { keyPrefix: 'optimizer' });
+  const { t: tRoot } = useTranslation('translation');
   const { formatCurrency, maskAmounts } = useFinancePrivacy();
   const {
     hasOpenAiApiKey: hasStoredOpenAiApiKey,
@@ -220,8 +225,15 @@ export const FinancialOptimizerV1: React.FC = () => {
     const handleDataRefresh = () => {
       if (open) void loadStatusRef.current();
     };
+    const handleTruthChange = (event: Event) => {
+      if (open && financialTruthChangeAffects(event, ['optimizer'])) void loadStatusRef.current();
+    };
     window.addEventListener('dataRefresh', handleDataRefresh);
-    return () => window.removeEventListener('dataRefresh', handleDataRefresh);
+    window.addEventListener(FINANCIAL_TRUTH_CHANGED_EVENT, handleTruthChange);
+    return () => {
+      window.removeEventListener('dataRefresh', handleDataRefresh);
+      window.removeEventListener(FINANCIAL_TRUTH_CHANGED_EVENT, handleTruthChange);
+    };
   }, [open]);
 
   const factsBySection = useMemo(() => {
@@ -536,6 +548,11 @@ export const FinancialOptimizerV1: React.FC = () => {
 
   const renderFactCard = (fact: OptimizerFact) => {
     const isEditing = editingFactKey === fact.factKey;
+    const connectedSourceRoute = fact.factKey === 'subscriptions.monthly_total'
+      ? { path: '/analysis', search: '?tab=subscriptions' }
+      : fact.factKey.startsWith('expenses.') || fact.factKey === 'income.monthly_take_home'
+        ? { path: '/', search: '' }
+        : null;
     const translatedLabel = getFactLabel(fact.factKey, fact.label);
 
     return (
@@ -626,6 +643,19 @@ export const FinancialOptimizerV1: React.FC = () => {
                 }}
               >
                 {t('actions.edit', 'Edit')}
+              </Button>
+            )}
+            {connectedSourceRoute && (
+              <Button
+                size="small"
+                startIcon={<LaunchIcon />}
+                disabled={mutationBusy}
+                onClick={() => {
+                  setOpen(false);
+                  window.dispatchEvent(new CustomEvent('navigateTo', { detail: connectedSourceRoute }));
+                }}
+              >
+                {tRoot('financialTruth.correctSourceFact', 'Correct source fact')}
               </Button>
             )}
             <Button

@@ -592,6 +592,206 @@ const MIGRATIONS = [
       `);
     },
   },
+  {
+    version: 7,
+    name: 'connected-financial-truth',
+    mutatesSchema: true,
+    up: (db) => {
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS financial_patterns (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          fingerprint TEXT NOT NULL UNIQUE,
+          normalized_name TEXT NOT NULL,
+          display_name TEXT NOT NULL,
+          direction TEXT NOT NULL CHECK(direction IN ('expense', 'income')),
+          category_definition_id INTEGER,
+          detected_frequency TEXT NOT NULL CHECK(detected_frequency IN ('daily', 'weekly', 'biweekly', 'monthly', 'bimonthly', 'quarterly', 'yearly', 'variable')),
+          detected_amount REAL NOT NULL DEFAULT 0,
+          amount_tolerance REAL NOT NULL DEFAULT 0,
+          confidence REAL NOT NULL DEFAULT 0 CHECK(confidence >= 0 AND confidence <= 1),
+          first_seen_date TEXT,
+          last_seen_date TEXT,
+          next_expected_date TEXT,
+          occurrence_count INTEGER NOT NULL DEFAULT 0,
+          source TEXT NOT NULL DEFAULT 'detected' CHECK(source IN ('detected', 'manual', 'legacy_subscription')),
+          is_subscription INTEGER NOT NULL DEFAULT 0 CHECK(is_subscription IN (0, 1)),
+          evidence_signature TEXT,
+          created_at TEXT NOT NULL DEFAULT (datetime('now')),
+          updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+          FOREIGN KEY (category_definition_id) REFERENCES category_definitions(id) ON DELETE SET NULL
+        );
+
+        CREATE TABLE IF NOT EXISTS financial_pattern_transactions (
+          pattern_id INTEGER NOT NULL,
+          transaction_identifier TEXT NOT NULL,
+          transaction_vendor TEXT NOT NULL,
+          transaction_date TEXT NOT NULL,
+          amount REAL NOT NULL,
+          match_score REAL NOT NULL DEFAULT 1 CHECK(match_score >= 0 AND match_score <= 1),
+          created_at TEXT NOT NULL DEFAULT (datetime('now')),
+          PRIMARY KEY (pattern_id, transaction_identifier, transaction_vendor),
+          FOREIGN KEY (pattern_id) REFERENCES financial_patterns(id) ON DELETE CASCADE,
+          FOREIGN KEY (transaction_identifier, transaction_vendor) REFERENCES transactions(identifier, vendor) ON DELETE CASCADE
+        );
+
+        CREATE TABLE IF NOT EXISTS financial_corrections (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          request_id TEXT NOT NULL UNIQUE,
+          target_kind TEXT NOT NULL CHECK(target_kind IN ('pattern', 'occurrence', 'category')),
+          pattern_id INTEGER,
+          occurrence_id TEXT,
+          category_definition_id INTEGER,
+          action TEXT NOT NULL CHECK(action IN ('skip_occurrence', 'suppress_pattern', 'end_pattern', 'pause_pattern', 'override_pattern', 'set_category_expectation')),
+          scope TEXT NOT NULL CHECK(scope IN ('occurrence', 'from_date', 'current_month', 'ongoing')),
+          effective_date TEXT,
+          effective_end_date TEXT,
+          reason_code TEXT,
+          source_feature TEXT NOT NULL,
+          source_key TEXT,
+          overrides_json TEXT NOT NULL DEFAULT '{}',
+          status TEXT NOT NULL DEFAULT 'active' CHECK(status IN ('active', 'reverted', 'superseded')),
+          supersedes_id INTEGER,
+          reverted_at TEXT,
+          created_at TEXT NOT NULL DEFAULT (datetime('now')),
+          updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+          FOREIGN KEY (pattern_id) REFERENCES financial_patterns(id) ON DELETE CASCADE,
+          FOREIGN KEY (category_definition_id) REFERENCES category_definitions(id) ON DELETE CASCADE,
+          FOREIGN KEY (supersedes_id) REFERENCES financial_corrections(id) ON DELETE SET NULL
+        );
+
+        CREATE TABLE IF NOT EXISTS financial_truth_state (
+          id INTEGER PRIMARY KEY CHECK(id = 1),
+          revision INTEGER NOT NULL DEFAULT 0,
+          materialized_transaction_signature TEXT,
+          materialized_at TEXT,
+          updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+        );
+        INSERT OR IGNORE INTO financial_truth_state (id, revision) VALUES (1, 0);
+
+        CREATE TABLE IF NOT EXISTS presentation_dismissals (
+          source_key TEXT PRIMARY KEY,
+          source_type TEXT NOT NULL,
+          hidden INTEGER NOT NULL DEFAULT 1 CHECK(hidden IN (0, 1)),
+          hidden_at TEXT,
+          updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_financial_patterns_lookup
+          ON financial_patterns(normalized_name, direction, detected_frequency);
+        CREATE INDEX IF NOT EXISTS idx_financial_pattern_transactions_transaction
+          ON financial_pattern_transactions(transaction_identifier, transaction_vendor);
+        CREATE INDEX IF NOT EXISTS idx_financial_corrections_active_pattern
+          ON financial_corrections(pattern_id, status, created_at DESC);
+        CREATE INDEX IF NOT EXISTS idx_financial_corrections_active_category
+          ON financial_corrections(category_definition_id, status, created_at DESC);
+      `);
+
+      if (tableExists(db, 'transactions')) {
+        db.exec(`
+          CREATE TRIGGER IF NOT EXISTS trg_financial_truth_transactions_insert
+          AFTER INSERT ON transactions
+          BEGIN
+            UPDATE financial_truth_state
+            SET materialized_transaction_signature = NULL, updated_at = datetime('now')
+            WHERE id = 1;
+          END;
+          CREATE TRIGGER IF NOT EXISTS trg_financial_truth_transactions_update
+          AFTER UPDATE ON transactions
+          BEGIN
+            UPDATE financial_truth_state
+            SET materialized_transaction_signature = NULL, updated_at = datetime('now')
+            WHERE id = 1;
+          END;
+          CREATE TRIGGER IF NOT EXISTS trg_financial_truth_transactions_delete
+          AFTER DELETE ON transactions
+          BEGIN
+            UPDATE financial_truth_state
+            SET materialized_transaction_signature = NULL, updated_at = datetime('now')
+            WHERE id = 1;
+          END;
+        `);
+      }
+
+      addColumnIfMissing(db, 'subscriptions', 'financial_pattern_id', 'INTEGER REFERENCES financial_patterns(id) ON DELETE SET NULL');
+
+      if (!tableExists(db, 'subscriptions')) return;
+      const legacySubscriptions = db.prepare(`
+        SELECT s.*,
+          COALESCE((
+            SELECT event_date FROM subscription_history history
+            WHERE history.subscription_id = s.id AND history.event_type = 'status_change'
+            ORDER BY history.event_date DESC, history.id DESC LIMIT 1
+          ), substr(s.updated_at, 1, 10)) AS status_effective_date
+        FROM subscriptions s
+      `).all();
+      const insertPattern = db.prepare(`
+        INSERT INTO financial_patterns (
+          fingerprint, normalized_name, display_name, direction, category_definition_id,
+          detected_frequency, detected_amount, amount_tolerance, confidence,
+          first_seen_date, last_seen_date, next_expected_date, source, is_subscription
+        ) VALUES (?, ?, ?, 'expense', ?, ?, ?, ?, ?, ?, ?, ?, 'legacy_subscription', 1)
+        ON CONFLICT(fingerprint) DO UPDATE SET
+          display_name = excluded.display_name,
+          category_definition_id = COALESCE(financial_patterns.category_definition_id, excluded.category_definition_id),
+          is_subscription = 1,
+          updated_at = datetime('now')
+        RETURNING id
+      `);
+      const insertCorrection = db.prepare(`
+        INSERT OR IGNORE INTO financial_corrections (
+          request_id, target_kind, pattern_id, action, scope, effective_date,
+          reason_code, source_feature, source_key, overrides_json
+        ) VALUES (?, 'pattern', ?, ?, ?, ?, 'legacy_explicit_choice', 'migration', ?, ?)
+      `);
+      const updateSubscription = db.prepare('UPDATE subscriptions SET financial_pattern_id = ? WHERE id = ?');
+
+      for (const sub of legacySubscriptions) {
+        const normalizedName = String(sub.pattern_key || sub.display_name || '')
+          .toLowerCase().trim().replace(/[^a-z0-9\u0590-\u05ff]+/g, '_').replace(/^_+|_+$/g, '');
+        if (!normalizedName) continue;
+        const frequency = sub.user_frequency || sub.detected_frequency || 'monthly';
+        const amount = Number(sub.user_amount ?? sub.detected_amount) || 0;
+        const fingerprint = `legacy:${normalizedName}:expense:${frequency}`;
+        const pattern = insertPattern.get(
+          fingerprint, normalizedName, sub.display_name || normalizedName,
+          sub.category_definition_id || null, frequency, amount,
+          Math.max(5, Math.abs(amount) * 0.15), Number(sub.consistency_score) || 0.5,
+          sub.first_detected_date || null, sub.last_charge_date || null,
+          sub.next_expected_date || null,
+        );
+        updateSubscription.run(pattern.id, sub.id);
+
+        let action = null;
+        let scope = 'ongoing';
+        let effectiveDate = null;
+        if (sub.status === 'cancelled') {
+          action = 'end_pattern';
+          scope = 'from_date';
+          effectiveDate = sub.status_effective_date;
+        } else if (sub.status === 'paused') {
+          action = 'pause_pattern';
+        } else if (sub.user_amount != null || sub.user_frequency != null || sub.billing_day != null || sub.status === 'keep') {
+          action = 'override_pattern';
+        }
+        if (action) {
+          insertCorrection.run(
+            `migration:subscription:${sub.id}:${action}`,
+            pattern.id,
+            action,
+            scope,
+            effectiveDate,
+            `subscription:${sub.id}`,
+            JSON.stringify({
+              ...(sub.user_amount != null ? { amount: Number(sub.user_amount) } : {}),
+              ...(sub.user_frequency ? { frequency: sub.user_frequency } : {}),
+              ...(sub.billing_day != null ? { billingDay: Number(sub.billing_day) } : {}),
+              ...(sub.status === 'keep' ? { confirmed: true } : {}),
+            }),
+          );
+        }
+      }
+    },
+  },
 ];
 
 const CURRENT_SCHEMA_VERSION = MIGRATIONS.length

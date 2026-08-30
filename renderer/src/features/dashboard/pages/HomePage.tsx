@@ -21,6 +21,12 @@ import { DashboardFiltersProvider, useDashboardFilters } from '@renderer/feature
 import DashboardSummarySection from '@renderer/features/dashboard/components/DashboardSummarySection';
 import TransactionHistorySection from '@renderer/features/dashboard/components/TransactionHistorySection';
 import BreakdownTabsSection from '@renderer/features/dashboard/components/BreakdownTabsSection';
+import MoneyReviewDashboardSection from '@renderer/features/money-review/components/MoneyReviewDashboardSection';
+import { signalStartupReady } from '@renderer/app/startup/startup-readiness';
+import {
+  FINANCIAL_TRUTH_CHANGED_EVENT,
+  financialTruthChangeAffects,
+} from '@renderer/features/financial-truth/types';
 import { CHART_COLORS } from '@renderer/shared/chart-colors';
 
 type YAxisScale = 'linear' | 'log';
@@ -436,9 +442,14 @@ const DashboardHomeContent: React.FC = () => {
   ]);
 
   useEffect(() => {
+    const handleTruthChange = (event: Event) => {
+      if (financialTruthChangeAffects(event, ['forecast', 'budget'])) refreshAllData();
+    };
     globalThis.addEventListener('dataRefresh', refreshAllData);
+    globalThis.addEventListener(FINANCIAL_TRUTH_CHANGED_EVENT, handleTruthChange);
     return () => {
       globalThis.removeEventListener('dataRefresh', refreshAllData);
+      globalThis.removeEventListener(FINANCIAL_TRUTH_CHANGED_EVENT, handleTruthChange);
     };
   }, [refreshAllData]);
 
@@ -552,6 +563,10 @@ const DashboardHomeContent: React.FC = () => {
   // Show loading while primary data loads, or while explicitly switching to fallback data
   const isLoading = dashboardLoading || (showFallbackData && fallbackDashboardLoading);
   const effectiveDashboardError = shouldUseFallback ? fallbackDashboardError : dashboardError;
+
+  useEffect(() => {
+    if (!isLoading) signalStartupReady();
+  }, [isLoading]);
 
   if (isLoading) {
     return (
@@ -789,6 +804,8 @@ const DashboardHomeContent: React.FC = () => {
         forecastData={forecastData}
         healthSnapshot={healthSnapshot}
       />
+
+      <MoneyReviewDashboardSection />
 
       <Box id="transactions">
         <TransactionHistorySection

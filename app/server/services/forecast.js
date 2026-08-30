@@ -6,6 +6,8 @@
 const path = require('path');
 const fs = require('fs');
 const Database = require('better-sqlite3');
+const { Worker } = require('worker_threads');
+const financialTruthService = require('./financial-truth.js');
 let databaseCtor = Database;
 
 function parsePositiveInt(value, fallback) {
@@ -30,6 +32,7 @@ const INCOME_NEAR_MONTHLY_FREQUENCY_FLOOR = Number.isFinite(Number.parseFloat(pr
   : 0.75;
 
 const forecastResultCache = new Map();
+const forecastInFlight = new Map();
 
 function resolveForecastDbPath() {
   if (process.env.SQLITE_DB_PATH) {
@@ -46,8 +49,14 @@ function resolveForecastDbPath() {
   return preferredDbPath;
 }
 
-function openForecastDb() {
-  const db = new databaseCtor(CONFIG.dbPath, { readonly: true });
+function openForecastDb({ writable = false } = {}) {
+  // Pattern materialization and truth revisions live in the same local DB.
+  // Most consumers stay read-only; generation opts into a writable connection
+  // only long enough to publish a newly imported transaction revision.
+  const db = writable
+    ? new databaseCtor(CONFIG.dbPath)
+    : new databaseCtor(CONFIG.dbPath, { readonly: true });
+  if (typeof db.pragma === 'function') db.pragma('foreign_keys = ON');
   return db;
 }
 
@@ -73,6 +82,8 @@ function getAllTransactions(db, sinceDate = null) {
   const filter = sinceDate ? 'AND t.date >= ?' : '';
   const query = `
     SELECT
+      t.identifier,
+      t.vendor,
       t.date,
       t.name,
       t.price,
@@ -103,6 +114,8 @@ function getAllTransactions(db, sinceDate = null) {
 function getCurrentMonthTransactions(db, currentMonth) {
   const query = `
     SELECT
+      t.identifier,
+      t.vendor,
       t.date,
       t.name,
       t.price,
@@ -1035,6 +1048,13 @@ function buildVariableExpenseMonthlyBaselines(transactions, patterns, now = new 
 function getActualSpendForBaseline(monthTransactions, baseline, patterns) {
   const netSpend = (monthTransactions || []).reduce((sum, txn) => {
     if (txn?.category_type !== 'expense') return sum;
+    if (
+      baseline.isUserExpectation
+      && baseline.categoryDefinitionId != null
+      && Number(txn.category_definition_id) === Number(baseline.categoryDefinitionId)
+    ) {
+      return sum + (-(Number(txn.price) || 0));
+    }
     const patternKey = resolvePatternKeyForTransaction(patterns, txn);
     if (patternKey !== baseline.patternKey) return sum;
     // Refunds (positive price) net against spend rather than inflating it.
@@ -1823,7 +1843,45 @@ function adjustMonthlyPatternForecasts(dailyForecasts, patterns, adjustments) {
   dailyForecasts.forEach(refreshForecastDayPredictions);
 }
 
-function generateForecastAcrossMonths(patterns, patternEntries, db, startDate, endDate, now, currentMonthTransactions, monthlyBaselines = {}) {
+function applyCategoryExpectations(monthlyBaselines, categoryExpectations, monthKey) {
+  const resolved = Object.fromEntries(Object.entries(monthlyBaselines || {}).map(([key, value]) => [key, { ...value }]));
+  (categoryExpectations || []).forEach((correction) => {
+    const appliesToMonth = correction.scope === 'ongoing'
+      || (correction.scope === 'current_month'
+        && monthKey === String(correction.effectiveDate || correction.createdAt || '').slice(0, 7));
+    if (!appliesToMonth) return;
+    const amount = Number(correction.overrides?.monthlyAmount);
+    if (!Number.isFinite(amount) || amount < 0) return;
+    let matched = false;
+    Object.values(resolved).forEach((baseline) => {
+      if (Number(baseline.categoryDefinitionId) === Number(correction.categoryDefinitionId)) {
+        baseline.monthlyBaseline = amount;
+        baseline.monthlyStdDev = 0;
+        baseline.isUserExpectation = true;
+        matched = true;
+      }
+    });
+    if (!matched) {
+      const patternKey = `financial_truth_category:${correction.categoryDefinitionId}`;
+      resolved[patternKey] = {
+        patternKey,
+        category: correction.categoryName || `Category ${correction.categoryDefinitionId}`,
+        categoryDefinitionId: correction.categoryDefinitionId,
+        categoryType: 'expense',
+        parentCategory: null,
+        monthlyBaseline: amount,
+        monthlyStdDev: 0,
+        monthsAnalyzed: 0,
+        activeMonths: 0,
+        sourceMonths: [],
+        isUserExpectation: true,
+      };
+    }
+  });
+  return resolved;
+}
+
+function generateForecastAcrossMonths(patterns, patternEntries, db, startDate, endDate, now, currentMonthTransactions, monthlyBaselines = {}, categoryExpectations = []) {
   const dailyForecasts = [];
   const simulationEntriesByDay = [];
   const adjustmentsByMonth = {};
@@ -1863,7 +1921,8 @@ function generateForecastAcrossMonths(patterns, patternEntries, db, startDate, e
     }
 
     adjustMonthlyPatternForecasts(monthForecasts, patterns, monthAdjustments);
-    reconcileVariableExpenseForecasts(monthForecasts, monthSimulationEntriesByDay, monthlyBaselines, monthTransactions, now, patterns);
+    const resolvedMonthlyBaselines = applyCategoryExpectations(monthlyBaselines, categoryExpectations, monthKey);
+    reconcileVariableExpenseForecasts(monthForecasts, monthSimulationEntriesByDay, resolvedMonthlyBaselines, monthTransactions, now, patterns);
     log(`  ↳ Adjusted monthly patterns for ${monthKey}: ${monthForecasts.length} day(s)`);
 
     dailyForecasts.push(...monthForecasts);
@@ -1874,8 +1933,129 @@ function generateForecastAcrossMonths(patterns, patternEntries, db, startDate, e
   return { dailyForecasts, adjustmentsByMonth, simulationEntriesByDay };
 }
 
+function injectResolvedRecurringPredictions(dailyForecasts, simulationEntriesByDay, truthSnapshot) {
+  if (!dailyForecasts.length) return;
+  const occurrences = financialTruthService.buildRecurringOccurrences(
+    truthSnapshot,
+    dailyForecasts[0].date,
+    dailyForecasts[dailyForecasts.length - 1].date,
+  );
+  const daysByDate = new Map(dailyForecasts.map((day) => [day.date, day]));
+  const simulationsByDate = new Map(simulationEntriesByDay.map((day) => [day.date, day]));
+
+  occurrences.forEach((occurrence) => {
+    const day = daysByDate.get(occurrence.date);
+    if (!day) return;
+    const isIncome = occurrence.categoryType === 'income';
+    const prediction = {
+      ...occurrence,
+      patternKey: `financial_pattern:${occurrence.patternId}`,
+      monthlyKey: `financial_pattern:${occurrence.patternId}`,
+      incomeType: isIncome ? 'operating' : null,
+      expenseType: isIncome ? null : 'operating',
+      isUserResolvedPattern: true,
+    };
+    day.predictions.push(prediction);
+    if (isIncome) {
+      day.expectedIncome = (Number(day.expectedIncome) || 0) + occurrence.probabilityWeightedAmount;
+      day.expectedOperatingIncome = (Number(day.expectedOperatingIncome) || 0) + occurrence.probabilityWeightedAmount;
+    } else {
+      day.expectedExpenses = (Number(day.expectedExpenses) || 0) + occurrence.probabilityWeightedAmount;
+      day.expectedOperatingExpenses = (Number(day.expectedOperatingExpenses) || 0) + occurrence.probabilityWeightedAmount;
+    }
+    const simulation = simulationsByDate.get(occurrence.date);
+    if (simulation) {
+      simulation.entries.push({
+        patternKey: prediction.patternKey,
+        monthlyKey: prediction.monthlyKey,
+        categoryType: occurrence.categoryType,
+        incomeType: prediction.incomeType,
+        expenseType: prediction.expenseType,
+        patternType: 'financial_pattern',
+        probability: occurrence.probability,
+        avgAmount: occurrence.expectedAmount,
+        stdDev: occurrence.amountRange
+          ? Math.max(0, (occurrence.amountRange.high - occurrence.amountRange.low) / 4)
+          : 0,
+        patternId: occurrence.patternId,
+        occurrenceId: occurrence.occurrenceId,
+      });
+    }
+  });
+
+  dailyForecasts.forEach(refreshForecastDayPredictions);
+}
+
+function buildEmptyForecastResult(startDate, endDate, truthSnapshot, monteCarloRuns) {
+  const dailyForecasts = [];
+  const simulationEntriesByDay = [];
+  const cursor = new Date(startDate);
+  while (cursor <= endDate) {
+    const date = formatDate(cursor);
+    dailyForecasts.push({
+      date,
+      expectedIncome: 0,
+      expectedOperatingIncome: 0,
+      expectedNonOperatingIncome: 0,
+      expectedExpenses: 0,
+      expectedOperatingExpenses: 0,
+      expectedNonOperatingExpenses: 0,
+      expectedCashFlow: 0,
+      expectedOperatingCashFlow: 0,
+      expectedNonOperatingCashFlow: 0,
+      predictions: [],
+      topPredictions: [],
+    });
+    simulationEntriesByDay.push({ date, entries: [] });
+    cursor.setDate(cursor.getDate() + 1);
+  }
+  injectResolvedRecurringPredictions(dailyForecasts, simulationEntriesByDay, truthSnapshot);
+  const monteCarloResults = runMonteCarloSimulation(dailyForecasts, simulationEntriesByDay, monteCarloRuns);
+  let cumulative = 0;
+  let cumulativeOperatingExpenses = 0;
+  dailyForecasts.forEach((day) => {
+    cumulative += Number(day.expectedCashFlow) || 0;
+    cumulativeOperatingExpenses += Number(day.expectedOperatingExpenses) || 0;
+    day.cumulativeCashFlow = cumulative;
+    day.cumulativeOperatingCashFlow = cumulative;
+    day.cumulativeNonOperatingCashFlow = 0;
+    day.cumulativeOperatingExpenses = cumulativeOperatingExpenses;
+    day.cumulativeNonOperatingExpenses = 0;
+  });
+  const withCumulative = (scenario) => {
+    let sum = 0;
+    return {
+      ...scenario,
+      dailyResults: (scenario.dailyResults || []).map((day) => {
+        sum += Number(day.cashFlow) || 0;
+        return { ...day, cumulativeCashFlow: sum, cumulativeOperatingCashFlow: sum, cumulativeNonOperatingCashFlow: 0 };
+      }),
+    };
+  };
+  return {
+    generated: new Date().toISOString(),
+    truthRevision: truthSnapshot.truthRevision,
+    analysisInfo: { totalTransactions: 0, projectedEvidenceTransactions: 0, totalCategories: 0, insufficientHistory: true },
+    forecastPeriod: { start: formatDate(startDate), end: formatDate(endDate), days: dailyForecasts.length },
+    dailyForecasts,
+    monteCarloResults: {
+      worstCase: monteCarloResults.worst,
+      baseCase: monteCarloResults.base,
+      bestCase: monteCarloResults.best,
+      numSimulations: monteCarloResults.numSimulations,
+    },
+    scenarios: {
+      p10: withCumulative(monteCarloResults.worst),
+      p50: withCumulative(monteCarloResults.base),
+      p90: withCumulative(monteCarloResults.best),
+    },
+    categoryPatterns: [],
+    monthlyAdjustments: {},
+  };
+}
+
 // ==================== MAIN EXPORT ====================
-async function generateDailyForecast(options = {}) {
+async function generateDailyForecastLocal(options = {}) {
   const now = new Date();
   const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
   const currentDay = now.getDate();
@@ -1910,25 +2090,41 @@ async function generateDailyForecast(options = {}) {
     CONFIG.forecastDays = Number.isFinite(forecastDays) ? Math.max(0, forecastDays) : null;
   }
 
-  const cacheKey = JSON.stringify({
-    date: formatDate(now),
-    includeToday: CONFIG.includeToday,
-    forecastDays: CONFIG.forecastDays,
-    forecastMonths: CONFIG.forecastMonths,
-    monteCarloRuns: CONFIG.monteCarloRuns,
-    historyMonths,
-  });
-
-  if (!skipCache) {
-    const cached = forecastResultCache.get(cacheKey);
-    if (cached && Date.now() < cached.expiresAt) {
-      return cached.value;
-    }
-  }
-
-  const db = openForecastDb();
+  const db = openForecastDb({ writable: true });
 
   try {
+    let truthSnapshot = {
+      truthRevision: 0,
+      patterns: [],
+      excludedTransactionKeys: new Set(),
+      categoryExpectations: [],
+    };
+    try {
+      truthSnapshot = financialTruthService.getProjectionSnapshotFromDb(db);
+    } catch (error) {
+      // Older test fixtures and databases still pending migration can forecast
+      // with legacy behavior; production startup applies v7 before this path.
+      if (process.env.NODE_ENV !== 'test') {
+        console.warn('[Forecast] Financial truth unavailable:', error?.message || error);
+      }
+    }
+    const cacheKey = JSON.stringify({
+      date: formatDate(now),
+      includeToday: CONFIG.includeToday,
+      forecastDays: CONFIG.forecastDays,
+      forecastMonths: CONFIG.forecastMonths,
+      monteCarloRuns: CONFIG.monteCarloRuns,
+      historyMonths,
+      truthRevision: truthSnapshot.truthRevision,
+    });
+
+    if (!skipCache) {
+      const cached = forecastResultCache.get(cacheKey);
+      if (cached && Date.now() < cached.expiresAt) {
+        return cached.value;
+      }
+    }
+
     let historySince = null;
     if (historyMonths > 0) {
       const since = new Date(now);
@@ -1942,7 +2138,28 @@ async function generateDailyForecast(options = {}) {
       allTransactions = getAllTransactions(db);
       historySince = null;
     }
-    if (allTransactions.length === 0) throw new Error('No transactions found in database');
+    if (allTransactions.length === 0) {
+      const { startDate, endDate } = resolveForecastWindow(now, {
+        includeToday: CONFIG.includeToday,
+        forecastDays: CONFIG.forecastDays,
+        forecastMonths: CONFIG.forecastMonths,
+      });
+      const emptyResult = buildEmptyForecastResult(startDate, endDate, truthSnapshot, CONFIG.monteCarloRuns);
+      if (!skipCache) forecastResultCache.set(cacheKey, { value: emptyResult, expiresAt: Date.now() + cacheDurationMs });
+      return emptyResult;
+    }
+
+    const historicalTransactionSummary = {
+      count: allTransactions.length,
+      first: allTransactions[0]?.date || null,
+      last: allTransactions[allTransactions.length - 1]?.date || null,
+    };
+
+    // Explicit recurring evidence is forecast once through the shared pattern
+    // layer, never a second time through the residual category baseline.
+    allTransactions = allTransactions.filter((transaction) => (
+      !truthSnapshot.excludedTransactionKeys.has(`${transaction.identifier}\u0000${transaction.vendor}`)
+    ));
 
     const patterns = analyzeCategoryPatterns(allTransactions);
     const patternEntries = buildPatternCaches(patterns);
@@ -1968,8 +2185,10 @@ async function generateDailyForecast(options = {}) {
       forecastEndDate,
       now,
       currentMonthTransactions,
-      variableExpenseBaselines
+      variableExpenseBaselines,
+      truthSnapshot.categoryExpectations,
     );
+    injectResolvedRecurringPredictions(dailyForecasts, simulationEntriesByDay, truthSnapshot);
     const monteCarloResults = runMonteCarloSimulation(dailyForecasts, simulationEntriesByDay, CONFIG.monteCarloRuns);
 
     let cumulativeCashFlow = 0;
@@ -1992,10 +2211,12 @@ async function generateDailyForecast(options = {}) {
 
     const results = {
       generated: new Date().toISOString(),
+      truthRevision: truthSnapshot.truthRevision,
       analysisInfo: {
-        totalTransactions: allTransactions.length,
-        firstTransaction: allTransactions[0].date,
-        lastTransaction: allTransactions[allTransactions.length - 1].date,
+        totalTransactions: historicalTransactionSummary.count,
+        projectedEvidenceTransactions: allTransactions.length,
+        firstTransaction: historicalTransactionSummary.first,
+        lastTransaction: historicalTransactionSummary.last,
         totalCategories: categoryCount,
         variableExpenseBaselines: Object.keys(variableExpenseBaselines).length,
         currentMonth,
@@ -2092,6 +2313,72 @@ results.scenarios = {
   } finally {
     db.close();
   }
+}
+
+function runForecastWorker(options) {
+  return new Promise((resolve, reject) => {
+    const worker = new Worker(path.join(__dirname, 'forecast-worker.js'), {
+      workerData: { options: { ...options, __workerThread: true } },
+    });
+    const timeout = setTimeout(() => {
+      worker.terminate();
+      reject(new Error('Forecast background calculation timed out'));
+    }, 170_000);
+    worker.once('message', (message) => {
+      clearTimeout(timeout);
+      if (message?.ok) resolve(message.result);
+      else reject(new Error(message?.error || 'Forecast background calculation failed'));
+    });
+    worker.once('error', (error) => {
+      clearTimeout(timeout);
+      reject(error);
+    });
+    worker.once('exit', (code) => {
+      clearTimeout(timeout);
+      if (code !== 0) reject(new Error(`Forecast worker stopped with code ${code}`));
+    });
+  });
+}
+
+async function runRevisionCheckedWorker(options) {
+  let result = await runForecastWorker(options);
+  let currentRevision = financialTruthService.getProjectionSnapshot({ materialize: false }).truthRevision;
+  if (Number(result?.truthRevision) === Number(currentRevision)) return result;
+  result = await runForecastWorker({ ...options, noCache: true });
+  currentRevision = financialTruthService.getProjectionSnapshot({ materialize: false }).truthRevision;
+  if (Number(result?.truthRevision) !== Number(currentRevision)) {
+    throw new Error('Financial data changed while the forecast was updating');
+  }
+  return result;
+}
+
+async function generateDailyForecast(options = {}) {
+  const normalizedKey = JSON.stringify({
+    includeToday: options.includeToday ?? false,
+    forecastDays: options.forecastDays ?? null,
+    forecastMonths: options.forecastMonths ?? 6,
+    monteCarloRuns: options.monteCarloRuns ?? DEFAULT_MONTE_CARLO_RUNS,
+    historyMonths: options.historyMonths ?? DEFAULT_HISTORY_MONTHS,
+    noCache: options.noCache === true || options.noCache === 'true' || options.noCache === '1',
+  });
+  const existing = forecastInFlight.get(normalizedKey);
+  if (existing) return existing;
+
+  const shouldUseWorker = process.env.NODE_ENV !== 'test' && options.__workerThread !== true;
+  const calculation = (shouldUseWorker
+    ? runRevisionCheckedWorker(options).catch(async (error) => {
+      console.warn('[Forecast] Background worker unavailable; using in-process fallback:', error?.message || error);
+      const result = await generateDailyForecastLocal({ ...options, __workerThread: true });
+      const currentRevision = financialTruthService.getProjectionSnapshot({ materialize: false }).truthRevision;
+      if (Number(result?.truthRevision) !== Number(currentRevision)) {
+        throw new Error('Financial data changed while the forecast was updating');
+      }
+      return result;
+    })
+    : generateDailyForecastLocal(options))
+    .finally(() => forecastInFlight.delete(normalizedKey));
+  forecastInFlight.set(normalizedKey, calculation);
+  return calculation;
 }
 
 /**
@@ -2432,6 +2719,10 @@ async function getForecast(options = {}) {
 module.exports = {
   generateDailyForecast,
   getForecast,
+  clearCache() {
+    forecastResultCache.clear();
+    forecastInFlight.clear();
+  },
   __setDatabaseCtor(mockCtor) {
     databaseCtor = mockCtor || Database;
   },
@@ -2442,8 +2733,10 @@ module.exports = {
     analyzeCategoryPatterns,
     adjustProbabilitiesForCurrentMonth,
     adjustMonthlyPatternForecasts,
+    applyCategoryExpectations,
     buildBudgetOutlook,
     buildChosenMonthlyOccurrenceDateByMonth,
+    buildEmptyForecastResult,
     buildPatternCaches,
     buildVariableExpenseMonthlyBaselines,
     calculateVariableExpenseBaselineTarget,
@@ -2467,6 +2760,7 @@ module.exports = {
     isOperatingIncomePattern,
     isOperatingExpensePattern,
     isVariableExpensePattern,
+    injectResolvedRecurringPredictions,
     loadCategoryDefinitions,
     logPatternSummary,
     mean,

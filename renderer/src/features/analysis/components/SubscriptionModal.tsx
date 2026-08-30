@@ -44,6 +44,7 @@ interface SubscriptionModalProps {
   subscription?: Subscription | null;
   onSave: (data: AddSubscriptionRequest | UpdateSubscriptionRequest) => Promise<void>;
   isEditing: boolean;
+  onCorrect?: (subscription: Subscription) => void;
 }
 
 const FREQUENCIES: SubscriptionFrequency[] = [
@@ -70,10 +71,12 @@ const SubscriptionModal: React.FC<SubscriptionModalProps> = ({
   subscription,
   onSave,
   isEditing,
+  onCorrect,
 }) => {
   const theme = useTheme();
   const { formatCurrency } = useFinancePrivacy();
   const { t } = useTranslation('translation', { keyPrefix: 'analysisPage.subscriptions' });
+  const { t: tRoot } = useTranslation('translation');
 
   const [formData, setFormData] = useState<{
     display_name: string;
@@ -508,6 +511,16 @@ const SubscriptionModal: React.FC<SubscriptionModalProps> = ({
           bgcolor: alpha(theme.palette.background.default, 0.5),
         }}
       >
+        {isEditing && subscription?.patternId && onCorrect && (
+          <Button
+            color="warning"
+            onClick={() => onCorrect(subscription)}
+            disabled={saving}
+            sx={{ mr: 'auto' }}
+          >
+            {tRoot('financialTruth.notAccurate', { defaultValue: 'Not accurate' })}
+          </Button>
+        )}
         <Button
           onClick={onClose}
           disabled={saving}

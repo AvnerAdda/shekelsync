@@ -1202,6 +1202,8 @@ const TABLE_DEFINITIONS = [
       notes TEXT,
       created_at TEXT NOT NULL DEFAULT (datetime('now')),
       updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+      financial_pattern_id INTEGER,
+      FOREIGN KEY (financial_pattern_id) REFERENCES financial_patterns(id) ON DELETE SET NULL,
       FOREIGN KEY (category_definition_id) REFERENCES category_definitions(id) ON DELETE SET NULL
     );`,
   `CREATE TABLE IF NOT EXISTS subscription_history (
@@ -1236,6 +1238,100 @@ const TABLE_DEFINITIONS = [
       created_at TEXT NOT NULL DEFAULT (datetime('now')),
       expires_at TEXT,
       FOREIGN KEY (subscription_id) REFERENCES subscriptions(id) ON DELETE CASCADE
+    );`,
+  `CREATE TABLE IF NOT EXISTS financial_patterns (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      fingerprint TEXT NOT NULL UNIQUE,
+      normalized_name TEXT NOT NULL,
+      display_name TEXT NOT NULL,
+      direction TEXT NOT NULL CHECK(direction IN ('expense', 'income')),
+      category_definition_id INTEGER,
+      detected_frequency TEXT NOT NULL CHECK(detected_frequency IN ('daily', 'weekly', 'biweekly', 'monthly', 'bimonthly', 'quarterly', 'yearly', 'variable')),
+      detected_amount REAL NOT NULL DEFAULT 0,
+      amount_tolerance REAL NOT NULL DEFAULT 0,
+      confidence REAL NOT NULL DEFAULT 0 CHECK(confidence >= 0 AND confidence <= 1),
+      first_seen_date TEXT,
+      last_seen_date TEXT,
+      next_expected_date TEXT,
+      occurrence_count INTEGER NOT NULL DEFAULT 0,
+      source TEXT NOT NULL DEFAULT 'detected' CHECK(source IN ('detected', 'manual', 'legacy_subscription')),
+      is_subscription INTEGER NOT NULL DEFAULT 0 CHECK(is_subscription IN (0, 1)),
+      evidence_signature TEXT,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+      FOREIGN KEY (category_definition_id) REFERENCES category_definitions(id) ON DELETE SET NULL
+    );`,
+  `CREATE TABLE IF NOT EXISTS financial_pattern_transactions (
+      pattern_id INTEGER NOT NULL,
+      transaction_identifier TEXT NOT NULL,
+      transaction_vendor TEXT NOT NULL,
+      transaction_date TEXT NOT NULL,
+      amount REAL NOT NULL,
+      match_score REAL NOT NULL DEFAULT 1 CHECK(match_score >= 0 AND match_score <= 1),
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      PRIMARY KEY (pattern_id, transaction_identifier, transaction_vendor),
+      FOREIGN KEY (pattern_id) REFERENCES financial_patterns(id) ON DELETE CASCADE,
+      FOREIGN KEY (transaction_identifier, transaction_vendor) REFERENCES transactions(identifier, vendor) ON DELETE CASCADE
+    );`,
+  `CREATE TABLE IF NOT EXISTS financial_corrections (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      request_id TEXT NOT NULL UNIQUE,
+      target_kind TEXT NOT NULL CHECK(target_kind IN ('pattern', 'occurrence', 'category')),
+      pattern_id INTEGER,
+      occurrence_id TEXT,
+      category_definition_id INTEGER,
+      action TEXT NOT NULL CHECK(action IN ('skip_occurrence', 'suppress_pattern', 'end_pattern', 'pause_pattern', 'override_pattern', 'set_category_expectation')),
+      scope TEXT NOT NULL CHECK(scope IN ('occurrence', 'from_date', 'current_month', 'ongoing')),
+      effective_date TEXT,
+      effective_end_date TEXT,
+      reason_code TEXT,
+      source_feature TEXT NOT NULL,
+      source_key TEXT,
+      overrides_json TEXT NOT NULL DEFAULT '{}',
+      status TEXT NOT NULL DEFAULT 'active' CHECK(status IN ('active', 'reverted', 'superseded')),
+      supersedes_id INTEGER,
+      reverted_at TEXT,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+      FOREIGN KEY (pattern_id) REFERENCES financial_patterns(id) ON DELETE CASCADE,
+      FOREIGN KEY (category_definition_id) REFERENCES category_definitions(id) ON DELETE CASCADE,
+      FOREIGN KEY (supersedes_id) REFERENCES financial_corrections(id) ON DELETE SET NULL
+    );`,
+  `CREATE TABLE IF NOT EXISTS financial_truth_state (
+      id INTEGER PRIMARY KEY CHECK(id = 1),
+      revision INTEGER NOT NULL DEFAULT 0,
+      materialized_transaction_signature TEXT,
+      materialized_at TEXT,
+      updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );`,
+  `INSERT OR IGNORE INTO financial_truth_state (id, revision) VALUES (1, 0);`,
+  `CREATE TRIGGER IF NOT EXISTS trg_financial_truth_transactions_insert
+    AFTER INSERT ON transactions
+    BEGIN
+      UPDATE financial_truth_state
+      SET materialized_transaction_signature = NULL, updated_at = datetime('now')
+      WHERE id = 1;
+    END;`,
+  `CREATE TRIGGER IF NOT EXISTS trg_financial_truth_transactions_update
+    AFTER UPDATE ON transactions
+    BEGIN
+      UPDATE financial_truth_state
+      SET materialized_transaction_signature = NULL, updated_at = datetime('now')
+      WHERE id = 1;
+    END;`,
+  `CREATE TRIGGER IF NOT EXISTS trg_financial_truth_transactions_delete
+    AFTER DELETE ON transactions
+    BEGIN
+      UPDATE financial_truth_state
+      SET materialized_transaction_signature = NULL, updated_at = datetime('now')
+      WHERE id = 1;
+    END;`,
+  `CREATE TABLE IF NOT EXISTS presentation_dismissals (
+      source_key TEXT PRIMARY KEY,
+      source_type TEXT NOT NULL,
+      hidden INTEGER NOT NULL DEFAULT 1 CHECK(hidden IN (0, 1)),
+      hidden_at TEXT,
+      updated_at TEXT NOT NULL DEFAULT (datetime('now'))
     );`
 ];
 

@@ -602,6 +602,8 @@ describe('Sidebar component', () => {
     expect(screen.getByText('Ctrl+2')).toBeInTheDocument();
     expect(screen.getByText('Ctrl+3')).toBeInTheDocument();
     expect(screen.getByText('Ctrl+4')).toBeInTheDocument();
+    expect(screen.queryByText('Ctrl+5')).not.toBeInTheDocument();
+    expect(screen.queryByText('Money Review')).not.toBeInTheDocument();
   });
 
   it('does not navigate when a sidebar page is locked', async () => {

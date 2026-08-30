@@ -54,6 +54,11 @@ export interface Subscription {
   notes: string | null;
   occurrence_count: number;
   total_spent: number;
+  financial_pattern_id?: number | null;
+  patternId?: number | null;
+  truthRevision?: number;
+  predictionKind?: 'recurring_expense';
+  correctionCapabilities?: Array<'skip_occurrence' | 'suppress_pattern' | 'end_pattern' | 'pause_pattern' | 'override_pattern'>;
 }
 
 export interface SubscriptionAlert {
@@ -74,6 +79,7 @@ export interface SubscriptionAlert {
   action_taken: string | null;
   created_at: string;
   expires_at: string | null;
+  financial_pattern_id?: number | null;
 }
 
 export interface CategoryBreakdown {

@@ -1,8 +1,32 @@
 const actualDatabase = require('../database.js');
 const { getLocalizedCategoryName } = require('../../../lib/server/locale-utils.js');
 const { getCreditCardRepaymentCategoryCondition } = require('../accounts/repayment-category.js');
+const actualFinancialTruth = require('../financial-truth.js');
 
 let database = actualDatabase;
+let financialTruth = actualFinancialTruth;
+
+function loadTruthSnapshot() {
+  if (process.env.NODE_ENV === 'test' && financialTruth === actualFinancialTruth) {
+    return { truthRevision: 0, patterns: [] };
+  }
+  try {
+    return financialTruth.getProjectionSnapshot();
+  } catch (error) {
+    console.warn('Subscription truth snapshot unavailable:', error?.message || error);
+    return { truthRevision: 0, patterns: [] };
+  }
+}
+
+function syncTruthFromSubscription(id, updates) {
+  if (process.env.NODE_ENV === 'test' && financialTruth === actualFinancialTruth) return null;
+  try {
+    return financialTruth.applySubscriptionUpdate(id, updates);
+  } catch (error) {
+    console.warn('Subscription truth update unavailable:', error?.message || error);
+    return null;
+  }
+}
 
 function getRecurringAnalyzer() {
   return require('./recurring-analyzer.js');
@@ -56,14 +80,43 @@ function calculateNextExpectedDate(lastChargeDate, frequency) {
  */
 async function getSubscriptions(options = {}) {
   const { status, frequency, locale = 'he' } = options;
-  const { patterns } = await recurringAnalyzerRef.analyzeRecurringPatterns({
-    monthsBack: 6,
-    minOccurrences: 2,
-    minConsistency: 0.3,
-    minVariableAmount: 50,
-    aggregateBy: 'day',
-    excludeCreditCardRepayments: true,
-  });
+  const truthSnapshot = loadTruthSnapshot();
+  const truthById = new Map(truthSnapshot.patterns.map((pattern) => [pattern.id, pattern]));
+  const truthByName = new Map();
+  truthSnapshot.patterns
+    .filter((pattern) => pattern.direction === 'expense')
+    .forEach((pattern) => {
+      if (!truthByName.has(pattern.normalizedName)) truthByName.set(pattern.normalizedName, pattern);
+    });
+  const patterns = truthSnapshot.patterns.length > 0
+    ? truthSnapshot.patterns
+      .filter((pattern) => (
+        pattern.direction === 'expense'
+        && pattern.isSubscription
+        && pattern.state !== 'suppressed'
+      ))
+      .map((pattern) => ({
+        financial_pattern_id: pattern.id,
+        pattern_key: pattern.normalizedName,
+        display_name: pattern.displayName,
+        detected_frequency: pattern.frequency,
+        detected_amount: pattern.amount,
+        amount_is_fixed: pattern.amountTolerance <= Math.max(5, pattern.amount * 0.15) ? 1 : 0,
+        consistency_score: pattern.confidence,
+        category_definition_id: pattern.categoryDefinitionId,
+        first_detected_date: pattern.firstSeenDate,
+        last_charge_date: pattern.lastSeenDate,
+        occurrence_count: pattern.occurrenceCount,
+        total_spent: pattern.amount * pattern.occurrenceCount,
+      }))
+    : (await recurringAnalyzerRef.analyzeRecurringPatterns({
+      monthsBack: 6,
+      minOccurrences: 2,
+      minConsistency: 0.3,
+      minVariableAmount: 50,
+      aggregateBy: 'day',
+      excludeCreditCardRepayments: true,
+    })).patterns;
 
   // Get stored subscriptions
   const storedSubsResult = await database.query(
@@ -91,20 +144,29 @@ async function getSubscriptions(options = {}) {
 
   for (const pattern of patterns) {
     const storedSub = storedSubsMap.get(pattern.pattern_key);
+    const truthPattern = truthById.get(Number(storedSub?.financial_pattern_id || pattern.financial_pattern_id))
+      || truthByName.get(recurringAnalyzerRef.normalizePatternKey(pattern.display_name || pattern.pattern_key));
     const categoryDefinitionId = storedSub?.category_definition_id ?? pattern.category_definition_id ?? null;
+    const truthStatus = truthPattern?.state === 'suppressed' || truthPattern?.state === 'ended'
+      ? 'cancelled'
+      : truthPattern?.state === 'paused'
+        ? 'paused'
+        : null;
 
     const subscription = {
       id: storedSub?.id || null,
+      financial_pattern_id: truthPattern?.id || storedSub?.financial_pattern_id || null,
+      patternId: truthPattern?.id || storedSub?.financial_pattern_id || null,
       pattern_key: pattern.pattern_key,
       display_name: storedSub?.display_name || pattern.display_name,
       detected_frequency: pattern.detected_frequency,
       detected_amount: pattern.detected_amount,
       amount_is_fixed: storedSub?.amount_is_fixed ?? pattern.amount_is_fixed,
       consistency_score: pattern.consistency_score,
-      user_frequency: storedSub?.user_frequency || null,
-      user_amount: storedSub?.user_amount || null,
-      billing_day: storedSub?.billing_day || null,
-      status: storedSub?.status || 'active',
+      user_frequency: truthPattern && truthPattern.frequency !== pattern.detected_frequency ? truthPattern.frequency : (storedSub?.user_frequency || null),
+      user_amount: truthPattern && truthPattern.amount !== pattern.detected_amount ? truthPattern.amount : (storedSub?.user_amount || null),
+      billing_day: truthPattern?.billingDay || storedSub?.billing_day || null,
+      status: truthStatus || storedSub?.status || 'active',
       category_definition_id: categoryDefinitionId,
       category_name: getLocalizedCategoryName({
         name: storedSub?.category_name || pattern.category_name,
@@ -120,14 +182,17 @@ async function getSubscriptions(options = {}) {
       }, locale),
       first_detected_date: storedSub?.first_detected_date || pattern.first_detected_date,
       last_charge_date: pattern.last_charge_date,
-      next_expected_date: calculateNextExpectedDate(
+      next_expected_date: truthPattern?.nextExpectedDate || calculateNextExpectedDate(
         pattern.last_charge_date,
         storedSub?.user_frequency || pattern.detected_frequency
       ),
       is_manual: storedSub?.is_manual || 0,
       notes: storedSub?.notes || null,
       occurrence_count: pattern.occurrence_count,
-      total_spent: pattern.total_spent
+      total_spent: pattern.total_spent,
+      truthRevision: truthSnapshot.truthRevision,
+      predictionKind: 'recurring_expense',
+      correctionCapabilities: ['skip_occurrence', 'suppress_pattern', 'end_pattern', 'pause_pattern', 'override_pattern'],
     };
 
     // Apply filters
@@ -145,11 +210,20 @@ async function getSubscriptions(options = {}) {
     if (!storedSub.is_manual) continue;
 
     // Apply filters
-    if (status && storedSub.status !== status) continue;
     if (frequency && (storedSub.user_frequency || storedSub.detected_frequency) !== frequency) continue;
 
+    const truthPattern = truthById.get(Number(storedSub.financial_pattern_id))
+      || truthByName.get(recurringAnalyzerRef.normalizePatternKey(storedSub.display_name || storedSub.pattern_key));
+    const resolvedStatus = truthPattern?.state === 'suppressed' || truthPattern?.state === 'ended'
+      ? 'cancelled'
+      : truthPattern?.state === 'paused' ? 'paused' : storedSub.status;
+    if (truthPattern?.state === 'suppressed') continue;
+    if (status && resolvedStatus !== status) continue;
     subscriptions.push({
       ...storedSub,
+      financial_pattern_id: truthPattern?.id || storedSub.financial_pattern_id || null,
+      patternId: truthPattern?.id || storedSub.financial_pattern_id || null,
+      status: resolvedStatus,
       category_name: getLocalizedCategoryName({
         name: storedSub.category_name,
         name_en: storedSub.category_name_en,
@@ -162,14 +236,17 @@ async function getSubscriptions(options = {}) {
       }, locale),
       detected_amount: storedSub.detected_amount || storedSub.user_amount,
       occurrence_count: 0,
-      total_spent: 0
+      total_spent: 0,
+      truthRevision: truthSnapshot.truthRevision,
+      predictionKind: 'recurring_expense',
+      correctionCapabilities: ['suppress_pattern', 'end_pattern', 'pause_pattern', 'override_pattern'],
     });
   }
 
   // Sort by total spent descending
   subscriptions.sort((a, b) => (b.total_spent || 0) - (a.total_spent || 0));
 
-  return { subscriptions };
+  return { subscriptions, truthRevision: truthSnapshot.truthRevision, refreshState: 'ready' };
 }
 
 /**
@@ -180,9 +257,9 @@ async function getSubscriptions(options = {}) {
  */
 async function getSubscriptionSummary(options = {}) {
   const { locale = 'he' } = options;
-  const { subscriptions } = await getSubscriptions({ locale });
+  const { subscriptions, truthRevision = 0 } = await getSubscriptions({ locale });
 
-  const activeSubscriptions = subscriptions.filter(s => s.status === 'active');
+  const activeSubscriptions = subscriptions.filter(s => s.status === 'active' || s.status === 'keep');
 
   // Calculate monthly costs
   const monthlyTotal = activeSubscriptions.reduce((sum, sub) => {
@@ -238,6 +315,8 @@ async function getSubscriptionSummary(options = {}) {
     active_count: activeSubscriptions.length,
     monthly_total: Math.round(monthlyTotal * 100) / 100,
     yearly_total: Math.round(yearlyTotal * 100) / 100,
+    truthRevision,
+    refreshState: 'ready',
     category_breakdown: Object.values(categoryBreakdown).sort((a, b) => b.monthly_total - a.monthly_total),
     frequency_breakdown: Object.values(frequencyBreakdown).sort((a, b) => b.monthly_total - a.monthly_total)
   };
@@ -264,7 +343,7 @@ function convertToMonthly(amount, frequency) {
  */
 async function getSubscriptionCreep(options = {}) {
   const { months = 12 } = options;
-  const { subscriptions } = await getSubscriptions();
+  const { subscriptions, truthRevision = 0 } = await getSubscriptions();
   const subscriptionKeys = new Set(subscriptions.map((sub) => sub.pattern_key));
   const repaymentCategoryCondition = getCreditCardRepaymentCategoryCondition('cd');
 
@@ -343,7 +422,9 @@ async function getSubscriptionCreep(options = {}) {
     total_creep_percentage: Math.round(totalCreep * 100) / 100,
     starting_total: Math.round(firstMonth * 100) / 100,
     current_total: Math.round(lastMonth * 100) / 100,
-    months_analyzed: months
+    months_analyzed: months,
+    truthRevision,
+    refreshState: 'ready',
   };
 }
 
@@ -359,10 +440,12 @@ async function getSubscriptionAlerts(options = {}) {
       sa.*,
       s.display_name as subscription_name,
       s.detected_amount,
-      s.detected_frequency
+      s.detected_frequency,
+      s.financial_pattern_id
     FROM subscription_alerts sa
     JOIN subscriptions s ON sa.subscription_id = s.id
     WHERE (sa.is_dismissed = 0 OR $1 = 1)
+      AND s.status IN ('active', 'keep', 'review')
       AND (sa.expires_at IS NULL OR sa.expires_at > datetime('now'))
     ORDER BY
       CASE sa.severity WHEN 'critical' THEN 0 WHEN 'warning' THEN 1 ELSE 2 END,
@@ -373,28 +456,31 @@ async function getSubscriptionAlerts(options = {}) {
   const alerts = alertsResult.rows || [];
 
   // Detect new alerts from patterns
-  const newAlerts = await detectNewAlerts(locale);
+  const subscriptionResult = await getSubscriptions({ locale });
+  const newAlerts = await detectNewAlerts(locale, subscriptionResult);
 
   return {
     alerts: [...alerts, ...newAlerts],
     total_count: alerts.length + newAlerts.length,
     critical_count: [...alerts, ...newAlerts].filter(a => a.severity === 'critical').length,
-    warning_count: [...alerts, ...newAlerts].filter(a => a.severity === 'warning').length
+    warning_count: [...alerts, ...newAlerts].filter(a => a.severity === 'warning').length,
+    truthRevision: subscriptionResult.truthRevision || 0,
+    refreshState: 'ready',
   };
 }
 
 /**
  * Detect new alerts from transaction patterns
  */
-async function detectNewAlerts(locale = 'he') {
+async function detectNewAlerts(locale = 'he', existingSubscriptionResult = null) {
   const alerts = [];
-  const { subscriptions } = await getSubscriptions({ locale });
+  const { subscriptions } = existingSubscriptionResult || await getSubscriptions({ locale });
   const repaymentCategoryCondition = getCreditCardRepaymentCategoryCondition('cd');
 
   const today = new Date();
 
   for (const sub of subscriptions) {
-    if (sub.status !== 'active') continue;
+    if (sub.status !== 'active' && sub.status !== 'keep') continue;
 
     // Check for price increases
     if (!sub.display_name) continue;
@@ -441,6 +527,7 @@ async function detectNewAlerts(locale = 'he') {
           alerts.push({
             id: null, // Not stored yet
             subscription_id: sub.id,
+            financial_pattern_id: sub.patternId || sub.financial_pattern_id || null,
             subscription_name: sub.display_name,
             alert_type: 'price_increase',
             severity: percentChange >= 20 ? 'critical' : 'warning',
@@ -465,6 +552,7 @@ async function detectNewAlerts(locale = 'he') {
         alerts.push({
           id: null,
           subscription_id: sub.id,
+          financial_pattern_id: sub.patternId || sub.financial_pattern_id || null,
           subscription_name: sub.display_name,
           alert_type: 'missed_charge',
           severity: daysPastDue > 30 ? 'warning' : 'info',
@@ -488,7 +576,7 @@ async function detectNewAlerts(locale = 'he') {
  */
 async function getUpcomingRenewals(options = {}) {
   const { days = 30, locale = 'he' } = options;
-  const { subscriptions } = await getSubscriptions({ locale });
+  const { subscriptions, truthRevision = 0 } = await getSubscriptions({ locale });
 
   const today = new Date();
   const futureDate = new Date();
@@ -496,7 +584,7 @@ async function getUpcomingRenewals(options = {}) {
 
   const renewals = subscriptions
     .filter(sub => {
-      if (sub.status !== 'active' || !sub.next_expected_date) return false;
+      if ((sub.status !== 'active' && sub.status !== 'keep') || !sub.next_expected_date) return false;
       const nextDate = new Date(sub.next_expected_date);
       return nextDate >= today && nextDate <= futureDate;
     })
@@ -508,7 +596,7 @@ async function getUpcomingRenewals(options = {}) {
     }))
     .sort((a, b) => new Date(a.next_expected_date) - new Date(b.next_expected_date));
 
-  return { renewals };
+  return { renewals, truthRevision, refreshState: 'ready' };
 }
 
 /**
@@ -580,7 +668,9 @@ async function updateSubscription(id, updates) {
     );
   }
 
-  return { success: true, id };
+  const truthResult = syncTruthFromSubscription(id, updates);
+
+  return { success: true, id, ...(truthResult || {}) };
 }
 
 /**
@@ -634,7 +724,14 @@ async function addManualSubscription(subscription) {
 
   const id = result.rows?.[0]?.id;
 
-  return { success: true, id };
+  const truthResult = syncTruthFromSubscription(id, {
+    user_amount: user_amount ?? detected_amount,
+    user_frequency: user_frequency || detected_frequency || 'monthly',
+    billing_day,
+    status,
+  });
+
+  return { success: true, id, ...(truthResult || {}) };
 }
 
 /**
@@ -658,13 +755,15 @@ async function deleteSubscription(id) {
       `UPDATE subscriptions SET status = 'cancelled', updated_at = datetime('now') WHERE id = $1`,
       [id]
     );
-    return { success: true, action: 'cancelled' };
+    const truthResult = syncTruthFromSubscription(id, { status: 'cancelled' });
+    return { success: true, action: 'cancelled', ...(truthResult || {}) };
   }
 
+  const truthResult = syncTruthFromSubscription(id, { status: 'cancelled' });
   // Delete manual subscription
   await database.query('DELETE FROM subscriptions WHERE id = $1', [id]);
 
-  return { success: true, action: 'deleted' };
+  return { success: true, action: 'deleted', ...(truthResult || {}) };
 }
 
 /**
@@ -828,8 +927,12 @@ module.exports = {
       ...mock,
     };
   },
+  __setFinancialTruth(mock) {
+    financialTruth = mock || actualFinancialTruth;
+  },
   __resetDependencies() {
     database = actualDatabase;
+    financialTruth = actualFinancialTruth;
     recurringAnalyzerRef = { ...defaultRecurringAnalyzer };
     lastAutoDetectionAt = 0;
   },
