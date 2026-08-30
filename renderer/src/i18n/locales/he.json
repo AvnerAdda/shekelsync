@@ -10,6 +10,16 @@
     "or": "או",
     "close": "סגור"
   },
+  "dashboardPeriod": {
+    "ariaLabel": "תקופת לוח הבקרה",
+    "mtd": "MTD",
+    "last30": "30י",
+    "custom": "מותאם",
+    "startDate": "תאריך התחלה",
+    "endDate": "תאריך סיום",
+    "cancel": "ביטול",
+    "apply": "החלה"
+  },
   "routeError": {
     "titles": {
       "notFound": "העמוד לא נמצא",
@@ -928,10 +938,9 @@
       "investment": "השקעות"
     },
     "periodDays": {
-      "last30": "30י",
-      "last60": "60י",
-      "last90": "90י",
-      "lastXDays": "{{count}} הימים האחרונים"
+      "mtdLong": "מתחילת החודש",
+      "last30Long": "30 הימים האחרונים",
+      "customLong": "{{start}} – {{end}}"
     },
     "overall": {
       "totalIncome": "סה\"כ הכנסות: {{amount}}",
@@ -989,10 +998,9 @@
       "monthly": "חודשי"
     },
     "periodDays": {
-      "last30": "30י",
-      "last60": "60י",
-      "last90": "90י",
-      "showingLast": "{{count}} הימים האחרונים"
+      "showingMtd": "מתחילת החודש",
+      "showingLast30": "30 הימים האחרונים",
+      "showingCustom": "{{start}} – {{end}}"
     },
     "settings": {
       "button": "אפשרויות גרף",

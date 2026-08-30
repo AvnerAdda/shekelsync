@@ -20,15 +20,36 @@ describe('DashboardFiltersContext', () => {
 
   it('provides default filter values derived from the current date', () => {
     const { result } = renderHook(() => useDashboardFilters(), { wrapper });
-    const { startDate, endDate, aggregationPeriod, hoveredDate } = result.current;
+    const { startDate, endDate, aggregationPeriod, hoveredDate, periodPreset } = result.current;
 
     expect(startDate.getFullYear()).toBe(2024);
-    expect(startDate.getMonth()).toBe(1); // February (0-indexed)
-    expect(startDate.getDate()).toBe(14);
+    expect(startDate.getMonth()).toBe(2); // March (0-indexed)
+    expect(startDate.getDate()).toBe(1);
 
     expect(endDate.getTime()).toBe(new Date('2024-03-15T12:00:00Z').getTime());
     expect(aggregationPeriod).toBe<AggregationPeriod>('daily');
     expect(hoveredDate).toBeNull();
+    expect(periodPreset).toBe('mtd');
+  });
+
+  it('switches between month-to-date and the rolling 30-day range', () => {
+    const { result } = renderHook(() => useDashboardFilters(), { wrapper });
+
+    act(() => {
+      result.current.setPeriodPreset('30d');
+    });
+
+    expect(result.current.periodPreset).toBe('30d');
+    expect(result.current.startDate.getMonth()).toBe(1);
+    expect(result.current.startDate.getDate()).toBe(14);
+
+    act(() => {
+      result.current.setPeriodPreset('mtd');
+    });
+
+    expect(result.current.periodPreset).toBe('mtd');
+    expect(result.current.startDate.getMonth()).toBe(2);
+    expect(result.current.startDate.getDate()).toBe(1);
   });
 
   it('allows updating date range, aggregation period, and hovered date', () => {
@@ -44,6 +65,7 @@ describe('DashboardFiltersContext', () => {
 
     expect(result.current.startDate).toBe(newStart);
     expect(result.current.endDate).toBe(newEnd);
+    expect(result.current.periodPreset).toBe('custom');
     expect(result.current.aggregationPeriod).toBe<AggregationPeriod>('weekly');
     expect(result.current.hoveredDate).toBe('2024-02-14');
   });

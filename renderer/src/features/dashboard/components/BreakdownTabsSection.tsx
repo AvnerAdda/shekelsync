@@ -11,8 +11,6 @@ import {
   AlertTitle,
   useTheme,
   alpha,
-  ToggleButtonGroup,
-  ToggleButton,
 } from '@mui/material';
 import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
 import { ResponsiveContainer, PieChart, Pie, Cell, Tooltip as RechartTooltip } from 'recharts';
@@ -21,6 +19,7 @@ import BreakdownPanel from '@renderer/features/breakdown/BreakdownPanel';
 import { PortfolioBreakdownItem } from '@renderer/types/investments';
 import { useDashboardFilters } from '../DashboardFiltersContext';
 import { useTranslation } from 'react-i18next';
+import DashboardPeriodSelector from './DashboardPeriodSelector';
 
 interface PortfolioPieChartProps {
   title: string;
@@ -204,13 +203,27 @@ const BreakdownTabsSection: React.FC<BreakdownTabsSectionProps> = ({
   data,
   chartColors,
 }) => {
-  const { startDate, endDate, periodDays, setPeriodDays } = useDashboardFilters();
-  const { t } = useTranslation('translation', { keyPrefix: 'breakdownTabs' });
+  const { startDate, endDate, periodPreset } = useDashboardFilters();
+  const { t, i18n } = useTranslation('translation', { keyPrefix: 'breakdownTabs' });
   const theme = useTheme();
   
-  // Use context dates directly (updated when periodDays changes)
+  // Use the shared dashboard range directly.
   const effectiveStartDate = startDate;
   const effectiveEndDate = endDate;
+  const selectedPeriodLabel = React.useMemo(() => {
+    if (periodPreset === 'mtd') return t('periodDays.mtdLong');
+    if (periodPreset === '30d') return t('periodDays.last30Long');
+
+    const formatter = new Intl.DateTimeFormat(i18n.language || undefined, {
+      month: 'short',
+      day: 'numeric',
+      year: startDate.getFullYear() === endDate.getFullYear() ? undefined : 'numeric',
+    });
+    return t('periodDays.customLong', {
+      start: formatter.format(startDate),
+      end: formatter.format(endDate),
+    });
+  }, [endDate, i18n.language, periodPreset, startDate, t]);
   
   const hasAnyTransactions =
     (data?.summary?.totalIncome ?? 0) !== 0 ||
@@ -275,7 +288,7 @@ const BreakdownTabsSection: React.FC<BreakdownTabsSectionProps> = ({
               <Typography variant="body2" sx={{
                 fontWeight: "500"
               }}>
-                {t('periodDays.lastXDays', { count: periodDays, defaultValue: `Last ${periodDays} days` })}
+                {selectedPeriodLabel}
               </Typography>
             </Box>
           </Box>
@@ -374,16 +387,7 @@ const BreakdownTabsSection: React.FC<BreakdownTabsSectionProps> = ({
             <Tab label={t('tabs.investment')} value="investment" />
           </Tabs>
           
-          {/* Period selector: last 30/60/90 days */}
-          <ToggleButtonGroup
-            value={periodDays}
-            exclusive
-            onChange={(_, newPeriod) => {
-              if (newPeriod) {
-                setPeriodDays(newPeriod);
-              }
-            }}
-            size="small"
+          <DashboardPeriodSelector
             sx={{
               mr: 2,
               bgcolor: alpha(theme.palette.background.paper, 0.4),
@@ -406,11 +410,7 @@ const BreakdownTabsSection: React.FC<BreakdownTabsSectionProps> = ({
                 }
               }
             }}
-          >
-            <ToggleButton value={30}>{t('periodDays.last30', { defaultValue: '30d' })}</ToggleButton>
-            <ToggleButton value={60}>{t('periodDays.last60', { defaultValue: '60d' })}</ToggleButton>
-            <ToggleButton value={90}>{t('periodDays.last90', { defaultValue: '90d' })}</ToggleButton>
-          </ToggleButtonGroup>
+          />
         </Box>
         <Box sx={{ p: 3 }}>
           {selectedBreakdownType === 'overall' && (

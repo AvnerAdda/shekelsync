@@ -1,5 +1,5 @@
 import React from 'react';
-import { ResponsiveContainer, ComposedChart, CartesianGrid, XAxis, YAxis, Tooltip, Legend, Line, Area } from 'recharts';
+import { ResponsiveContainer, ComposedChart, CartesianGrid, XAxis, YAxis, Tooltip, Legend, Line, Area, Bar } from 'recharts';
 import { useTheme, alpha, Box, ToggleButtonGroup, ToggleButton, Dialog, DialogTitle, DialogContent, IconButton, List, ListItem, ListItemText, Divider, Typography, Chip } from '@mui/material';
 import CloseIcon from '@mui/icons-material/Close';
 import HourglassEmptyIcon from '@mui/icons-material/HourglassEmpty';
@@ -420,6 +420,17 @@ const TimelineView: React.FC<TimelineViewProps> = ({
                   dot={false}
                 />
               </>
+            ) : timelineMode === 'simple' ? (
+              activeSeries.map((series) => (
+                <Bar
+                  key={series.key}
+                  dataKey={`${series.key}_simple`}
+                  fill={series.color}
+                  name={series.name}
+                  stackId="simple"
+                  maxBarSize={48}
+                />
+              ))
             ) : (
               activeSeries.map((series) => (
                 <Line
@@ -435,32 +446,59 @@ const TimelineView: React.FC<TimelineViewProps> = ({
             )
           ) : (
             shouldFallbackToTotal ? (
-              <Line
-                type="monotone"
-                dataKey={totalDataKey}
-                stroke={theme.palette.primary.main}
-                strokeWidth={2}
-                name={timelineStrings.fallbackLegend}
-              />
+              timelineMode === 'simple' ? (
+                <Bar
+                  dataKey={totalDataKey}
+                  fill={theme.palette.primary.main}
+                  name={timelineStrings.fallbackLegend}
+                  maxBarSize={48}
+                />
+              ) : (
+                <Line
+                  type="monotone"
+                  dataKey={totalDataKey}
+                  stroke={theme.palette.primary.main}
+                  strokeWidth={2}
+                  name={timelineStrings.fallbackLegend}
+                />
+              )
             ) : (
               <>
                 {hasOutflow && (
-                  <Line
-                    type="monotone"
-                    dataKey={outflowDataKey}
-                    stroke={theme.palette.error.main}
-                    strokeWidth={2}
-                    name={categoryType === 'income' ? timelineStrings.outflow : title}
-                  />
+                  timelineMode === 'simple' ? (
+                    <Bar
+                      dataKey={outflowDataKey}
+                      fill={theme.palette.error.main}
+                      name={categoryType === 'income' ? timelineStrings.outflow : title}
+                      maxBarSize={48}
+                    />
+                  ) : (
+                    <Line
+                      type="monotone"
+                      dataKey={outflowDataKey}
+                      stroke={theme.palette.error.main}
+                      strokeWidth={2}
+                      name={categoryType === 'income' ? timelineStrings.outflow : title}
+                    />
+                  )
                 )}
                 {hasInflow && (
-                  <Line
-                    type="monotone"
-                    dataKey={inflowDataKey}
-                    stroke={theme.palette.success.main}
-                    strokeWidth={2}
-                    name={categoryType === 'expense' ? timelineStrings.income : timelineStrings.inflow}
-                  />
+                  timelineMode === 'simple' ? (
+                    <Bar
+                      dataKey={inflowDataKey}
+                      fill={theme.palette.success.main}
+                      name={categoryType === 'expense' ? timelineStrings.income : timelineStrings.inflow}
+                      maxBarSize={48}
+                    />
+                  ) : (
+                    <Line
+                      type="monotone"
+                      dataKey={inflowDataKey}
+                      stroke={theme.palette.success.main}
+                      strokeWidth={2}
+                      name={categoryType === 'expense' ? timelineStrings.income : timelineStrings.inflow}
+                    />
+                  )
                 )}
               </>
             )
