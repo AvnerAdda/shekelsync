@@ -261,6 +261,19 @@ describe('TitleBar component', () => {
     expect(screen.getByText('Ctrl+K')).toBeInTheDocument();
   });
 
+  it('opens Money Review in the dashboard modal from quick jump', async () => {
+    const user = userEvent.setup();
+
+    await renderTitleBar({ sessionDisplayName: 'Demo User', authLoading: false });
+
+    const combobox = screen.getByRole('combobox');
+    await user.click(combobox);
+    fireEvent.change(combobox, { target: { value: 'review' } });
+    await user.click(await screen.findByRole('option', { name: 'titleBar.search.options.review' }));
+
+    expect(navigate).toHaveBeenCalledWith('/?moneyReview=all');
+  });
+
   it('navigates to the holdings tab from search selection', async () => {
     const user = userEvent.setup();
 

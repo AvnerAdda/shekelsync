@@ -26,6 +26,7 @@ let mockFallbackLoading = false;
 let mockPrimaryData: any = null;
 let mockFallbackData: any = null;
 let mockPrimaryError: Error | null = null;
+let mockTransactionCount = 12;
 
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
@@ -69,7 +70,7 @@ vi.mock('@app/contexts/OnboardingContext', () => ({
   useOnboarding: () => ({
     status: {
       stats: {
-        transactionCount: 12,
+        transactionCount: mockTransactionCount,
       },
     },
   }),
@@ -190,11 +191,17 @@ vi.mock('@renderer/features/dashboard/components/BreakdownTabsSection', () => ({
   default: () => <div>breakdown-tabs</div>,
 }));
 
+vi.mock('@renderer/features/money-review/components/MoneyReviewDashboardSection', () => ({
+  default: () => <div>money-review-dashboard</div>,
+}));
+
 describe('HomePage dashboard fallback', () => {
   beforeEach(() => {
+    delete document.body.dataset.appReady;
     mockPrimaryLoading = false;
     mockFallbackLoading = false;
     mockPrimaryError = null;
+    mockTransactionCount = 12;
     mockPrimaryData = {
       marker: 'primary',
       summary: {
@@ -281,5 +288,15 @@ describe('HomePage dashboard fallback', () => {
     expect(mockRefreshBreakdowns).toHaveBeenCalledWith(['expense', 'income']);
     expect(mockRefreshWaterfall).toHaveBeenCalledOnce();
     expect(mockRefreshAccountSignals).toHaveBeenCalledOnce();
+  });
+
+  it('keeps Money Review out of the first-run onboarding state until transactions exist', () => {
+    mockTransactionCount = 0;
+
+    render(<HomePage />);
+
+    expect(screen.getByText('onboarding-checklist')).toBeTruthy();
+    expect(screen.queryByText('money-review-dashboard')).toBeNull();
+    expect(document.body.dataset.appReady).toBe('true');
   });
 });

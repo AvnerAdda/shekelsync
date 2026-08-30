@@ -76,4 +76,16 @@ describe('schema migrations (PRAGMA user_version)', () => {
     expect(result.status, result.stderr || result.stdout).toBe(0);
     expect(result.stdout).toContain('schema-migrations:optimizer-v2-from-legacy-v5:ok');
   });
+
+  it('backfills only explicit legacy subscription choices into financial truth', () => {
+    const result = runScenario('financial-truth-v7-backfill');
+    expect(result.status, result.stderr || result.stdout).toBe(0);
+    expect(result.stdout).toContain('schema-migrations:financial-truth-v7-backfill:ok');
+  });
+
+  it('persists, applies, restores, and deduplicates connected corrections', () => {
+    const result = runScenario('financial-truth-service-roundtrip');
+    expect(result.status, result.stderr || result.stdout).toBe(0);
+    expect(result.stdout).toContain('schema-migrations:financial-truth-service-roundtrip:ok');
+  });
 });

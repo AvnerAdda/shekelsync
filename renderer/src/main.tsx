@@ -2,6 +2,7 @@ import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App';
 import { AppProviders } from './app/providers/AppProviders';
+import { STARTUP_READY_EVENT } from './app/startup/startup-readiness';
 import { installElectronLoggerBridge } from '@app/lib/install-electron-logger';
 
 installElectronLoggerBridge();
@@ -22,25 +23,24 @@ if (typeof document !== 'undefined') {
   }
 }
 
-const AppReadySignal: React.FC = () => {
+const StartupShellController: React.FC = () => {
   React.useEffect(() => {
-    document.body.dataset.appReady = 'true';
+    if (document.body.dataset.appReady === 'true') return undefined;
 
-    const startupShell = document.getElementById('startup-shell');
-    if (!startupShell) {
-      return;
-    }
-
-    const removeStartupShell = () => {
-      startupShell.remove();
+    const updateSlowStartupMessage = () => {
+      const status = document.querySelector<HTMLElement>('[data-startup-status]');
+      const caption = document.querySelector<HTMLElement>('[data-startup-caption]');
+      if (status) status.textContent = 'The local service is still preparing your financial workspace.';
+      if (caption) caption.textContent = 'Finishing startup…';
     };
+    const slowStartupTimer = window.setTimeout(updateSlowStartupMessage, 6_000);
+    const clearSlowStartupTimer = () => window.clearTimeout(slowStartupTimer);
 
-    startupShell.addEventListener('transitionend', removeStartupShell, { once: true });
-    const removalTimer = window.setTimeout(removeStartupShell, 220);
+    window.addEventListener(STARTUP_READY_EVENT, clearSlowStartupTimer, { once: true });
 
     return () => {
-      window.clearTimeout(removalTimer);
-      startupShell.removeEventListener('transitionend', removeStartupShell);
+      clearSlowStartupTimer();
+      window.removeEventListener(STARTUP_READY_EVENT, clearSlowStartupTimer);
     };
   }, []);
 
@@ -49,7 +49,7 @@ const AppReadySignal: React.FC = () => {
 
 ReactDOM.createRoot(document.getElementById('root') as HTMLElement).render(
   <React.StrictMode>
-    <AppReadySignal />
+    <StartupShellController />
     <AppProviders>
       <App />
     </AppProviders>

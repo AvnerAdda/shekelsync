@@ -53,6 +53,192 @@
       "transactionLoadFailed": "Impossible d'ouvrir cette transaction pour le moment."
     }
   },
+  "moneyReview": {
+    "eyebrow": "Votre plan d’action",
+    "title": "Revue financière",
+    "subtitle": "Vos tâches financières les plus importantes, classées par priorité et prêtes à être traitées.",
+    "updatedAt": "Actualisé à {{time}}",
+    "loading": "Chargement de la revue financière",
+    "dashboard": {
+      "summary": "{{count}} éléments · ~{{minutes}} min",
+      "reviewAll": "Tout examiner",
+      "previous": "Faire défiler les éléments précédents",
+      "next": "Faire défiler les éléments suivants",
+      "minutes": "~{{count}} min",
+      "impact": "Potentiel de {{amount}}",
+      "openItem": "Examiner {{title}}",
+      "caughtUp": "Tout est à jour",
+      "caughtUpDescription": "Aucune action ouverte ne nécessite votre attention.",
+      "loadError": "La revue financière est temporairement indisponible."
+    },
+    "detail": {
+      "loading": "Chargement de l’élément",
+      "close": "Fermer l’élément",
+      "unavailableTitle": "Cet élément n’est plus disponible",
+      "unavailableDescription": "Il a peut-être été résolu automatiquement après une modification de vos données locales.",
+      "whyTitle": "Pourquoi cet élément apparaît",
+      "comparisonTitle": "Ce que montrent les chiffres",
+      "comparisonDescription": "Une comparaison directe des valeurs qui ont déclenché cet élément.",
+      "comparisonAria": "{{first}} : {{firstValue}}. {{second}} : {{secondValue}}.",
+      "priorityTitle": "Pourquoi cette priorité",
+      "priorityDescription": "Le score combine l’urgence, l’impact financier potentiel et la solidité du signal dans vos données locales.",
+      "priorityAria": "Score de priorité de {{score}} sur 100",
+      "explanations": {
+        "data": "Cet élément peut affecter la fiabilité des soldes, catégories, prévisions ou recommandations dans ShekelSync.",
+        "cash": "Cet élément signale un changement ou un risque à court terme pouvant affecter vos liquidités.",
+        "improve": "Il s’agit d’une opportunité ou d’un défi enregistré qui peut renforcer votre plan financier.",
+        "budget": "Les dépenses actuelles ou prévues ont dépassé le seuil budgétaire enregistré pour cette catégorie.",
+        "subscription": "Un prélèvement récurrent a changé ou correspond à un schéma qui mérite confirmation.",
+        "cashFlow": "Le rythme récent des revenus et dépenses suggère que vos liquidités mensuelles pourraient se resserrer.",
+        "staleSync": "Un ou plusieurs soldes sont assez anciens pour rendre les totaux du tableau de bord moins fiables.",
+        "uncategorized": "Plusieurs dépenses récentes n’ont pas de catégorie utile, ce qui affaiblit budgets et analyses.",
+        "unusual": "Cette transaction diffère sensiblement du comportement récent de sa catégorie.",
+        "largeTransaction": "Cette dépense compte parmi les plus importantes récemment et mérite une vérification.",
+        "newVendor": "Un marchand récemment détecté a déjà une activité répétée ; sa catégorie ou sa règle mérite confirmation.",
+        "optimizer": "Vous aviez enregistré cette opportunité depuis l’Optimiseur ; elle reste disponible jusqu’à sa clôture ou son abandon."
+      },
+      "labels": {
+        "spent": "Dépensé",
+        "projected": "Prévision",
+        "budget": "Budget",
+        "category": "Catégorie",
+        "overBudget": "Dépassement potentiel",
+        "previousCharge": "Prélèvement précédent",
+        "currentCharge": "Prélèvement actuel",
+        "change": "Variation (%)",
+        "frequency": "Fréquence",
+        "income": "Revenus",
+        "expenses": "Dépenses",
+        "daysRemaining": "Jours restants",
+        "dailySpending": "Dépense quotidienne",
+        "accountsAffected": "Comptes concernés",
+        "daysSinceSync": "Jours depuis la synchro",
+        "oldestAccount": "Compte le plus ancien",
+        "transactions": "Transactions",
+        "amount": "Montant",
+        "vendor": "Marchand",
+        "deviation": "Score d’écart",
+        "scope": "Périmètre Optimiseur",
+        "monthlyPotential": "Potentiel mensuel"
+      },
+      "sources": {
+        "local": "Calculé à partir des comptes et transactions stockés localement sur cet appareil. Aucune IA externe ni clé API n’est requise.",
+        "subscription": "Calculé à partir des prélèvements récurrents et alertes d’abonnement stockés localement.",
+        "optimizer": "Enregistré depuis un résultat antérieur de l’Optimiseur. Ouvrir la revue n’appelle aucun service d’IA externe."
+      }
+    },
+    "summary": {
+      "open": "éléments à examiner",
+      "minutes": "minutes estimées",
+      "impact": "impact potentiel"
+    },
+    "tabs": {
+      "label": "Statut des éléments de la revue",
+      "open": "Ouverts ({{count}})",
+      "snoozed": "Reportés ({{count}})",
+      "completed": "Terminés ({{count}})"
+    },
+    "groups": {
+      "data": {
+        "title": "Corriger les données",
+        "description": "Assurez la fiabilité de la synchronisation, des catégories et des transactions."
+      },
+      "cash": {
+        "title": "Protéger votre trésorerie",
+        "description": "Examinez les dépassements, les activités inhabituelles et les échéances proches."
+      },
+      "improve": {
+        "title": "Améliorer votre plan",
+        "description": "Avancez dans les recommandations acceptées et les défis financiers."
+      }
+    },
+    "priority": {
+      "low": "Priorité faible",
+      "medium": "Priorité moyenne",
+      "high": "Priorité élevée",
+      "critical": "Critique"
+    },
+    "status": {
+      "inProgress": "En cours",
+      "snoozed": "Reporté",
+      "resolved": "Terminé",
+      "dismissed": "Ignoré"
+    },
+    "actions": {
+      "refresh": "Actualiser la revue",
+      "close": "Fermer la revue financière",
+      "retry": "Réessayer",
+      "reviewNext": "Commencer la revue",
+      "open": "Ouvrir",
+      "start": "Commencer",
+      "done": "Terminé",
+      "snooze": "Reporter",
+      "hide": "Masquer",
+      "hideHint": "Masquer ce message sans modifier votre plan financier",
+      "dismiss": "Ignorer",
+      "dismissHint": "Retirer cet élément de votre revue",
+      "more": "Plus d’actions",
+      "reopen": "Rouvrir",
+      "reopenNow": "Réactiver maintenant",
+      "clearFilter": "Effacer le filtre"
+    },
+    "snooze": {
+      "week": "Une semaine",
+      "weekHint": "Le réafficher dans 7 jours",
+      "month": "Un mois",
+      "monthHint": "Le réafficher le mois prochain",
+      "threeMonths": "Trois mois",
+      "threeMonthsHint": "Le réafficher dans 90 jours"
+    },
+    "item": {
+      "nextUp": "À traiter ensuite",
+      "minutes": "~{{count}} min",
+      "returnsOn": "Revient le {{date}}"
+    },
+    "filters": {
+      "label": "Filtrer les éléments de la revue",
+      "all": "Tout · {{count}}",
+      "group": "{{name}} · {{count}}",
+      "showing": "{{count}} affichés"
+    },
+    "potentialImpact": "Impact potentiel : {{amount}}",
+    "empty": {
+      "open": {
+        "title": "Tout est à jour",
+        "description": "Aucune action ouverte ne nécessite votre attention."
+      },
+      "snoozed": {
+        "title": "Aucun élément reporté",
+        "description": "Les éléments reportés apparaîtront ici."
+      },
+      "completed": {
+        "title": "Aucun élément terminé",
+        "description": "Les actions résolues ou ignorées des 30 derniers jours apparaîtront ici."
+      },
+      "filtered": {
+        "title": "Aucun élément dans cette catégorie",
+        "description": "Effacez le filtre de catégorie pour voir le reste de votre revue."
+      }
+    },
+    "errors": {
+      "load": "La revue financière n'a pas pu être chargée.",
+      "update": "L'élément n'a pas pu être mis à jour.",
+      "sync": "La synchronisation des comptes n'a pas pu démarrer."
+    },
+    "messages": {
+      "active": "Élément rouvert.",
+      "accepted": "Élément démarré.",
+      "snoozed": {
+        "1_week": "Élément reporté d’une semaine.",
+        "1_month": "Élément reporté d’un mois.",
+        "3_months": "Élément reporté de trois mois."
+      },
+      "resolved": "Élément terminé.",
+      "dismissed": "Élément ignoré.",
+      "syncStarted": "Synchronisation des comptes démarrée."
+    },
+    "privacy": "La revue financière est générée et stockée localement. Aucune IA externe n'est nécessaire."
+  },
   "globalSearch": {
     "placeholder": "Rechercher des transactions...",
     "hint": "Appuyez sur Entrée pour sélectionner, Échap pour fermer",
@@ -3229,6 +3415,7 @@
       "placeholder": "Rechercher des sections...",
       "options": {
         "dashboard": "Tableau de bord",
+        "review": "Revue financière",
         "analysis": "Analyse",
         "investments": "Investissements",
         "settings": "Paramètres",
@@ -3248,6 +3435,12 @@
           "aperçu",
           "principal",
           "résumé"
+        ],
+        "review": [
+          "actions",
+          "boîte",
+          "alertes",
+          "tâches"
         ],
         "analysis": [
           "analyses",
@@ -3757,6 +3950,59 @@
         "description": "Gardez vos données à jour en synchronisant régulièrement.",
         "action": "Synchroniser"
       }
+    }
+  },
+  "financialTruth": {
+    "correctTitle": "Corriger cette prévision",
+    "correctDescription": "Votre choix devient la référence commune pour toutes les prévisions et analyses connectées.",
+    "notAccurate": "Inexact",
+    "correctSourceFact": "Corriger la donnée source",
+    "monthlyExpectation": "Montant mensuel prévu",
+    "thisMonth": "Ce mois-ci",
+    "ongoing": "À long terme",
+    "endedOn": "Terminé le",
+    "amount": "Montant",
+    "frequency": "Fréquence",
+    "nextExpectedDate": "Prochaine date prévue",
+    "calculating": "Calcul de l’impact…",
+    "impactTitle": "Ce qui va changer",
+    "impactValues": "Impact estimé : {{monthly}} par mois · {{sixMonth}} sur six mois",
+    "apply": "Appliquer la correction",
+    "saved": "Correction enregistrée. Mise à jour de votre plan…",
+    "correctionsTitle": "Vos corrections",
+    "correctionsDescription": "Ces choix sont utilisés par les prévisions, abonnements, alertes et conseils financiers.",
+    "active": "Actives",
+    "restored": "Restaurées",
+    "restore": "Restaurer",
+    "restorePrediction": "Restaurer la prévision",
+    "noCorrections": "Aucune correction dans cette vue.",
+    "sourceScope": "Source : {{source}} · Portée : {{scope}}",
+    "effectiveFrom": "À partir du {{date}}",
+    "scopes": {
+      "occurrence": "une occurrence",
+      "from_date": "à partir d’une date",
+      "current_month": "mois en cours",
+      "ongoing": "continue"
+    },
+    "actions": {
+      "skipOccurrence": "Pas cette fois",
+      "skipOccurrenceHint": "Seule cette occurrence prévue sera retirée.",
+      "suppressPattern": "Ce n’est pas récurrent",
+      "suppressPatternHint": "Ne plus utiliser ce schéma dans les projections futures.",
+      "endPattern": "Terminé ou annulé",
+      "endPatternHint": "Conserver l’historique et arrêter les prévisions à partir d’une date.",
+      "pausePattern": "Mettre en pause",
+      "pausePatternHint": "L’exclure jusqu’à sa reprise explicite.",
+      "overridePattern": "Les détails sont incorrects",
+      "overridePatternHint": "Définir manuellement le montant, la fréquence ou la prochaine date."
+    },
+    "historyActions": {
+      "skip_occurrence": "Une occurrence ignorée",
+      "suppress_pattern": "Marqué comme non récurrent",
+      "end_pattern": "Terminé ou annulé",
+      "pause_pattern": "Mis en pause",
+      "override_pattern": "Détails corrigés",
+      "set_category_expectation": "Prévision de catégorie ajustée"
     }
   }
 }

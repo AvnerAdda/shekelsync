@@ -233,7 +233,7 @@ async function processMessage(payload = {}) {
     // Build financial context
     let financialContext;
     try {
-      financialContext = await buildContext(client, perms, { includeOptimizer: true });
+      financialContext = await buildContext(client, perms, { includeOptimizer: true, includeTruthRevision: true });
       console.log('[chat] Financial context built:', {
         hasData: financialContext.hasData,
         hasProfile: Boolean(financialContext.profile),
@@ -244,7 +244,7 @@ async function processMessage(payload = {}) {
     } catch (contextError) {
       console.error('[chat] ERROR building financial context:', contextError);
       // Use empty context on error
-      financialContext = { hasData: false, permissions: perms, summary: { transactionCount: 0 } };
+      financialContext = { hasData: false, truthRevision: 0, permissions: perms, summary: { transactionCount: 0 } };
     }
 
     // Create anonymizer for this conversation
@@ -409,6 +409,7 @@ async function processMessage(payload = {}) {
       timestamp: new Date().toISOString(),
       metadata: {
         model: resolvedModel,
+        truthRevision: financialContext.truthRevision || 0,
         tokensUsed: totalTokensUsed,
         toolExecutions: toolExecutions.length > 0 ? toolExecutions : undefined,
         contextIncluded: {
@@ -565,9 +566,9 @@ async function processMessageStream(payload = {}, onEvent) {
 
     let financialContext;
     try {
-      financialContext = await buildContext(client, perms, { includeOptimizer: true });
+      financialContext = await buildContext(client, perms, { includeOptimizer: true, includeTruthRevision: true });
     } catch {
-      financialContext = { hasData: false, permissions: perms, summary: { transactionCount: 0 } };
+      financialContext = { hasData: false, truthRevision: 0, permissions: perms, summary: { transactionCount: 0 } };
     }
 
     const anonymizer = createAnonymizer();
@@ -700,6 +701,7 @@ async function processMessageStream(payload = {}, onEvent) {
       isNewConversation,
       metadata: {
         model: resolvedModel,
+        truthRevision: financialContext.truthRevision || 0,
         tokensUsed: totalTokensUsed,
         toolExecutions: toolExecutions.length > 0 ? toolExecutions : undefined,
       },

@@ -50,6 +50,10 @@ import { useTranslation } from 'react-i18next';
 import { apiClient } from '@renderer/lib/api-client';
 import { useChatbotPermissions } from '@app/contexts/ChatbotPermissionsContext';
 import { useFinancePrivacy } from '@app/contexts/FinancePrivacyContext';
+import {
+  FINANCIAL_TRUTH_CHANGED_EVENT,
+  financialTruthChangeAffects,
+} from '@renderer/features/financial-truth/types';
 import type {
   OptimizerV2Candidate,
   OptimizerV2ReviewFact,
@@ -97,6 +101,7 @@ function dateLabel(value: string | null | undefined): string {
 const FinancialOptimizerV2: React.FC = () => {
   const theme = useTheme();
   const { t, i18n } = useTranslation('translation', { keyPrefix: 'optimizerV2' });
+  const { t: tRoot } = useTranslation('translation');
   const { formatCurrency, maskAmounts, toggleMaskAmounts } = useFinancePrivacy();
   const { hasOpenAiApiKey, openAiApiKey } = useChatbotPermissions();
   const [open, setOpen] = useState(false);
@@ -149,8 +154,15 @@ const FinancialOptimizerV2: React.FC = () => {
 
   useEffect(() => {
     const handleRefresh = () => { if (open) void loadStatusRef.current(); };
+    const handleTruthChange = (event: Event) => {
+      if (open && financialTruthChangeAffects(event, ['optimizer'])) void loadStatusRef.current();
+    };
     window.addEventListener('dataRefresh', handleRefresh);
-    return () => window.removeEventListener('dataRefresh', handleRefresh);
+    window.addEventListener(FINANCIAL_TRUTH_CHANGED_EVENT, handleTruthChange);
+    return () => {
+      window.removeEventListener('dataRefresh', handleRefresh);
+      window.removeEventListener(FINANCIAL_TRUTH_CHANGED_EVENT, handleTruthChange);
+    };
   }, [open]);
 
   const latestRun = status?.latestRun || null;
@@ -355,7 +367,9 @@ const FinancialOptimizerV2: React.FC = () => {
             size="small" variant={group.status === 'excluded' ? 'contained' : 'outlined'} color="inherit"
             startIcon={<BlockIcon />} disabled={busy} onClick={() => void resolveReviewGroup(group, 'excluded')}
           >Exclude from this run</Button>
-          <Button size="small" startIcon={<EditIcon />} disabled={busy} onClick={() => fixAtSource(group)}>Fix at source</Button>
+          <Button size="small" startIcon={<EditIcon />} disabled={busy} onClick={() => fixAtSource(group)}>
+            {tRoot('financialTruth.correctSourceFact', 'Correct source fact')}
+          </Button>
         </Stack>
       </Stack>
     </Paper>
@@ -544,7 +558,7 @@ const FinancialOptimizerV2: React.FC = () => {
 
   const renderReview = () => (
     <Stack spacing={1.5}>
-      <Alert severity="info">Confirm or exclude every database summary. “Fix at source” opens the owning ShekelSync area and never edits data here.</Alert>
+      <Alert severity="info">Confirm or exclude every database summary. “Correct source fact” opens the owning ShekelSync area and never edits data here.</Alert>
       <Stack direction="row" sx={{ alignItems: 'center', justifyContent: 'space-between' }}>
         <Typography variant="caption">{status?.review.resolvedCount || 0} of {status?.review.totalCount || 5} groups resolved</Typography>
         <FormControlLabel control={<Switch checked={maskAmounts} onChange={toggleMaskAmounts} />} label="Mask amounts" />
