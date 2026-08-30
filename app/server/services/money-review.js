@@ -96,8 +96,12 @@ function notificationToSmartAction(notification) {
       notificationType: String(notification.type),
       notificationSeverity: String(notification.severity || 'info'),
       data: notification.data || {},
+      timeScope: notification.data?.time_scope || null,
       patternId: notification.data?.patternId || notification.data?.pattern_id || null,
       occurrenceId: notification.data?.occurrenceId || notification.data?.occurrence_id || null,
+      correctionCapabilities: notification.data?.correctionCapabilities
+        || notification.data?.correction_capabilities
+        || [],
       actions: Array.isArray(notification.actions) ? notification.actions : [],
     },
   };
@@ -115,7 +119,9 @@ function subscriptionAlertImpact(alert) {
 
 function subscriptionAlertToSmartAction(alert) {
   if (!alert?.subscription_id || !alert?.alert_type) return null;
-  const stableAlertId = alert.id || `${alert.subscription_id}:${alert.alert_type}`;
+  const evidenceDate = alert.evidence_end_date || alert.expected_date || null;
+  const stableAlertId = alert.id
+    || `${alert.subscription_id}:${alert.alert_type}${evidenceDate ? `:${evidenceDate}` : ''}`;
   const actionType = {
     duplicate: 'fixed_recurring_duplicate',
     missed_charge: 'fixed_recurring_missing',
@@ -137,12 +143,26 @@ function subscriptionAlertToSmartAction(alert) {
       subscriptionId: alert.subscription_id,
       subscriptionAlertType: alert.alert_type,
       patternId: alert.financial_pattern_id || alert.patternId || null,
+      occurrenceId: alert.occurrence_id || alert.occurrenceId || null,
+      correctionCapabilities: alert.correction_capabilities
+        || alert.correctionCapabilities
+        || [],
+      timeScope: alert.time_scope || null,
       data: {
         old_amount: alert.old_amount,
         new_amount: alert.new_amount,
         percentage_change: alert.percentage_change,
         detected_amount: alert.detected_amount,
         detected_frequency: alert.detected_frequency,
+        evidence_start_date: alert.evidence_start_date || null,
+        evidence_end_date: alert.evidence_end_date || null,
+        expected_date: alert.expected_date || null,
+        days_past_due: alert.days_past_due ?? null,
+        occurrence_id: alert.occurrence_id || alert.occurrenceId || null,
+        correction_capabilities: alert.correction_capabilities
+          || alert.correctionCapabilities
+          || [],
+        time_scope: alert.time_scope || null,
       },
       actions: [{ action: 'view_subscriptions', params: { subscription_id: alert.subscription_id } }],
     },

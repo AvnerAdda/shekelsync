@@ -23,6 +23,7 @@ import type {
   SnoozePreset,
 } from '../types';
 import MoneyReviewItemActions from './MoneyReviewItemActions';
+import { buildMoneyReviewTimeScopeLabel } from '../time-scope';
 
 const GROUP_ICONS: Record<MoneyReviewGroup, React.ReactNode> = {
   data: <DataObjectIcon fontSize="small" />,
@@ -67,6 +68,7 @@ const MoneyReviewCard: React.FC<MoneyReviewCardProps> = ({
   const theme = useTheme();
   const { t, i18n } = useTranslation('translation', { keyPrefix: 'moneyReview' });
   const { formatCurrency } = useFinancePrivacy();
+  const timeScopeLabel = buildMoneyReviewTimeScopeLabel(item, i18n?.language || 'en');
   const isCompleted = ['resolved', 'dismissed'].includes(item.status);
   const isSnoozed = item.status === 'snoozed';
   const estimatedMinutes = item.group === 'data' ? 1 : 2;
@@ -205,6 +207,15 @@ const MoneyReviewCard: React.FC<MoneyReviewCardProps> = ({
                     label={t(`groups.${item.group}.title`)}
                     sx={{ height: 23, color: groupPalette.main, bgcolor: alpha(groupPalette.main, 0.1) }}
                   />
+                  {timeScopeLabel && (
+                    <Chip
+                      size="small"
+                      variant="outlined"
+                      icon={<ScheduleIcon />}
+                      label={t(timeScopeLabel.key, timeScopeLabel.values)}
+                      sx={{ height: 23 }}
+                    />
+                  )}
                   {item.potentialImpact > 0 && (
                     <Typography variant="caption" color="success.main" sx={{ fontWeight: 800 }}>
                       {t('potentialImpact', { amount: formatCurrency(item.potentialImpact) })}

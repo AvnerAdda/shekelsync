@@ -27,15 +27,19 @@ const SEVERITY_LEVELS = {
   CRITICAL: 'critical',
 };
 
-function toISODate(date) {
-  return date.toISOString().split('T')[0];
-}
-
 function toISODateLocal(date) {
   const year = date.getFullYear();
   const month = String(date.getMonth() + 1).padStart(2, '0');
   const day = String(date.getDate()).padStart(2, '0');
   return `${year}-${month}-${day}`;
+}
+
+function calendarDateString(value) {
+  if (value instanceof Date && !Number.isNaN(value.getTime())) return toISODateLocal(value);
+  const match = String(value || '').match(/^(\d{4}-\d{2}-\d{2})/);
+  if (match) return match[1];
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? null : toISODateLocal(parsed);
 }
 
 function startOfMonth(date) {
@@ -546,8 +550,18 @@ async function getNotifications(query = {}) {
     start: startOfMonth(now),
     end: endOfMonth(now),
   };
-  const currentMonthStartStr = toISODate(currentMonth.start);
-  const currentMonthEndStr = toISODate(currentMonth.end);
+  // Transaction dates are stored as local calendar dates. Converting these
+  // boundaries through UTC can shift the first day into the previous month in
+  // positive-offset time zones (for example, August 1 becomes July 31 in
+  // Israel). Keep the comparison in the user's local calendar instead.
+  const currentMonthStartStr = toISODateLocal(currentMonth.start);
+  const currentMonthEndStr = toISODateLocal(currentMonth.end);
+  const todayStr = toISODateLocal(now);
+  const currentMonthTimeScope = {
+    kind: 'current_month',
+    start: currentMonthStartStr,
+    end: currentMonthEndStr,
+  };
 
   const client = await database.getClient();
   let credentialSyncsCache = null;
@@ -611,6 +625,7 @@ async function getNotifications(query = {}) {
             budget: budgetLimit,
             percentage: usagePercentage,
             parent_category_name: parentCategoryName,
+            time_scope: currentMonthTimeScope,
           },
           timestamp: now.toISOString(),
           actionable: true,
@@ -626,8 +641,9 @@ async function getNotifications(query = {}) {
 
     // 2. Unusual spending detection
     if (type === 'all' || type === NOTIFICATION_TYPES.UNUSUAL_SPENDING) {
-      const ninetyDaysStr = toISODate(subDays(now, 90));
-      const sevenDaysAgo = subDays(now, 7);
+      const ninetyDaysStr = toISODateLocal(subDays(now, 90));
+      const sevenDayWindowStart = subDays(now, 6);
+      const sevenDayWindowStartStr = toISODateLocal(sevenDayWindowStart);
 
       const transactionsResult = await client.query(
         `SELECT
@@ -669,6 +685,7 @@ async function getNotifications(query = {}) {
           vendor: row.vendor,
           name: row.name,
           date,
+          dateKey: calendarDateString(row.date),
           amount,
           categoryDefinitionId: normalizedCategoryId,
           categoryName,
@@ -678,7 +695,7 @@ async function getNotifications(query = {}) {
       const categoryStats = computeCategoryStatsForNotifications(transactions, 5);
 
       transactions
-        .filter((txn) => txn.date >= sevenDaysAgo)
+        .filter((txn) => txn.dateKey && txn.dateKey >= sevenDayWindowStartStr)
         .forEach((txn) => {
           const categoryKey =
             typeof txn.categoryDefinitionId === 'number' && !Number.isNaN(txn.categoryDefinitionId)
@@ -705,6 +722,12 @@ async function getNotifications(query = {}) {
               category_name: categoryName,
               date: txn.date,
               deviation: zScore,
+              time_scope: {
+                kind: 'rolling_days',
+                days: 7,
+                start: sevenDayWindowStartStr,
+                end: todayStr,
+              },
             },
             timestamp: txn.date.toISOString(),
             actionable: true,
@@ -726,8 +749,9 @@ async function getNotifications(query = {}) {
 
     // 3. High-value transactions
     if (type === 'all' || type === NOTIFICATION_TYPES.HIGH_TRANSACTION) {
-      const thirtyDaysStr = toISODate(subDays(now, 30));
-      const threeDaysAgo = subDays(now, 3);
+      const thirtyDaysStr = toISODateLocal(subDays(now, 30));
+      const threeDayWindowStart = subDays(now, 2);
+      const threeDayWindowStartStr = toISODateLocal(threeDayWindowStart);
 
       const highTxResult = await client.query(
         `SELECT
@@ -763,6 +787,7 @@ async function getNotifications(query = {}) {
           vendor: row.vendor,
           name: row.name,
           date,
+          dateKey: calendarDateString(row.date),
           amount,
           categoryDefinitionId: normalizedCategoryId,
           categoryName,
@@ -773,7 +798,7 @@ async function getNotifications(query = {}) {
       if (amountList.length > 0) {
         const threshold = percentile(amountList, 0.95);
         highTransactions
-          .filter((txn) => txn.date >= threeDaysAgo && txn.amount >= threshold)
+          .filter((txn) => txn.dateKey && txn.dateKey >= threeDayWindowStartStr && txn.amount >= threshold)
           .slice(0, 5)
           .forEach((txn) => {
             notifications.push({
@@ -789,6 +814,12 @@ async function getNotifications(query = {}) {
                 category_definition_id: txn.categoryDefinitionId,
                 category_name: txn.categoryName,
                 date: txn.date,
+                time_scope: {
+                  kind: 'rolling_days',
+                  days: 3,
+                  start: threeDayWindowStartStr,
+                  end: todayStr,
+                },
               },
               timestamp: txn.date.toISOString(),
               actionable: true,
@@ -837,6 +868,8 @@ async function getNotifications(query = {}) {
               limit: item.limit,
               next_hit_date: item.nextLikelyHitDate || null,
               risk: item.risk,
+              correction_capabilities: ['set_category_expectation'],
+              time_scope: currentMonthTimeScope,
             },
             timestamp: forecast?.generated || new Date().toISOString(),
             actionable: true,
@@ -853,7 +886,7 @@ async function getNotifications(query = {}) {
 
     // 4. New vendor detection
     if (type === 'all' || type === NOTIFICATION_TYPES.NEW_VENDOR) {
-      const newVendorThreshold = toISODate(subDays(now, 7));
+      const newVendorThreshold = toISODateLocal(subDays(now, 7));
       const newVendorsResult = await client.query(
         `SELECT
           t.vendor,
@@ -897,7 +930,7 @@ async function getNotifications(query = {}) {
 
     // 5. Cash flow alert
     if (type === 'all' || type === NOTIFICATION_TYPES.CASH_FLOW_ALERT) {
-      const fifteenDaysAgoStr = toISODate(subDays(now, 15));
+      const fifteenDaysAgoStr = toISODateLocal(subDays(now, 15));
 
       const cashFlowResult = await client.query(
         `
@@ -951,6 +984,7 @@ async function getNotifications(query = {}) {
               days_remaining: daysRemaining,
               income,
               expenses,
+              time_scope: currentMonthTimeScope,
             },
             timestamp: now.toISOString(),
             actionable: true,
@@ -1007,7 +1041,7 @@ async function getNotifications(query = {}) {
 
     // 7. Uncategorized transactions alert
     if (type === 'all' || type === NOTIFICATION_TYPES.UNCATEGORIZED_TRANSACTIONS) {
-      const thirtyDaysAgoStr = toISODate(subDays(now, 30));
+      const thirtyDaysAgoStr = toISODateLocal(subDays(now, 30));
 
       const uncategorizedResult = await client.query(
         `SELECT COUNT(*) as count, SUM(ABS(price)) as total_amount

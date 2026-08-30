@@ -27,6 +27,7 @@ import { useTranslation } from 'react-i18next';
 import { useFinancePrivacy } from '@app/contexts/FinancePrivacyContext';
 import { useFinancialTruth } from './useFinancialTruth';
 import type { CorrectionAction, CorrectionDraft, CorrectionPreview, CorrectionTarget } from './types';
+import { toLocalDateInputValue } from './local-date';
 
 interface Props {
   open: boolean;
@@ -61,7 +62,7 @@ const FinancialCorrectionDialog: React.FC<Props> = ({
   const isCategory = target?.kind === 'category';
   const defaultAction: CorrectionAction = isCategory ? 'set_category_expectation' : target?.occurrenceId ? 'skip_occurrence' : 'suppress_pattern';
   const [action, setAction] = useState<CorrectionAction>(defaultAction);
-  const [effectiveDate, setEffectiveDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [effectiveDate, setEffectiveDate] = useState(() => toLocalDateInputValue());
   const [amount, setAmount] = useState<number | ''>('');
   const [frequency, setFrequency] = useState(target?.frequency || 'monthly');
   const [nextExpectedDate, setNextExpectedDate] = useState(target?.nextExpectedDate || '');
@@ -75,7 +76,7 @@ const FinancialCorrectionDialog: React.FC<Props> = ({
     setAmount(target.amount ?? '');
     setFrequency(target.frequency || 'monthly');
     setNextExpectedDate(target.nextExpectedDate || '');
-    setEffectiveDate(new Date().toISOString().slice(0, 10));
+    setEffectiveDate(toLocalDateInputValue());
     setOngoing(false);
     setPreview(null);
   }, [open, target]);
@@ -137,9 +138,22 @@ const FinancialCorrectionDialog: React.FC<Props> = ({
   const submit = async () => {
     const draft = buildDraft();
     if (!draft) return;
-    await truth.create(draft);
-    onApplied?.(target?.patternId, action);
-    onClose();
+    try {
+      await truth.create(draft);
+      onApplied?.(target?.patternId, action);
+      onClose();
+    } catch {
+      // useFinancialTruth owns the user-facing error state.
+    }
+  };
+
+  const undoLastCorrection = async () => {
+    if (!truth.lastCorrection) return;
+    try {
+      await truth.revert(truth.lastCorrection.id);
+    } catch {
+      // Keep the Snackbar open and let useFinancialTruth retain the error.
+    }
   };
 
   return (
@@ -241,7 +255,7 @@ const FinancialCorrectionDialog: React.FC<Props> = ({
         autoHideDuration={8000}
         onClose={truth.clearLastCorrection}
         message={t('financialTruth.saved', 'Correction saved. Updating your plan…')}
-        action={<Button color="inherit" size="small" disabled={truth.busy} onClick={() => truth.lastCorrection && void truth.revert(truth.lastCorrection.id)}>{t('actions.undo', 'Undo')}</Button>}
+        action={<Button color="inherit" size="small" disabled={truth.busy} onClick={() => void undoLastCorrection()}>{t('actions.undo', 'Undo')}</Button>}
       />
     </>
   );

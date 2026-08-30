@@ -2,6 +2,7 @@ const actualDatabase = require('../database.js');
 const { getLocalizedCategoryName } = require('../../../lib/server/locale-utils.js');
 const { getCreditCardRepaymentCategoryCondition } = require('../accounts/repayment-category.js');
 const actualFinancialTruth = require('../financial-truth.js');
+const { activeSubscriptionAlertPredicate } = require('../subscription-alert-policy.js');
 
 let database = actualDatabase;
 let financialTruth = actualFinancialTruth;
@@ -50,6 +51,35 @@ const FREQUENCY_INTERVALS = {
   yearly: 365,
   variable: null
 };
+
+const PRICE_CHANGE_FRESHNESS_DAYS = 35;
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+function parseDateOnlyParts(value) {
+  const match = String(value || '').match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (!match) return null;
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  const timestamp = Date.UTC(year, month - 1, day);
+  return Number.isFinite(timestamp) ? { year, month, day, timestamp } : null;
+}
+
+function localCalendarDayNumber(date) {
+  return Date.UTC(date.getFullYear(), date.getMonth(), date.getDate());
+}
+
+function calendarDaysSince(dateValue, now = new Date()) {
+  const parsed = parseDateOnlyParts(dateValue);
+  if (!parsed) return null;
+  return Math.floor((localCalendarDayNumber(now) - parsed.timestamp) / DAY_MS);
+}
+
+function missedChargeFreshnessDays(subscription) {
+  const frequency = subscription.user_frequency || subscription.detected_frequency;
+  const intervalDays = FREQUENCY_INTERVALS[frequency] || 30;
+  return Math.min(120, Math.max(30, Math.ceil(intervalDays * 2)));
+}
 
 /**
  * Calculate the next expected date based on frequency and last charge date
@@ -446,7 +476,7 @@ async function getSubscriptionAlerts(options = {}) {
     JOIN subscriptions s ON sa.subscription_id = s.id
     WHERE (sa.is_dismissed = 0 OR $1 = 1)
       AND s.status IN ('active', 'keep', 'review')
-      AND (sa.expires_at IS NULL OR sa.expires_at > datetime('now'))
+      AND ${activeSubscriptionAlertPredicate('sa')}
     ORDER BY
       CASE sa.severity WHEN 'critical' THEN 0 WHEN 'warning' THEN 1 ELSE 2 END,
       sa.created_at DESC`,
@@ -519,8 +549,14 @@ async function detectNewAlerts(locale = 'he', existingSubscriptionResult = null)
       const sortedCharges = [...clusterCharges].sort((a, b) => b.date.localeCompare(a.date));
       const current = sortedCharges[0]?.amount || 0;
       const previous = sortedCharges[1]?.amount || 0;
+      const currentChargeDate = sortedCharges[0]?.date || null;
+      const previousChargeDate = sortedCharges[1]?.date || null;
+      const evidenceAgeDays = calendarDaysSince(currentChargeDate, today);
+      const hasFreshEvidence = evidenceAgeDays !== null
+        && evidenceAgeDays >= 0
+        && evidenceAgeDays <= PRICE_CHANGE_FRESHNESS_DAYS;
 
-      if (previous > 0 && current > previous) {
+      if (hasFreshEvidence && previous > 0 && current > previous) {
         const percentChange = ((current - previous) / previous) * 100;
 
         if (percentChange >= 5) {
@@ -536,6 +572,16 @@ async function detectNewAlerts(locale = 'he', existingSubscriptionResult = null)
             old_amount: previous,
             new_amount: current,
             percentage_change: Math.round(percentChange * 100) / 100,
+            detected_amount: sub.user_amount || sub.detected_amount || current,
+            detected_frequency: sub.user_frequency || sub.detected_frequency || 'monthly',
+            evidence_start_date: previousChargeDate,
+            evidence_end_date: currentChargeDate,
+            time_scope: {
+              kind: 'evidence_range',
+              start: previousChargeDate,
+              end: currentChargeDate,
+            },
+            correction_capabilities: ['suppress_pattern', 'end_pattern', 'pause_pattern', 'override_pattern'],
             is_dismissed: 0,
             created_at: new Date().toISOString()
           });
@@ -545,14 +591,19 @@ async function detectNewAlerts(locale = 'he', existingSubscriptionResult = null)
 
     // Check for missed charges
     if (sub.next_expected_date) {
-      const expectedDate = new Date(sub.next_expected_date);
-      const daysPastDue = Math.floor((today - expectedDate) / (1000 * 60 * 60 * 24));
+      const daysPastDue = calendarDaysSince(sub.next_expected_date, today);
+      const freshnessDays = missedChargeFreshnessDays(sub);
 
-      if (daysPastDue > 7) {
+      if (daysPastDue !== null && daysPastDue > 7 && daysPastDue <= freshnessDays) {
+        const patternId = sub.patternId || sub.financial_pattern_id || null;
+        const occurrenceId = patternId
+          ? `pattern:${patternId}:${sub.next_expected_date}`
+          : null;
         alerts.push({
           id: null,
           subscription_id: sub.id,
-          financial_pattern_id: sub.patternId || sub.financial_pattern_id || null,
+          financial_pattern_id: patternId,
+          occurrence_id: occurrenceId,
           subscription_name: sub.display_name,
           alert_type: 'missed_charge',
           severity: daysPastDue > 30 ? 'warning' : 'info',
@@ -561,6 +612,17 @@ async function detectNewAlerts(locale = 'he', existingSubscriptionResult = null)
           old_amount: null,
           new_amount: null,
           percentage_change: null,
+          detected_amount: sub.user_amount || sub.detected_amount || null,
+          detected_frequency: sub.user_frequency || sub.detected_frequency || 'monthly',
+          expected_date: sub.next_expected_date,
+          days_past_due: daysPastDue,
+          time_scope: {
+            kind: 'overdue_since',
+            start: sub.next_expected_date,
+          },
+          correction_capabilities: occurrenceId
+            ? ['skip_occurrence', 'suppress_pattern', 'end_pattern', 'pause_pattern', 'override_pattern']
+            : ['suppress_pattern', 'end_pattern', 'pause_pattern', 'override_pattern'],
           is_dismissed: 0,
           created_at: new Date().toISOString()
         });

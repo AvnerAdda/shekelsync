@@ -59,6 +59,14 @@
     "subtitle": "המשימות הפיננסיות החשובות ביותר שלך, לפי סדר עדיפות ומוכנות לפעולה.",
     "updatedAt": "עודכן ב־{{time}}",
     "loading": "טוען את סקירת הכסף",
+    "timeScope": {
+      "currentMonth": "{{month}}",
+      "rollingDays": "{{count}} הימים האחרונים",
+      "rollingRange": "חלון של {{count}} ימים · {{start}}–{{end}}",
+      "evidenceRange": "חיובים מ־{{start}} עד {{end}}",
+      "overdueSince": "באיחור מאז {{date}}",
+      "detectedOn": "זוהה ב־{{date}}"
+    },
     "dashboard": {
       "summary": "{{count}} פריטים · כ־{{minutes}} דק׳",
       "reviewAll": "הצגת הכול",

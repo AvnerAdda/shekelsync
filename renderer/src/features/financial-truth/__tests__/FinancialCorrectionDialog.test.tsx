@@ -132,4 +132,33 @@ describe('FinancialCorrectionDialog', () => {
       expect.objectContaining({ target: expect.objectContaining({ patternId: 22 }) }),
     ));
   });
+
+  it('keeps a failed correction open and presents the error without an unhandled rejection', async () => {
+    const onClose = vi.fn();
+    post.mockImplementation((url: string) => {
+      if (url.endsWith('/preview')) return Promise.resolve(previewResponse(31));
+      return Promise.resolve({ ok: false, data: { error: 'Correction could not be saved' } });
+    });
+
+    render(
+      <FinancialCorrectionDialog
+        open
+        target={{
+          kind: 'pattern',
+          patternId: 31,
+          title: 'Failed correction',
+          capabilities: ['suppress_pattern'],
+        }}
+        sourceFeature="money_review"
+        sourceKey="card:failed"
+        onClose={onClose}
+      />,
+    );
+
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Apply correction' })).toBeEnabled());
+    fireEvent.click(screen.getByRole('button', { name: 'Apply correction' }));
+
+    expect(await screen.findByText('Correction could not be saved')).toBeInTheDocument();
+    expect(onClose).not.toHaveBeenCalled();
+  });
 });

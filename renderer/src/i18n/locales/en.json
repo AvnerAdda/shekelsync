@@ -59,6 +59,14 @@
     "subtitle": "Your most important financial tasks, ordered by priority and ready to act on.",
     "updatedAt": "Updated at {{time}}",
     "loading": "Loading Money Review",
+    "timeScope": {
+      "currentMonth": "{{month}}",
+      "rollingDays": "Last {{count}} days",
+      "rollingRange": "{{count}}-day window · {{start}}–{{end}}",
+      "evidenceRange": "Charges from {{start}} to {{end}}",
+      "overdueSince": "Overdue since {{date}}",
+      "detectedOn": "Detected on {{date}}"
+    },
     "dashboard": {
       "summary": "{{count}} items · ~{{minutes}} min",
       "reviewAll": "Review all",

@@ -59,6 +59,14 @@
     "subtitle": "Vos tâches financières les plus importantes, classées par priorité et prêtes à être traitées.",
     "updatedAt": "Actualisé à {{time}}",
     "loading": "Chargement de la revue financière",
+    "timeScope": {
+      "currentMonth": "{{month}}",
+      "rollingDays": "Sur les {{count}} derniers jours",
+      "rollingRange": "Période de {{count}} jours · du {{start}} au {{end}}",
+      "evidenceRange": "Prélèvements du {{start}} au {{end}}",
+      "overdueSince": "En retard depuis le {{date}}",
+      "detectedOn": "Détecté le {{date}}"
+    },
     "dashboard": {
       "summary": "{{count}} éléments · ~{{minutes}} min",
       "reviewAll": "Tout examiner",
