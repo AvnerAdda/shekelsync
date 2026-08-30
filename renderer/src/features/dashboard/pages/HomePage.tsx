@@ -58,7 +58,7 @@ const DashboardHomeContent: React.FC = () => {
     return new Date(year, month - 1, day);
   };
 
-  const { startDate, endDate, aggregationPeriod, hoveredDate, setHoveredDate, periodDays } = useDashboardFilters();
+  const { startDate, endDate, aggregationPeriod, hoveredDate, setHoveredDate, periodPreset } = useDashboardFilters();
   const [compareToLastMonth, setCompareToLastMonth] = useState<boolean>(false);
   const [selectedBreakdownType, setSelectedBreakdownType] = useState<'overall' | 'expense' | 'income' | 'investment'>('overall');
   const {
@@ -75,7 +75,7 @@ const DashboardHomeContent: React.FC = () => {
     data: pairingGapData,
     loading: pairingGapLoading,
     refresh: refreshPairingGap,
-  } = useCurrentMonthPairingGap({ days: 30, enabled: periodDays === 30 });
+  } = useCurrentMonthPairingGap({ days: 30, enabled: periodPreset === 'mtd' });
   const [yAxisScale, setYAxisScale] = useState<YAxisScale>('linear');
   const [fallbackEnabled, setFallbackEnabled] = useState(false);
   const [showFallbackData, setShowFallbackData] = useState(false);
@@ -799,7 +799,7 @@ const DashboardHomeContent: React.FC = () => {
         onToggleCompare={toggleCompareLastMonth}
         pairingGap={pairingGapData}
         pairingGapLoading={pairingGapLoading}
-        isCurrentMonthWindow={periodDays === 30}
+        isCurrentMonthWindow={periodPreset === 'mtd'}
         pairingGapExpensesBase={Number(data?.summary?.totalExpenses || 0)}
         forecastData={forecastData}
         healthSnapshot={healthSnapshot}
