@@ -12,6 +12,8 @@ Release binaries are published at
 
 ## [Unreleased]
 
+## [0.1.35] - 2026-08-30
+
 ### Added
 - Money Review: a local-first, prioritized action queue that unifies data-quality
   fixes, cash-flow and subscription alerts, optimizer recommendations, and
@@ -20,11 +22,20 @@ Release binaries are published at
   full review runs in a focused modal instead of occupying primary navigation.
   Selecting a dashboard card opens a minimal item-only explanation with relevant
   comparisons, metrics, priority context, and local-data provenance.
+- A shared financial-truth system connects user corrections across recurring
+  patterns, subscriptions, forecasts, budgets, notifications, optimizer facts,
+  generated quests, and chat context. Corrections are revisioned, preview their
+  impact, support undo and restore, and never rewrite historical transactions.
+- Deterministic Money Review and forecast states for first launch, missing API
+  keys, insufficient history, pending calculations, and failed recalculations.
 
 ### Changed
 - Startup now keeps the lightweight launch screen visible until the first usable
   Dashboard or error state is rendered. Money Review, Optimizer, and chatbot
   initialization is staggered into idle time to reduce first-paint contention.
+- Dashboard charts now share a compact month-to-date, last-30-days, or custom
+  date-range selector across transaction history and breakdown views, with
+  localized English, French, and Hebrew labels.
 
 ## [0.1.34] - 2026-08-20
 
@@ -146,7 +157,8 @@ Initial public release series. Highlights across these versions:
 - Numerous scraping-reliability, double-counting, and schema-safety fixes,
   including guarding against unsafe SQLite schema reinitialization.
 
-[Unreleased]: https://github.com/AvnerAdda/shekelsync/compare/v0.1.34...HEAD
+[Unreleased]: https://github.com/AvnerAdda/shekelsync/compare/v0.1.35...HEAD
+[0.1.35]: https://github.com/AvnerAdda/shekelsync/releases/tag/v0.1.35
 [0.1.34]: https://github.com/AvnerAdda/shekelsync/releases/tag/v0.1.34
 [0.1.33]: https://github.com/AvnerAdda/shekelsync/releases/tag/v0.1.33
 [0.1.32]: https://github.com/AvnerAdda/shekelsync/releases/tag/v0.1.32
