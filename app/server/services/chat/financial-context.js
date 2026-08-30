@@ -188,6 +188,7 @@ async function getSubscriptionContext(db) {
         COUNT(*) as subscription_count,
         SUM(${subscriptionMonthlySql('s')}) as monthly_total
       FROM subscriptions s
+      WHERE status IN ('active', 'keep', 'review', 'paused')
       GROUP BY status
       ORDER BY subscription_count DESC
     `),
@@ -206,9 +207,11 @@ async function getSubscriptionContext(db) {
       SELECT
         severity,
         COUNT(*) as alert_count
-      FROM subscription_alerts
-      WHERE COALESCE(is_dismissed, 0) = 0
-        AND (expires_at IS NULL OR expires_at > datetime('now'))
+      FROM subscription_alerts alert
+      LEFT JOIN subscriptions subscription ON subscription.id = alert.subscription_id
+      WHERE COALESCE(alert.is_dismissed, 0) = 0
+        AND (alert.expires_at IS NULL OR alert.expires_at > datetime('now'))
+        AND (alert.subscription_id IS NULL OR subscription.status IN ('active', 'keep', 'review'))
       GROUP BY severity
     `),
   ]);
@@ -466,12 +469,21 @@ async function buildContext(db, permissions, options = {}) {
 
   const context = {
     hasData: false,
+    truthRevision: 0,
     permissions: {
       transactions: permissions.allowTransactionAccess,
       categories: permissions.allowCategoryAccess,
       analytics: permissions.allowAnalyticsAccess,
     },
   };
+
+  if (options.includeTruthRevision === true) {
+    const truthRows = await optionalQuery(
+      db,
+      'SELECT revision FROM financial_truth_state WHERE id = 1',
+    );
+    context.truthRevision = normalizeInt(truthRows[0]?.revision) || 0;
+  }
 
   // Always get basic summary stats (no permission needed for aggregates)
   const summaryResult = await db.query(`

@@ -199,6 +199,18 @@ async function setupAPIServer(mainWindow, options = {}) {
     lazyRouter(() => require(resolveAppPath('server', 'routes', 'optimizer.js')).createOptimizerRouter()),
   );
 
+  // Durable, prioritized workflow across alerts, quests, and optimizer actions.
+  app.use(
+    '/api/money-review',
+    lazyRouter(() => require(resolveAppPath('server', 'routes', 'money-review.js')).createMoneyReviewRouter()),
+  );
+
+  // Canonical local feedback shared by forecasts, subscriptions, and derived advice.
+  app.use(
+    '/api/financial-truth',
+    lazyRouter(() => require(resolveAppPath('server', 'routes', 'financial-truth.js')).createFinancialTruthRouter()),
+  );
+
   app.put('/api/transactions/:id', (req, res) => transactionHandlers.updateTransaction(req, res));
   app.put('/api/transactions', (req, res) => transactionHandlers.updateTransaction(req, res));
   app.delete('/api/transactions/:id', (req, res) => transactionHandlers.deleteTransaction(req, res));

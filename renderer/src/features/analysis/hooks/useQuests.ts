@@ -9,6 +9,10 @@ import type {
   VerifyQuestResponse,
 } from '@renderer/types/quests';
 import { useLocaleSettings } from '@renderer/i18n/I18nProvider';
+import {
+  FINANCIAL_TRUTH_CHANGED_EVENT,
+  financialTruthChangeAffects,
+} from '@renderer/features/financial-truth/types';
 
 interface UseQuestsOptions {
   autoLoad?: boolean;
@@ -195,6 +199,14 @@ export function useQuests(options: UseQuestsOptions = {}) {
       fetchStats();
     }
   }, [autoLoad, fetchQuests, fetchStats]);
+
+  useEffect(() => {
+    const handleTruthChange = (event: Event) => {
+      if (financialTruthChangeAffects(event, ['quests'])) void fetchQuests();
+    };
+    window.addEventListener(FINANCIAL_TRUTH_CHANGED_EVENT, handleTruthChange);
+    return () => window.removeEventListener(FINANCIAL_TRUTH_CHANGED_EVENT, handleTruthChange);
+  }, [fetchQuests]);
 
   // Categorize quests
   const proposedQuests = quests.filter(q => q.user_status === 'active');

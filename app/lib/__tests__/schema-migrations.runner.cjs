@@ -362,8 +362,8 @@ const scenarios = {
       db.pragma('user_version = 5');
       const result = runSchemaMigrations(db, { dbPath, logger: { log: () => {} } });
       assert.equal(result.fromVersion, 5);
-      assert.equal(result.toVersion, 6);
-      assert.equal(getSchemaVersion(db), 6);
+      assert.equal(result.toVersion, CURRENT_SCHEMA_VERSION);
+      assert.equal(getSchemaVersion(db), CURRENT_SCHEMA_VERSION);
       const tables = db.prepare(`
         SELECT name FROM sqlite_master
         WHERE type = 'table' AND name LIKE 'optimizer_v2_%'
@@ -375,6 +375,181 @@ const scenarios = {
         'optimizer_v2_runs',
         'optimizer_v2_sources',
       ]);
+    }),
+
+  'financial-truth-v7-backfill': () =>
+    withDatabase((db, dbPath) => {
+      db.exec(`
+        CREATE TABLE category_definitions (id INTEGER PRIMARY KEY);
+        CREATE TABLE transactions (
+          identifier TEXT NOT NULL,
+          vendor TEXT NOT NULL,
+          PRIMARY KEY (identifier, vendor)
+        );
+        CREATE TABLE subscriptions (
+          id INTEGER PRIMARY KEY,
+          pattern_key TEXT,
+          display_name TEXT NOT NULL,
+          category_definition_id INTEGER,
+          user_frequency TEXT,
+          detected_frequency TEXT,
+          user_amount REAL,
+          detected_amount REAL,
+          billing_day INTEGER,
+          consistency_score REAL,
+          first_detected_date TEXT,
+          last_charge_date TEXT,
+          next_expected_date TEXT,
+          status TEXT NOT NULL,
+          updated_at TEXT NOT NULL
+        );
+        CREATE TABLE subscription_history (
+          id INTEGER PRIMARY KEY,
+          subscription_id INTEGER NOT NULL,
+          event_type TEXT NOT NULL,
+          event_date TEXT NOT NULL
+        );
+        INSERT INTO subscriptions VALUES
+          (1, 'stream', 'Stream', NULL, NULL, 'monthly', NULL, 50, NULL, .9, '2026-01-01', '2026-07-01', '2026-08-01', 'cancelled', '2026-07-20'),
+          (2, 'gym', 'Gym', NULL, NULL, 'monthly', NULL, 120, NULL, .8, '2026-01-02', '2026-07-02', '2026-08-02', 'paused', '2026-07-21'),
+          (3, 'cloud', 'Cloud', NULL, 'yearly', 'monthly', 240, 20, 15, .8, '2026-01-03', '2026-07-03', '2026-08-03', 'keep', '2026-07-22'),
+          (4, 'news', 'News', NULL, NULL, 'monthly', NULL, 10, NULL, .7, '2026-01-04', '2026-07-04', '2026-08-04', 'review', '2026-07-23');
+        INSERT INTO subscription_history VALUES
+          (1, 1, 'status_change', '2026-06-15'),
+          (2, 1, 'status_change', '2026-07-15');
+        PRAGMA user_version = 6;
+      `);
+
+      const result = runSchemaMigrations(db, { dbPath, logger: { log: () => {} } });
+      assert.equal(result.toVersion, CURRENT_SCHEMA_VERSION);
+      assert.equal(db.prepare('SELECT COUNT(*) AS count FROM financial_patterns').get().count, 4);
+      assert.equal(db.prepare('SELECT COUNT(*) AS count FROM financial_corrections').get().count, 3);
+      assert.equal(db.prepare('SELECT COUNT(*) AS count FROM subscriptions WHERE financial_pattern_id IS NOT NULL').get().count, 4);
+      assert.equal(db.prepare("SELECT COUNT(*) AS count FROM financial_corrections WHERE source_key = 'subscription:4'").get().count, 0);
+      assert.deepEqual(
+        db.prepare("SELECT action, effective_date FROM financial_corrections WHERE source_key = 'subscription:1'").get(),
+        { action: 'end_pattern', effective_date: '2026-07-15' },
+      );
+      assert.deepEqual(
+        JSON.parse(db.prepare("SELECT overrides_json FROM financial_corrections WHERE source_key = 'subscription:3'").get().overrides_json),
+        { amount: 240, frequency: 'yearly', billingDay: 15, confirmed: true },
+      );
+      assert.equal(db.prepare('SELECT revision FROM financial_truth_state WHERE id = 1').get().revision, 0);
+      assert.equal(db.prepare("SELECT COUNT(*) AS count FROM sqlite_master WHERE type = 'table' AND name = 'presentation_dismissals'").get().count, 1);
+    }),
+
+  'financial-truth-service-roundtrip': () =>
+    withDatabase((db, dbPath) => {
+      db.exec(`
+        CREATE TABLE category_definitions (
+          id INTEGER PRIMARY KEY,
+          name TEXT NOT NULL
+        );
+        CREATE TABLE transactions (
+          identifier TEXT NOT NULL,
+          vendor TEXT NOT NULL,
+          date TEXT NOT NULL,
+          name TEXT,
+          merchant_name TEXT,
+          price REAL NOT NULL,
+          category_type TEXT NOT NULL,
+          category_definition_id INTEGER,
+          status TEXT NOT NULL,
+          PRIMARY KEY (identifier, vendor)
+        );
+        CREATE TABLE transaction_pairing_exclusions (
+          transaction_identifier TEXT NOT NULL,
+          transaction_vendor TEXT NOT NULL
+        );
+        CREATE TABLE subscriptions (
+          id INTEGER PRIMARY KEY,
+          pattern_key TEXT,
+          display_name TEXT NOT NULL,
+          category_definition_id INTEGER,
+          user_frequency TEXT,
+          detected_frequency TEXT,
+          user_amount REAL,
+          detected_amount REAL,
+          billing_day INTEGER,
+          consistency_score REAL,
+          first_detected_date TEXT,
+          last_charge_date TEXT,
+          next_expected_date TEXT,
+          status TEXT NOT NULL,
+          updated_at TEXT NOT NULL
+        );
+        CREATE TABLE subscription_history (
+          id INTEGER PRIMARY KEY,
+          subscription_id INTEGER NOT NULL,
+          event_type TEXT NOT NULL,
+          event_date TEXT NOT NULL
+        );
+        INSERT INTO category_definitions VALUES (5, 'Media');
+        INSERT INTO transactions VALUES
+          ('tx-1', 'card-a', '2026-05-05', 'Example Stream', 'Example Stream', -49, 'expense', 5, 'completed'),
+          ('tx-2', 'card-b', '2026-06-05', 'Example Stream', 'Example Stream', -50, 'expense', 5, 'completed'),
+          ('tx-3', 'card-a', '2026-07-05', 'Example Stream', 'Example Stream', -51, 'expense', 5, 'completed'),
+          ('tx-4', 'card-c', '2026-05-19', 'Example Stream', 'Example Stream', -199, 'expense', 5, 'completed'),
+          ('tx-5', 'card-c', '2026-06-19', 'Example Stream', 'Example Stream', -200, 'expense', 5, 'completed'),
+          ('tx-6', 'card-d', '2026-07-19', 'Example Stream', 'Example Stream', -201, 'expense', 5, 'completed');
+        PRAGMA user_version = 6;
+      `);
+      runSchemaMigrations(db, { dbPath, logger: { log: () => {} } });
+      const truth = require('../../server/services/financial-truth.js');
+
+      const detected = truth.getProjectionSnapshot({ db });
+      assert.equal(detected.patterns.length, 2);
+      assert.ok(detected.patterns.every((pattern) => pattern.frequency === 'monthly'));
+      assert.deepEqual(detected.patterns.map((pattern) => Math.round(pattern.amount)).sort((a, b) => a - b), [50, 200]);
+      assert.equal(db.prepare('SELECT COUNT(*) AS count FROM transactions').get().count, 6);
+      const patternId = detected.patterns.find((pattern) => pattern.amount < 100).id;
+      const beforeRevision = detected.truthRevision;
+
+      const result = truth.createCorrection({
+        requestId: 'roundtrip-suppress',
+        target: { kind: 'pattern', patternId },
+        action: 'suppress_pattern',
+        scope: 'ongoing',
+        reasonCode: 'not_recurring',
+        source: { feature: 'dashboard', sourceKey: 'forecast-card:stream' },
+      }, { db });
+      assert.ok(result.truthRevision > beforeRevision);
+      assert.equal(truth.getProjectionSnapshot({ db }).patterns.find((pattern) => pattern.id === patternId).state, 'suppressed');
+      assert.deepEqual(truth.buildRecurringOccurrences(
+        truth.getProjectionSnapshot({ db }), '2026-08-01', '2027-01-31',
+      ).filter((occurrence) => occurrence.patternId === patternId), []);
+      assert.equal(db.prepare('SELECT COUNT(*) AS count FROM transactions').get().count, 6);
+
+      const duplicate = truth.createCorrection({
+        requestId: 'roundtrip-suppress',
+        target: { kind: 'pattern', patternId },
+        action: 'suppress_pattern',
+        scope: 'ongoing',
+        reasonCode: 'not_recurring',
+        source: { feature: 'dashboard' },
+      }, { db });
+      assert.equal(duplicate.correction.id, result.correction.id);
+      assert.equal(duplicate.truthRevision, result.truthRevision);
+
+      const restored = truth.revertCorrection(result.correction.id, { db });
+      assert.equal(restored.correction.status, 'reverted');
+      assert.equal(truth.getProjectionSnapshot({ db }).patterns.find((pattern) => pattern.id === patternId).state, 'active');
+      assert.ok(truth.buildRecurringOccurrences(
+        truth.getProjectionSnapshot({ db }), '2026-08-01', '2026-10-31',
+      ).filter((occurrence) => occurrence.patternId === patternId).length > 0);
+
+      truth.setPresentationDismissal('notification:stream', { hidden: true }, { db });
+      assert.deepEqual([...truth.getHiddenSourceKeys({ db })], ['notification:stream']);
+      truth.setPresentationDismissal('notification:stream', { hidden: false }, { db });
+      assert.deepEqual([...truth.getHiddenSourceKeys({ db })], []);
+
+      const stablePatternIds = truth.getProjectionSnapshot({ db }).patterns.map((pattern) => pattern.id).sort();
+      const revisionBeforeImportChange = truth.getProjectionSnapshot({ db }).truthRevision;
+      db.prepare("UPDATE transactions SET price = -52 WHERE identifier = 'tx-3' AND vendor = 'card-a'").run();
+      assert.equal(db.prepare('SELECT materialized_transaction_signature FROM financial_truth_state WHERE id = 1').get().materialized_transaction_signature, null);
+      const rematerialized = truth.getProjectionSnapshot({ db });
+      assert.ok(rematerialized.truthRevision > revisionBeforeImportChange);
+      assert.deepEqual(rematerialized.patterns.map((pattern) => pattern.id).sort(), stablePatternIds);
     }),
 };
 

@@ -808,6 +808,8 @@ function mergeOptimizerFacts(detectedFacts = [], storedFacts = []) {
 }
 
 async function buildStatus(client) {
+  const truthRows = await optionalQuery(client, 'SELECT revision FROM financial_truth_state WHERE id = 1');
+  const truthRevision = normalizeInt(truthRows[0]?.revision) || 0;
   const [detectedFacts, storedFacts] = await Promise.all([
     buildDetectedFacts(client),
     getStoredFacts(client),
@@ -836,6 +838,7 @@ async function buildStatus(client) {
   );
 
   return {
+    truthRevision,
     facts,
     detectedFacts,
     questions,

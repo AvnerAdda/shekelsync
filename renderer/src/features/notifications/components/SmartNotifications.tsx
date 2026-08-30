@@ -42,6 +42,10 @@ import { apiClient } from '@/lib/api-client';
 import InsightsPanel from './InsightsPanel';
 import SnapshotProgressModal, { SnapshotProgressData } from './SnapshotProgressModal';
 import { useTranslation } from 'react-i18next';
+import {
+  FINANCIAL_TRUTH_CHANGED_EVENT,
+  financialTruthChangeAffects,
+} from '@renderer/features/financial-truth/types';
 
 interface Notification {
   id: string;
@@ -178,13 +182,24 @@ const SmartNotifications: React.FC = () => {
   const open = Boolean(anchorEl);
   const INSIGHTS_CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
 
+  const sharedDismissalKey = (notification: Notification) => `money_review:notification:${notification.type}:${notification.id}`;
+
+  const persistSharedDismissal = (notification: Notification, hidden = true) => {
+    void apiClient.put(
+      `/api/financial-truth/presentation-dismissals/${encodeURIComponent(sharedDismissalKey(notification))}`,
+      { hidden, sourceType: 'notification' },
+    );
+  };
+
   const handleDismissNotification = (id: string) => {
+    const notification = notifications.find((item) => item.id === id);
     setDismissedIds(prev => {
       const next = new Set(prev);
       next.add(id);
       saveDismissedIds(next);
       return next;
     });
+    if (notification) persistSharedDismissal(notification);
   };
 
   const handleDismissAll = () => {
@@ -194,6 +209,7 @@ const SmartNotifications: React.FC = () => {
       saveDismissedIds(next);
       return next;
     });
+    notifications.forEach((notification) => persistSharedDismissal(notification));
   };
 
   const buildSnapshotAlert = (triggerKey: string, isRead = false): Notification => ({
@@ -251,7 +267,10 @@ const SmartNotifications: React.FC = () => {
   const fetchNotifications = async () => {
     setLoading(true);
     try {
-      const response = await apiClient.get('/api/notifications?limit=20');
+      const [response, dismissalResponse] = await Promise.all([
+        apiClient.get('/api/notifications?limit=20'),
+        apiClient.get<{ success?: boolean; sourceKeys?: string[] }>('/api/financial-truth/presentation-dismissals', { cacheMode: 'no-store' }),
+      ]);
       const data = response.data as any;
 
       if (response.ok && data?.success) {
@@ -261,6 +280,15 @@ const SmartNotifications: React.FC = () => {
         const snapshotIsRead = seenTriggerKey === triggerKey;
         const nonSnapshotNotifications = baseNotifications.filter((item: Notification) => item.type !== SNAPSHOT_NOTIFICATION_TYPE);
         const mergedNotifications = [buildSnapshotAlert(triggerKey, snapshotIsRead), ...nonSnapshotNotifications];
+        const sharedHiddenKeys = new Set(dismissalResponse.data?.sourceKeys || []);
+        setDismissedIds((current) => {
+          const next = new Set(current);
+          mergedNotifications.forEach((notification) => {
+            if (sharedHiddenKeys.has(sharedDismissalKey(notification))) next.add(notification.id);
+          });
+          saveDismissedIds(next);
+          return next;
+        });
 
         setNotifications(mergedNotifications);
         setSummary(buildNotificationSummary(mergedNotifications, data.data?.summary ?? null));
@@ -272,6 +300,14 @@ const SmartNotifications: React.FC = () => {
       setLoading(false);
     }
   };
+
+  useEffect(() => {
+    const handleTruthChange = (event: Event) => {
+      if (financialTruthChangeAffects(event, ['notifications'])) void fetchNotifications();
+    };
+    window.addEventListener(FINANCIAL_TRUTH_CHANGED_EVENT, handleTruthChange);
+    return () => window.removeEventListener(FINANCIAL_TRUTH_CHANGED_EVENT, handleTruthChange);
+  });
 
   const fetchInsights = async (forceRefresh = false) => {
     // Check if we have cached data and it's still valid

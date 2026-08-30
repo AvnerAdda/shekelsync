@@ -43,6 +43,192 @@
       "transactionLoadFailed": "Unable to open that transaction right now."
     }
   },
+  "moneyReview": {
+    "eyebrow": "Your action plan",
+    "title": "Money Review",
+    "subtitle": "Your most important financial tasks, ordered by priority and ready to act on.",
+    "updatedAt": "Updated at {{time}}",
+    "loading": "Loading Money Review",
+    "dashboard": {
+      "summary": "{{count}} items · ~{{minutes}} min",
+      "reviewAll": "Review all",
+      "previous": "Scroll review items back",
+      "next": "Scroll review items forward",
+      "minutes": "~{{count}} min",
+      "impact": "{{amount}} potential",
+      "openItem": "Review {{title}}",
+      "caughtUp": "You're all caught up",
+      "caughtUpDescription": "No open actions need your attention right now.",
+      "loadError": "Money Review is temporarily unavailable."
+    },
+    "detail": {
+      "loading": "Loading review item",
+      "close": "Close item",
+      "unavailableTitle": "This review item is no longer available",
+      "unavailableDescription": "It may have been resolved automatically when your local data changed.",
+      "whyTitle": "Why this appeared",
+      "comparisonTitle": "What the numbers show",
+      "comparisonDescription": "A direct comparison using the values that triggered this review item.",
+      "comparisonAria": "{{first}}: {{firstValue}}. {{second}}: {{secondValue}}.",
+      "priorityTitle": "Why it is prioritized",
+      "priorityDescription": "The score combines urgency, potential financial impact, and how directly the signal is supported by your local data.",
+      "priorityAria": "Priority score {{score}} out of 100",
+      "explanations": {
+        "data": "This item can affect the accuracy of balances, categories, forecasts, or recommendations elsewhere in ShekelSync.",
+        "cash": "This item highlights a near-term change or risk that may affect available cash.",
+        "improve": "This is a saved opportunity or challenge that may strengthen your financial plan.",
+        "budget": "Current or projected spending crossed the budget threshold saved for this category.",
+        "subscription": "A recurring charge changed or matched a pattern that deserves confirmation.",
+        "cashFlow": "Recent income and spending velocity suggest your available monthly cash may tighten.",
+        "staleSync": "One or more account balances are old enough to make dashboard totals less reliable.",
+        "uncategorized": "Several recent expenses have no useful category, weakening budgets and spending insights.",
+        "unusual": "This transaction differs materially from the recent pattern in its category.",
+        "largeTransaction": "This is among the larger recent expenses and is worth verifying.",
+        "newVendor": "A recently seen vendor already has repeated activity, so its category or rule may need confirmation.",
+        "optimizer": "You previously saved this opportunity from the Optimizer; Money Review keeps it actionable until you finish or dismiss it."
+      },
+      "labels": {
+        "spent": "Spent",
+        "projected": "Projected",
+        "budget": "Budget",
+        "category": "Category",
+        "overBudget": "Potential overrun",
+        "previousCharge": "Previous charge",
+        "currentCharge": "Current charge",
+        "change": "Change (%)",
+        "frequency": "Frequency",
+        "income": "Income",
+        "expenses": "Expenses",
+        "daysRemaining": "Days remaining",
+        "dailySpending": "Daily spending",
+        "accountsAffected": "Accounts affected",
+        "daysSinceSync": "Days since sync",
+        "oldestAccount": "Oldest account",
+        "transactions": "Transactions",
+        "amount": "Amount",
+        "vendor": "Vendor",
+        "deviation": "Deviation score",
+        "scope": "Optimizer scope",
+        "monthlyPotential": "Monthly potential"
+      },
+      "sources": {
+        "local": "Calculated from account and transaction data stored locally on this device. No external AI or API key is required.",
+        "subscription": "Calculated from recurring charges and subscription alerts stored locally on this device.",
+        "optimizer": "Saved from an earlier Optimizer result. Opening Money Review does not call an external AI service."
+      }
+    },
+    "summary": {
+      "open": "items to review",
+      "minutes": "estimated minutes",
+      "impact": "potential impact"
+    },
+    "tabs": {
+      "label": "Review item status",
+      "open": "Open ({{count}})",
+      "snoozed": "Snoozed ({{count}})",
+      "completed": "Completed ({{count}})"
+    },
+    "groups": {
+      "data": {
+        "title": "Fix the data",
+        "description": "Keep account sync, categorization, and transaction quality trustworthy."
+      },
+      "cash": {
+        "title": "Protect your cash",
+        "description": "Review overspending, unusual activity, and upcoming commitments."
+      },
+      "improve": {
+        "title": "Improve your plan",
+        "description": "Work through accepted recommendations and financial challenges."
+      }
+    },
+    "priority": {
+      "low": "Low priority",
+      "medium": "Medium priority",
+      "high": "High priority",
+      "critical": "Critical"
+    },
+    "status": {
+      "inProgress": "In progress",
+      "snoozed": "Snoozed",
+      "resolved": "Completed",
+      "dismissed": "Dismissed"
+    },
+    "actions": {
+      "refresh": "Refresh review",
+      "close": "Close Money Review",
+      "retry": "Try again",
+      "reviewNext": "Start review",
+      "open": "Open",
+      "start": "Start",
+      "done": "Done",
+      "snooze": "Snooze",
+      "hide": "Hide",
+      "hideHint": "Hide this message without changing your financial plan",
+      "dismiss": "Dismiss",
+      "dismissHint": "Remove this item from your review",
+      "more": "More actions",
+      "reopen": "Reopen",
+      "reopenNow": "Bring back now",
+      "clearFilter": "Clear filter"
+    },
+    "snooze": {
+      "week": "One week",
+      "weekHint": "Bring it back in 7 days",
+      "month": "One month",
+      "monthHint": "Bring it back next month",
+      "threeMonths": "Three months",
+      "threeMonthsHint": "Bring it back in 90 days"
+    },
+    "item": {
+      "nextUp": "Next up",
+      "minutes": "~{{count}} min",
+      "returnsOn": "Returns {{date}}"
+    },
+    "filters": {
+      "label": "Filter review items",
+      "all": "All · {{count}}",
+      "group": "{{name}} · {{count}}",
+      "showing": "Showing {{count}}"
+    },
+    "potentialImpact": "Potential impact: {{amount}}",
+    "empty": {
+      "open": {
+        "title": "You're all caught up",
+        "description": "No open actions need your attention right now."
+      },
+      "snoozed": {
+        "title": "Nothing is snoozed",
+        "description": "Items you postpone will appear here."
+      },
+      "completed": {
+        "title": "No completed items yet",
+        "description": "Resolved and dismissed actions from the last 30 days will appear here."
+      },
+      "filtered": {
+        "title": "Nothing in this category",
+        "description": "Clear the category filter to see the rest of your review."
+      }
+    },
+    "errors": {
+      "load": "Money Review could not be loaded.",
+      "update": "The review item could not be updated.",
+      "sync": "Account sync could not be started."
+    },
+    "messages": {
+      "active": "Item reopened.",
+      "accepted": "Item started.",
+      "snoozed": {
+        "1_week": "Item snoozed for one week.",
+        "1_month": "Item snoozed for one month.",
+        "3_months": "Item snoozed for three months."
+      },
+      "resolved": "Item completed.",
+      "dismissed": "Item dismissed.",
+      "syncStarted": "Account sync started."
+    },
+    "privacy": "Money Review is generated and stored locally. External AI is not required."
+  },
   "globalSearch": {
     "placeholder": "Search transactions...",
     "hint": "Press Enter to select, Escape to close",
@@ -3226,6 +3412,7 @@
       "placeholder": "Search sections...",
       "options": {
         "dashboard": "Dashboard",
+        "review": "Money Review",
         "analysis": "Analysis",
         "investments": "Investments",
         "settings": "Settings",
@@ -3245,6 +3432,12 @@
           "overview",
           "main",
           "summary"
+        ],
+        "review": [
+          "actions",
+          "inbox",
+          "alerts",
+          "tasks"
         ],
         "analysis": [
           "analytics",
@@ -3753,6 +3946,59 @@
         "description": "Keep your data up to date by syncing regularly.",
         "action": "Sync Now"
       }
+    }
+  },
+  "financialTruth": {
+    "correctTitle": "Correct this prediction",
+    "correctDescription": "Your choice becomes shared financial truth across every connected forecast and insight.",
+    "notAccurate": "Not accurate",
+    "correctSourceFact": "Correct source fact",
+    "monthlyExpectation": "Expected monthly amount",
+    "thisMonth": "This month",
+    "ongoing": "Ongoing",
+    "endedOn": "Ended on",
+    "amount": "Amount",
+    "frequency": "Frequency",
+    "nextExpectedDate": "Next expected date",
+    "calculating": "Calculating impact…",
+    "impactTitle": "What will change",
+    "impactValues": "Estimated impact: {{monthly}} per month · {{sixMonth}} over six months",
+    "apply": "Apply correction",
+    "saved": "Correction saved. Updating your plan…",
+    "correctionsTitle": "Your corrections",
+    "correctionsDescription": "These choices are used by forecasts, subscriptions, alerts, and financial guidance.",
+    "active": "Active",
+    "restored": "Restored",
+    "restore": "Restore",
+    "restorePrediction": "Restore prediction",
+    "noCorrections": "No corrections in this view.",
+    "sourceScope": "Source: {{source}} · Scope: {{scope}}",
+    "effectiveFrom": "Effective {{date}}",
+    "scopes": {
+      "occurrence": "one occurrence",
+      "from_date": "from a date",
+      "current_month": "current month",
+      "ongoing": "ongoing"
+    },
+    "actions": {
+      "skipOccurrence": "Not coming this time",
+      "skipOccurrenceHint": "Only this expected occurrence will be removed.",
+      "suppressPattern": "This is not recurring",
+      "suppressPatternHint": "Stop using this pattern in every future projection.",
+      "endPattern": "It ended or was cancelled",
+      "endPatternHint": "Keep history and stop predictions from an effective date.",
+      "pausePattern": "Pause it for now",
+      "pausePatternHint": "Exclude it until you explicitly resume it.",
+      "overridePattern": "The details are wrong",
+      "overridePatternHint": "Set the amount, frequency, or next date yourself."
+    },
+    "historyActions": {
+      "skip_occurrence": "Skipped one occurrence",
+      "suppress_pattern": "Marked as not recurring",
+      "end_pattern": "Ended or cancelled",
+      "pause_pattern": "Paused",
+      "override_pattern": "Details corrected",
+      "set_category_expectation": "Category expectation adjusted"
     }
   }
 }

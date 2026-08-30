@@ -17,9 +17,12 @@ if (!global.__electronAliasRegistered) {
     }
 
     if (request === 'electron') {
-      // In Electron runtime, defer to the built-in module
+      // In Electron runtime, let Node/Electron resolve the built-in module.
+      // Returning the bare request here worked in older Electron releases, but
+      // Node 24 can then treat app/node_modules/electron as the resolved file
+      // and attempt to read that directory as JavaScript (EISDIR).
       if (process.versions && process.versions.electron) {
-        return request;
+        return originalResolveFilename.call(this, request, parent, isMain, options);
       }
       // In plain Node (e.g., running the dev API server), use a lightweight stub
       const stubPath = path.join(__dirname, 'electron-stub.js');
