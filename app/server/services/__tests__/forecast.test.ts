@@ -1310,4 +1310,73 @@ describe('forecast service internals', () => {
       isUserExpectation: true,
     });
   });
+
+  it('summarizes realized forecast error, bias, and uncertainty coverage', () => {
+    const { summarizeAccuracyRows } = forecastModule._internal;
+    const summary = summarizeAccuracyRows([
+      {
+        expected_expenses: 100,
+        actual_expenses: 80,
+        expected_cash_flow: 40,
+        actual_cash_flow: 20,
+        p10_cash_flow: 0,
+        p90_cash_flow: 30,
+      },
+      {
+        expected_expenses: 50,
+        actual_expenses: 100,
+        expected_cash_flow: -10,
+        actual_cash_flow: -20,
+        p10_cash_flow: -15,
+        p90_cash_flow: -5,
+      },
+    ]);
+
+    expect(summary).toEqual({
+      sampleCount: 2,
+      expenseMae: 35,
+      expenseMape: 37.5,
+      cashFlowMae: 15,
+      cashFlowBias: 15,
+      intervalCoverage: 50,
+    });
+    expect(summarizeAccuracyRows([])).toMatchObject({
+      sampleCount: 0,
+      expenseMae: null,
+      intervalCoverage: null,
+    });
+    expect(summarizeAccuracyRows([{
+      expected_expenses: 0,
+      actual_expenses: 0,
+      expected_cash_flow: 0,
+      actual_cash_flow: 0,
+      p10_cash_flow: null,
+      p90_cash_flow: null,
+    }])).toMatchObject({ expenseMape: null, intervalCoverage: null });
+  });
+
+  it('labels forecast calibration readiness using distinct realized days', () => {
+    const { summarizeAccuracyReadiness } = forecastModule._internal;
+    const rows = (days: number, samplesPerDay: number) => Array.from(
+      { length: days * samplesPerDay },
+      (_, index) => ({ target_date: `2026-07-${String(Math.floor(index / samplesPerDay) + 1).padStart(2, '0')}` }),
+    );
+
+    expect(summarizeAccuracyReadiness([])).toEqual({
+      readiness: 'collecting',
+      observedDays: 0,
+      evaluatedFrom: null,
+      evaluatedThrough: null,
+    });
+    expect(summarizeAccuracyReadiness(rows(14, 3))).toMatchObject({
+      readiness: 'provisional',
+      observedDays: 14,
+      evaluatedFrom: '2026-07-01',
+      evaluatedThrough: '2026-07-14',
+    });
+    expect(summarizeAccuracyReadiness(rows(30, 4))).toMatchObject({
+      readiness: 'established',
+      observedDays: 30,
+    });
+  });
 });

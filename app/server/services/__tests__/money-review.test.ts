@@ -1,9 +1,27 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const moneyReview = require('../money-review.js');
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const forecastService = require('../forecast.js');
 
 describe('Money Review service contracts', () => {
+  it('includes forecast calibration when available and degrades safely when unavailable', () => {
+    const accuracy = {
+      available: true,
+      readiness: 'provisional',
+      observedDays: 18,
+      sampleCount: 52,
+    };
+    const accuracySpy = vi.spyOn(forecastService, 'getForecastAccuracy').mockReturnValue(accuracy);
+    expect(moneyReview.utils.loadForecastAccuracy()).toBe(accuracy);
+    expect(accuracySpy).toHaveBeenCalledWith({ days: 90 });
+
+    accuracySpy.mockImplementation(() => { throw new Error('database unavailable'); });
+    expect(moneyReview.utils.loadForecastAccuracy()).toBeNull();
+    accuracySpy.mockRestore();
+  });
+
   it('adapts actionable notifications into durable smart actions', () => {
     const action = moneyReview.utils.notificationToSmartAction({
       id: 'budget_7',

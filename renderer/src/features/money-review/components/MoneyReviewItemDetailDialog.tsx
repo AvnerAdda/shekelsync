@@ -354,7 +354,12 @@ const MoneyReviewItemDetailDialog: React.FC<MoneyReviewItemDetailDialogProps> = 
       sourceFeature="money_review"
       sourceKey={item?.sourceKey}
       onClose={() => setCorrectionTarget(null)}
-      onApplied={() => onClose()}
+      onApplied={() => {
+        if (!item) return;
+        void onUpdateStatus(item, 'resolved').then((updated) => {
+          if (updated) onClose();
+        });
+      }}
     />
     </>
   );

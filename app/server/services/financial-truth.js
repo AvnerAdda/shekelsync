@@ -508,6 +508,7 @@ function resolvePattern(pattern, correctionRows) {
       if (overrides.nextExpectedDate) resolved.nextExpectedDate = toDateOnly(overrides.nextExpectedDate);
       if (Number.isInteger(Number(overrides.billingDay))) resolved.billingDay = Number(overrides.billingDay);
       if (overrides.confirmed === true) resolved.confirmed = true;
+      if (typeof overrides.isSubscription === 'boolean') resolved.isSubscription = overrides.isSubscription;
     }
     if (row.action === 'skip_occurrence' && row.occurrence_id) resolved.skippedOccurrences.push(row.occurrence_id);
   });
@@ -660,7 +661,8 @@ function validateDraft(payload = {}) {
   if (action === 'override_pattern') {
     const overrides = payload.overrides && typeof payload.overrides === 'object' ? payload.overrides : {};
     const hasOverride = overrides.amount != null || overrides.frequency || overrides.nextExpectedDate
-      || overrides.billingDay != null || overrides.confirmed === true;
+      || overrides.billingDay != null || overrides.confirmed === true
+      || typeof overrides.isSubscription === 'boolean';
     if (!hasOverride) throw Object.assign(new Error('At least one corrected value is required'), { status: 400, code: 'OVERRIDE_REQUIRED' });
     if (overrides.amount != null && (!Number.isFinite(Number(overrides.amount)) || Number(overrides.amount) < 0)) {
       throw Object.assign(new Error('A valid amount is required'), { status: 400, code: 'INVALID_OVERRIDE_AMOUNT' });

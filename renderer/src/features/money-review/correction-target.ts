@@ -107,6 +107,7 @@ export function buildMoneyReviewCorrectionTarget(item: MoneyReviewItem): Correct
         data.expected_date,
         data.expectedDate,
       ),
+      ...(metadata.source === 'subscription' ? { isSubscription: true } : {}),
       capabilities,
     };
   }
@@ -132,4 +133,3 @@ export function buildMoneyReviewCorrectionTarget(item: MoneyReviewItem): Correct
     capabilities: ['set_category_expectation'],
   };
 }
-

@@ -76,6 +76,11 @@ export function buildMoneyReviewTimeScopeLabel(
     return date ? { key: 'timeScope.overdueSince', values: { date } } : null;
   }
 
+  if (kind === 'upcoming_until') {
+    const date = formatDate(scope.end, locale);
+    return date ? { key: 'timeScope.upcomingOn', values: { date } } : null;
+  }
+
   if (item.group === 'cash') {
     const date = formatDate(item.detectedAt, locale);
     return date ? { key: 'timeScope.detectedOn', values: { date } } : null;

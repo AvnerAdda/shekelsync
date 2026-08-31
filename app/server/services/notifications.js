@@ -843,7 +843,10 @@ async function getNotifications(query = {}) {
       type === NOTIFICATION_TYPES.BUDGET_PROJECTED
     ) {
       try {
-        const forecast = await forecastService.generateDailyForecast();
+        // Budget outlook is part of the enriched forecast contract. Calling the
+        // daily engine directly returns only daily/scenario data and silently
+        // prevents projected-overrun review items from ever being generated.
+        const forecast = await forecastService.getForecast({ forecastDays: 31 });
         const outlook = forecast?.budgetOutlook || [];
 
         outlook.forEach((item) => {

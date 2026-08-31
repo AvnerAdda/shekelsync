@@ -1,6 +1,7 @@
 import React from 'react';
 import {
   Box,
+  Button,
   Card,
   CardContent,
   Chip,
@@ -55,6 +56,7 @@ interface MoneyReviewCardProps {
     status: MoneyReviewStatus,
     snoozePreset?: SnoozePreset,
   ) => Promise<boolean>;
+  onOpenDetails: (item: MoneyReviewItem) => void;
 }
 
 const MoneyReviewCard: React.FC<MoneyReviewCardProps> = ({
@@ -64,6 +66,7 @@ const MoneyReviewCard: React.FC<MoneyReviewCardProps> = ({
   busy,
   onPrimaryAction,
   onUpdateStatus,
+  onOpenDetails,
 }) => {
   const theme = useTheme();
   const { t, i18n } = useTranslation('translation', { keyPrefix: 'moneyReview' });
@@ -229,12 +232,17 @@ const MoneyReviewCard: React.FC<MoneyReviewCardProps> = ({
                 </Stack>
               </Box>
 
-              <MoneyReviewItemActions
-                item={item}
-                busy={busy}
-                onPrimaryAction={onPrimaryAction}
-                onUpdateStatus={onUpdateStatus}
-              />
+              <Stack spacing={0.75} sx={{ alignItems: { md: 'flex-end' } }}>
+                <Button size="small" variant="text" onClick={() => onOpenDetails(item)}>
+                  {t('actions.details')}
+                </Button>
+                <MoneyReviewItemActions
+                  item={item}
+                  busy={busy}
+                  onPrimaryAction={onPrimaryAction}
+                  onUpdateStatus={onUpdateStatus}
+                />
+              </Stack>
             </Stack>
           </Box>
         </Stack>

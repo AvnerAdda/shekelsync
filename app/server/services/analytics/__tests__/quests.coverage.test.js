@@ -141,6 +141,29 @@ describe('quest helpers coverage', () => {
     expect(resolveCategoryId({ category: 'Unknown' }, categoryIdByName)).toBe(null);
   });
 
+  it('uses the category or merchant identity in monthly recurrence keys', () => {
+    const { buildQuestRecurrenceKey } = questsService._internal;
+    const now = new Date(2026, 1, 10);
+    const aroma = buildQuestRecurrenceKey({
+      action_type: 'quest_merchant_limit',
+      trigger_category_id: null,
+      metadata: JSON.stringify({ merchant_name: 'Aroma Cafe' }),
+    }, now);
+    const market = buildQuestRecurrenceKey({
+      action_type: 'quest_merchant_limit',
+      trigger_category_id: null,
+      metadata: JSON.stringify({ merchant_name: 'Supermarket Big' }),
+    }, now);
+
+    expect(aroma).toBe('quest_merchant_limit_merchant_aroma_cafe_2026_02');
+    expect(market).toBe('quest_merchant_limit_merchant_supermarket_big_2026_02');
+    expect(aroma).not.toBe(market);
+    expect(buildQuestRecurrenceKey({
+      action_type: 'quest_reduce_spending',
+      trigger_category_id: 17,
+    }, now)).toBe('quest_reduce_spending_category_17_2026_02');
+  });
+
   it('covers reduction, days remaining and period stability helpers', () => {
     const { computeReductionPct, getDaysRemainingInMonth, computePeriodStability } = questsService._internal;
 
@@ -306,14 +329,14 @@ describe('quest helpers coverage', () => {
 describe('quest generation and lifecycle coverage', () => {
   it('gets active accepted quest count from the database', async () => {
     const client = createDbClient([
-      { match: /SELECT COUNT\(\*\) as count[\s\S]*user_status = 'accepted'/, result: { rows: [{ count: 3 }] } },
+      { match: /SELECT COUNT\(\*\) as count[\s\S]*user_status IN \('active', 'accepted'\)/, result: { rows: [{ count: 3 }] } },
     ]);
     expect(await questsService._internal.getActiveQuestCount(client)).toBe(3);
   });
 
   it('returns early when active quest cap is reached', async () => {
     const client = createDbClient([
-      { match: /SELECT COUNT\(\*\) as count[\s\S]*user_status = 'accepted'/, result: { rows: [{ count: 5 }] } },
+      { match: /SELECT COUNT\(\*\) as count[\s\S]*user_status IN \('active', 'accepted'\)/, result: { rows: [{ count: 5 }] } },
     ]);
     setMockDatabase(client);
 
@@ -326,7 +349,7 @@ describe('quest generation and lifecycle coverage', () => {
   it('generates and inserts multiple quest types from actionable data', async () => {
     getBehavioralPatterns.mockResolvedValue({ recurringPatterns: [] });
     const client = createDbClient([
-      { match: /SELECT COUNT\(\*\) as count[\s\S]*user_status = 'accepted'/, result: { rows: [{ count: 4 }] } },
+      { match: /SELECT COUNT\(\*\) as count[\s\S]*user_status IN \('active', 'accepted'\)/, result: { rows: [{ count: 4 }] } },
       {
         match: /FROM spending_category_mappings/,
         result: {
@@ -392,7 +415,7 @@ describe('quest generation and lifecycle coverage', () => {
   it('skips creating duplicate recurrence keys when not forced', async () => {
     getBehavioralPatterns.mockResolvedValue({ recurringPatterns: [] });
     const client = createDbClient([
-      { match: /SELECT COUNT\(\*\) as count[\s\S]*user_status = 'accepted'/, result: { rows: [{ count: 4 }] } },
+      { match: /SELECT COUNT\(\*\) as count[\s\S]*user_status IN \('active', 'accepted'\)/, result: { rows: [{ count: 4 }] } },
       {
         match: /FROM spending_category_mappings/,
         result: { rows: [{ category_definition_id: 1, variability_type: 'variable', name: 'Dining', name_en: 'Dining' }] },
@@ -455,7 +478,7 @@ describe('quest generation and lifecycle coverage', () => {
       ],
     });
     const client = createDbClient([
-      { match: /SELECT COUNT\(\*\) as count[\s\S]*user_status = 'accepted'/, result: { rows: [{ count: 0 }] } },
+      { match: /SELECT COUNT\(\*\) as count[\s\S]*user_status IN \('active', 'accepted'\)/, result: { rows: [{ count: 0 }] } },
       { match: /FROM spending_category_mappings/, result: { rows: [] } },
       { match: /avg_weekend_spend/, result: { rows: [{ avg_weekend_spend: 700, weeks_analyzed: 4 }] } },
       { match: /WHERE recurrence_key = \$1/, result: { rows: [] } },
@@ -479,6 +502,48 @@ describe('quest generation and lifecycle coverage', () => {
     expect(actionTypes).toContain('quest_weekend_limit');
   });
 
+  it('measures budget adherence against spend remaining after acceptance', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-02-10T12:00:00Z'));
+    getBehavioralPatterns.mockResolvedValue({ recurringPatterns: [] });
+    const client = createDbClient([
+      { match: /SELECT COUNT\(\*\) as count[\s\S]*user_status IN \('active', 'accepted'\)/, result: { rows: [{ count: 0 }] } },
+      { match: /FROM spending_category_mappings/, result: { rows: [] } },
+      { match: /avg_weekend_spend/, result: { rows: [] } },
+      { match: /WHERE recurrence_key = \$1/, result: { rows: [] } },
+      { match: /INSERT INTO smart_action_items \(/, result: { rows: [] } },
+    ]);
+    setMockDatabase(client);
+
+    const result = await questsService.generateQuests({
+      locale: 'en',
+      force: true,
+      forecastData: {
+        patterns: [],
+        budgetOutlook: [{
+          budgetId: 12,
+          status: 'at_risk',
+          risk: 0.7,
+          limit: 1000,
+          actualSpent: 780,
+          projectedTotal: 1150,
+          categoryName: 'Groceries',
+          categoryNameEn: 'Groceries',
+          categoryDefinitionId: 2,
+        }],
+      },
+    });
+
+    expect(result.created).toBe(1);
+    const insert = client.query.mock.calls.find(([, params]) => params?.[0] === 'quest_budget_adherence');
+    expect(JSON.parse(insert?.[1]?.[6])).toMatchObject({
+      type: 'budget_adherence',
+      target_amount: 220,
+      baseline_spent: 780,
+      target_limit: 1000,
+    });
+  });
+
   it('returns an error payload when quest generation fails unexpectedly', async () => {
     questsService.__setDatabase({
       getClient: vi.fn().mockRejectedValue(new Error('db exploded')),
@@ -493,7 +558,7 @@ describe('quest generation and lifecycle coverage', () => {
     const client = createDbClient(
       withCleanupHandlers([
         { match: /SELECT \* FROM smart_action_items WHERE id = \$1/, result: { rows: [{ id: 12, action_type: 'quest_reduce_spending', user_status: 'active', quest_duration_days: 7, points_reward: 90 }] } },
-        { match: /SELECT COUNT\(\*\) as count[\s\S]*user_status = 'accepted'/, result: { rows: [{ count: 2 }] } },
+      { match: /SELECT COUNT\(\*\) as count[\s\S]*user_status IN \('active', 'accepted'\)/, result: { rows: [{ count: 2 }] } },
         { match: /SELECT name, tbl_name, sql FROM sqlite_master/, result: { rows: [] } },
       ]),
     );
@@ -557,7 +622,7 @@ describe('quest generation and lifecycle coverage', () => {
           }],
         }),
       },
-      { match: /SELECT COUNT\(\*\) as count[\s\S]*user_status = 'accepted'/, result: { rows: [{ count: 1 }] } },
+      { match: /SELECT COUNT\(\*\) as count[\s\S]*user_status IN \('active', 'accepted'\)/, result: { rows: [{ count: 1 }] } },
       { match: /SELECT name, tbl_name, sql FROM sqlite_master[\s\S]*tbl_name = 'smart_action_items'/, result: { rows: [] } },
       { match: /DROP TRIGGER IF EXISTS/i, result: { rows: [] } },
       { match: /PRAGMA foreign_keys = OFF/i, result: { rows: [] } },
@@ -626,7 +691,7 @@ describe('quest generation and lifecycle coverage', () => {
     const limitClient = createDbClient(
       withCleanupHandlers([
         { match: /SELECT \* FROM smart_action_items WHERE id = \$1/, result: { rows: [{ id: 2, action_type: 'quest_reduce_spending', user_status: 'active', quest_duration_days: 7 }] } },
-        { match: /SELECT COUNT\(\*\) as count[\s\S]*user_status = 'accepted'/, result: { rows: [{ count: 5 }] } },
+      { match: /SELECT COUNT\(\*\) as count[\s\S]*user_status IN \('active', 'accepted'\)/, result: { rows: [{ count: 5 }] } },
       ]),
     );
     setMockDatabase(limitClient);
@@ -678,7 +743,7 @@ describe('quest generation and lifecycle coverage', () => {
           ],
         },
       },
-      { match: /SELECT COALESCE\(SUM\(ABS\(price\)\), 0\) as total_spent[\s\S]*date >= \$2 AND date <= \$3/, result: { rows: [{ total_spent: 40 }] } },
+      { match: /WITH RECURSIVE category_tree/, result: { rows: [{ identifier: 'spend-40', vendor: 'Dining', amount: 40 }] } },
       { match: /SELECT total_points FROM user_quest_stats WHERE id = 1/, result: { rows: [{ total_points: 360 }] } },
     ]);
     setMockDatabase(client);
@@ -689,7 +754,9 @@ describe('quest generation and lifecycle coverage', () => {
       quest_id: 7,
       points_earned: 125,
       new_status: 'resolved',
+      actual_value: 40,
     });
+    expect(client.query.mock.calls.some(([sql]) => normalizeSql(sql).includes('WITH RECURSIVE category_tree'))).toBe(true);
     expect(client.query.mock.calls.some(([sql]) => normalizeSql(sql).includes('SET level = $1'))).toBe(true);
   });
 
@@ -715,7 +782,7 @@ describe('quest generation and lifecycle coverage', () => {
           ],
         },
       },
-      { match: /SELECT COALESCE\(SUM\(ABS\(price\)\), 0\) as total_spent[\s\S]*date >= \$2 AND date <= \$3/, result: { rows: [{ total_spent: 110 }] } },
+      { match: /WITH RECURSIVE category_tree/, result: { rows: [{ identifier: 'spend-110', vendor: 'Dining', amount: 110 }] } },
       { match: /SELECT total_points FROM user_quest_stats WHERE id = 1/, result: { rows: [{ total_points: 180 }] } },
     ]);
     setMockDatabase(partialClient);
@@ -743,7 +810,7 @@ describe('quest generation and lifecycle coverage', () => {
           ],
         },
       },
-      { match: /SELECT COALESCE\(SUM\(ABS\(price\)\), 0\) as total_spent[\s\S]*date >= \$2 AND date <= \$3/, result: { rows: [{ total_spent: 200 }] } },
+      { match: /WITH RECURSIVE category_tree/, result: { rows: [{ identifier: 'spend-200', vendor: 'Dining', amount: 200 }] } },
     ]);
     setMockDatabase(failClient);
     const failed = await questsService.verifyQuestCompletion(9);
@@ -813,7 +880,7 @@ describe('quest generation and lifecycle coverage', () => {
           ],
         },
       },
-      { match: /SELECT COUNT\(\*\) as cnt[\s\S]*name LIKE/, result: { rows: [{ cnt: 1 }] } },
+      { match: /SELECT t\.identifier[\s\S]*COALESCE\(t\.name, t\.vendor\)[\s\S]*LIKE/, result: { rows: [{ identifier: 'merchant-1', vendor: 'Aroma', amount: 20 }] } },
       { match: /SELECT total_points FROM user_quest_stats WHERE id = 1/, result: { rows: [{ total_points: 420 }] } },
     ]);
     setMockDatabase(merchantClient);
@@ -844,8 +911,8 @@ describe('quest generation and lifecycle coverage', () => {
         },
       },
       {
-        match: /SELECT COALESCE\(SUM\(ABS\(price\)\), 0\) as total[\s\S]*CAST\(strftime\('%w', date\) AS INTEGER\) IN \(0, 5, 6\)/,
-        result: { rows: [{ total: 250 }] },
+        match: /SELECT t\.identifier[\s\S]*strftime\('%w', t\.date\)/,
+        result: { rows: [{ identifier: 'weekend-250', vendor: 'Market', amount: 250 }] },
       },
     ]);
     setMockDatabase(weekendClient);
@@ -901,7 +968,7 @@ describe('quest query views and stats coverage', () => {
           ],
         },
       },
-      { match: /SELECT COALESCE\(SUM\(ABS\(price\)\), 0\) as total_spent[\s\S]*category_definition_id = \$1/, result: { rows: [{ total_spent: 50 }] } },
+      { match: /WITH RECURSIVE category_tree/, result: { rows: [{ identifier: 'spend-50', vendor: 'Dining', amount: 50 }] } },
     ]);
     setMockDatabase(client);
 
@@ -941,7 +1008,14 @@ describe('quest query views and stats coverage', () => {
           ],
         },
       },
-      { match: /SELECT COUNT\(\*\) as cnt[\s\S]*name LIKE/, result: { rows: [{ cnt: 3 }] } },
+      {
+        match: /SELECT t\.identifier[\s\S]*COALESCE\(t\.name, t\.vendor\)[\s\S]*LIKE/,
+        result: { rows: [
+          { identifier: 'merchant-1', vendor: 'Aroma', amount: 20 },
+          { identifier: 'merchant-2', vendor: 'Aroma', amount: 20 },
+          { identifier: 'merchant-3', vendor: 'Aroma', amount: 20 },
+        ] },
+      },
     ]);
     setMockDatabase(merchantClient);
 
@@ -977,7 +1051,7 @@ describe('quest query views and stats coverage', () => {
           ],
         },
       },
-      { match: /SELECT COALESCE\(SUM\(ABS\(price\)\), 0\) as total_spent[\s\S]*CAST\(strftime\('%w', date\) AS INTEGER\) IN \(0, 5, 6\)/, result: { rows: [{ total_spent: 130 }] } },
+      { match: /SELECT t\.identifier[\s\S]*strftime\('%w', t\.date\)/, result: { rows: [{ identifier: 'weekend-130', vendor: 'Market', amount: 130 }] } },
     ]);
     setMockDatabase(weekendClient);
 
@@ -1058,7 +1132,7 @@ describe('quest query views and stats coverage', () => {
   it('checks deadlines with no expired quests and no auto-generation trigger', async () => {
     const client = createDbClient([
       { match: /SELECT id FROM smart_action_items[\s\S]*deadline < datetime\('now'\)/, result: { rows: [] } },
-      { match: /SELECT COUNT\(\*\) as count[\s\S]*user_status = 'accepted'/, result: { rows: [{ count: 4 }] } },
+      { match: /SELECT COUNT\(\*\) as count[\s\S]*user_status IN \('active', 'accepted'\)/, result: { rows: [{ count: 4 }] } },
     ]);
     setMockDatabase(client);
 
@@ -1077,7 +1151,7 @@ describe('quest query views and stats coverage', () => {
     const client = createDbClient([
       { match: /SELECT id FROM smart_action_items[\s\S]*deadline < datetime\('now'\)/, result: { rows: [] } },
       {
-        match: /SELECT COUNT\(\*\) as count[\s\S]*user_status = 'accepted'/,
+        match: /SELECT COUNT\(\*\) as count[\s\S]*user_status IN \('active', 'accepted'\)/,
         result: () => {
           activeCountCalls += 1;
           return activeCountCalls === 1
@@ -1118,9 +1192,9 @@ describe('quest query views and stats coverage', () => {
           ],
         },
       },
-      { match: /SELECT COALESCE\(SUM\(ABS\(price\)\), 0\) as total_spent[\s\S]*date >= \$2 AND date <= \$3/, result: { rows: [{ total_spent: 60 }] } },
+      { match: /WITH RECURSIVE category_tree/, result: { rows: [{ identifier: 'spend-60', vendor: 'Dining', amount: 60 }] } },
       { match: /SELECT total_points FROM user_quest_stats WHERE id = 1/, result: { rows: [{ total_points: 220 }] } },
-      { match: /SELECT COUNT\(\*\) as count[\s\S]*user_status = 'accepted'/, result: { rows: [{ count: 3 }] } },
+      { match: /SELECT COUNT\(\*\) as count[\s\S]*user_status IN \('active', 'accepted'\)/, result: { rows: [{ count: 3 }] } },
     ]);
     setMockDatabase(verifiedClient);
 
@@ -1132,7 +1206,7 @@ describe('quest query views and stats coverage', () => {
     const errorClient = createDbClient([
       { match: /SELECT id FROM smart_action_items[\s\S]*deadline < datetime\('now'\)/, result: { rows: [{ id: 77 }] } },
       { match: /SELECT \* FROM smart_action_items WHERE id = \$1/, result: { rows: [] } },
-      { match: /SELECT COUNT\(\*\) as count[\s\S]*user_status = 'accepted'/, result: { rows: [{ count: 4 }] } },
+      { match: /SELECT COUNT\(\*\) as count[\s\S]*user_status IN \('active', 'accepted'\)/, result: { rows: [{ count: 4 }] } },
     ]);
     setMockDatabase(errorClient);
 

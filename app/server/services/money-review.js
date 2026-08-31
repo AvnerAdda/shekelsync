@@ -2,6 +2,7 @@ const database = require('./database.js');
 const notificationsService = require('./notifications.js');
 const subscriptionsService = require('./analytics/subscriptions.js');
 const financialTruthService = require('./financial-truth.js');
+const forecastService = require('./forecast.js');
 
 const REVIEW_NOTIFICATION_PREFIX = 'money_review:notification:';
 const REVIEW_SUBSCRIPTION_PREFIX = 'money_review:subscription:';
@@ -46,6 +47,17 @@ function parseJson(value, fallback = {}) {
 function number(value, fallback = 0) {
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : fallback;
+}
+
+function loadForecastAccuracy() {
+  try {
+    return forecastService.getForecastAccuracy({ days: 90 });
+  } catch (error) {
+    if (process.env.NODE_ENV !== 'test') {
+      console.warn('Money Review forecast calibration unavailable:', error?.message || error);
+    }
+    return null;
+  }
 }
 
 function normalizeNotificationResponse(payload) {
@@ -192,7 +204,9 @@ function resolvePrimaryAction(row, metadata) {
     return { label: 'Open optimizer', action: 'open_optimizer', params: {} };
   }
   if (row.action_type.startsWith('quest_')) {
-    return { label: 'View challenge', action: 'view_quests', params: {} };
+    return row.user_status === 'active'
+      ? { label: 'Accept challenge', action: 'accept_quest', params: { quest_id: row.id } }
+      : { label: 'View challenge', action: 'view_quests', params: { quest_id: row.id } };
   }
   return null;
 }
@@ -328,6 +342,7 @@ async function getMoneyReview(options = {}) {
   } catch (error) {
     if (process.env.NODE_ENV !== 'test') console.warn('Money Review presentation state unavailable:', error?.message || error);
   }
+  const forecastAccuracy = loadForecastAccuracy();
   const subscriptionRequest = subscriptionsService.getSubscriptionAlerts({
     locale: options.locale || 'he',
   }).then((payload) => ({ available: true, payload })).catch((error) => {
@@ -386,6 +401,7 @@ async function getMoneyReview(options = {}) {
         generatedAt: new Date().toISOString(),
         truthRevision: subscriptionResult.payload?.truthRevision || 0,
         refreshState: 'ready',
+        forecastAccuracy,
         summary: buildSummary(items),
         items,
       };
@@ -517,6 +533,7 @@ module.exports = {
   updateMoneyReviewItem,
   utils: {
     buildSummary,
+    loadForecastAccuracy,
     normalizeNotificationResponse,
     normalizeReviewRow,
     notificationToSmartAction,

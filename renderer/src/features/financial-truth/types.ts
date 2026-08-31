@@ -17,6 +17,7 @@ export interface CorrectionTarget {
   amount?: number;
   frequency?: string;
   nextExpectedDate?: string;
+  isSubscription?: boolean;
   capabilities?: CorrectionAction[];
 }
 
@@ -34,6 +35,7 @@ export interface CorrectionDraft {
     nextExpectedDate?: string;
     billingDay?: number;
     monthlyAmount?: number;
+    isSubscription?: boolean;
   };
 }
 

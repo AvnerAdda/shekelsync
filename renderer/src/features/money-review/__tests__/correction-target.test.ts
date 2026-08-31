@@ -64,6 +64,21 @@ describe('Money Review correction targets', () => {
     });
   });
 
+  it('marks subscription-backed patterns as eligible for non-subscription classification', () => {
+    expect(buildMoneyReviewCorrectionTarget({
+      ...baseItem,
+      metadata: {
+        source: 'subscription',
+        patternId: 14,
+        data: { detected_amount: 52, detected_frequency: 'monthly' },
+      },
+    })).toMatchObject({
+      kind: 'pattern',
+      patternId: 14,
+      isSubscription: true,
+    });
+  });
+
   it('seeds forecast-backed category corrections with the projected monthly total', () => {
     expect(buildMoneyReviewCorrectionTarget({
       ...baseItem,
@@ -99,4 +114,3 @@ describe('Money Review correction targets', () => {
     })).toBeNull();
   });
 });
-

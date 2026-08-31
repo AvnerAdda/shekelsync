@@ -37,11 +37,27 @@ export interface MoneyReviewSummary {
   byGroup: Record<MoneyReviewGroup, number>;
 }
 
+export interface ForecastAccuracySummary {
+  available: boolean;
+  evaluationWindowDays: number;
+  readiness: 'collecting' | 'provisional' | 'established';
+  observedDays: number;
+  evaluatedFrom: string | null;
+  evaluatedThrough: string | null;
+  sampleCount: number;
+  expenseMae: number | null;
+  expenseMape: number | null;
+  cashFlowMae: number | null;
+  cashFlowBias: number | null;
+  intervalCoverage: number | null;
+}
+
 export interface MoneyReviewResponse {
   success: boolean;
   generatedAt: string;
   truthRevision?: number;
   refreshState?: 'pending' | 'ready';
+  forecastAccuracy?: ForecastAccuracySummary | null;
   summary: MoneyReviewSummary;
   items: MoneyReviewItem[];
 }

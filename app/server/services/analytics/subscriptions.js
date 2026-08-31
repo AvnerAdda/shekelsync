@@ -81,6 +81,97 @@ function missedChargeFreshnessDays(subscription) {
   return Math.min(120, Math.max(30, Math.ceil(intervalDays * 2)));
 }
 
+function addCalendarDays(dateValue, days) {
+  const parsed = parseDateOnlyParts(dateValue);
+  if (!parsed) return null;
+  const date = new Date(parsed.timestamp);
+  date.setUTCDate(date.getUTCDate() + days);
+  return date.toISOString().slice(0, 10);
+}
+
+function parseStoredAlert(row) {
+  if (!row) return row;
+  let correctionCapabilities = Array.isArray(row.correction_capabilities)
+    ? row.correction_capabilities
+    : [];
+  let timeScope = row.time_scope && typeof row.time_scope === 'object'
+    ? row.time_scope
+    : null;
+  if (row.correction_capabilities_json != null) {
+    try { correctionCapabilities = JSON.parse(row.correction_capabilities_json || '[]'); } catch { /* malformed legacy row */ }
+  }
+  if (row.time_scope_json != null) {
+    try { timeScope = JSON.parse(row.time_scope_json || 'null'); } catch { /* malformed legacy row */ }
+  }
+  return {
+    ...row,
+    correction_capabilities: Array.isArray(correctionCapabilities) ? correctionCapabilities : [],
+    time_scope: timeScope && typeof timeScope === 'object' ? timeScope : null,
+  };
+}
+
+async function persistDetectedAlerts(alerts) {
+  const persisted = [];
+  for (const alert of alerts) {
+    // A newly detected pattern may not have a subscription row yet. Keep that
+    // alert visible for this response; once the subscription is materialized,
+    // the deterministic identity below makes it durable and deduplicated.
+    if (!alert.subscription_id || !alert.identity_key) {
+      persisted.push(parseStoredAlert(alert));
+      continue;
+    }
+    const result = await database.query(`
+      INSERT INTO subscription_alerts (
+        subscription_id, alert_type, severity, title, description,
+        old_amount, new_amount, percentage_change, identity_key,
+        evidence_start_date, evidence_end_date, expected_date, days_past_due,
+        occurrence_id, correction_capabilities_json, time_scope_json, expires_at
+      ) VALUES (
+        $1, $2, $3, $4, $5, $6, $7, $8, $9,
+        $10, $11, $12, $13, $14, $15, $16, $17
+      )
+      ON CONFLICT(identity_key) WHERE identity_key IS NOT NULL DO UPDATE SET
+        severity = excluded.severity,
+        title = excluded.title,
+        description = excluded.description,
+        old_amount = excluded.old_amount,
+        new_amount = excluded.new_amount,
+        percentage_change = excluded.percentage_change,
+        evidence_start_date = excluded.evidence_start_date,
+        evidence_end_date = excluded.evidence_end_date,
+        expected_date = excluded.expected_date,
+        days_past_due = excluded.days_past_due,
+        occurrence_id = excluded.occurrence_id,
+        correction_capabilities_json = excluded.correction_capabilities_json,
+        time_scope_json = excluded.time_scope_json,
+        expires_at = excluded.expires_at
+      RETURNING id, is_dismissed, is_actioned, dismissed_at, actioned_at, action_taken, created_at
+    `, [
+      alert.subscription_id,
+      alert.alert_type,
+      alert.severity,
+      alert.title,
+      alert.description,
+      alert.old_amount,
+      alert.new_amount,
+      alert.percentage_change,
+      alert.identity_key,
+      alert.evidence_start_date || null,
+      alert.evidence_end_date || null,
+      alert.expected_date || null,
+      alert.days_past_due ?? null,
+      alert.occurrence_id || null,
+      JSON.stringify(alert.correction_capabilities || []),
+      JSON.stringify(alert.time_scope || {}),
+      alert.expires_at || null,
+    ]);
+    const stored = result.rows?.[0];
+    const normalized = parseStoredAlert({ ...alert, ...(stored || {}) });
+    if (!normalized.is_dismissed && !normalized.is_actioned) persisted.push(normalized);
+  }
+  return persisted;
+}
+
 /**
  * Calculate the next expected date based on frequency and last charge date
  */
@@ -176,6 +267,10 @@ async function getSubscriptions(options = {}) {
     const storedSub = storedSubsMap.get(pattern.pattern_key);
     const truthPattern = truthById.get(Number(storedSub?.financial_pattern_id || pattern.financial_pattern_id))
       || truthByName.get(recurringAnalyzerRef.normalizePatternKey(pattern.display_name || pattern.pattern_key));
+    if (truthPattern && !truthPattern.isSubscription) {
+      storedSubsMap.delete(pattern.pattern_key);
+      continue;
+    }
     const categoryDefinitionId = storedSub?.category_definition_id ?? pattern.category_definition_id ?? null;
     const truthStatus = truthPattern?.state === 'suppressed' || truthPattern?.state === 'ended'
       ? 'cancelled'
@@ -244,6 +339,7 @@ async function getSubscriptions(options = {}) {
 
     const truthPattern = truthById.get(Number(storedSub.financial_pattern_id))
       || truthByName.get(recurringAnalyzerRef.normalizePatternKey(storedSub.display_name || storedSub.pattern_key));
+    if (truthPattern && !truthPattern.isSubscription) continue;
     const resolvedStatus = truthPattern?.state === 'suppressed' || truthPattern?.state === 'ended'
       ? 'cancelled'
       : truthPattern?.state === 'paused' ? 'paused' : storedSub.status;
@@ -475,6 +571,7 @@ async function getSubscriptionAlerts(options = {}) {
     FROM subscription_alerts sa
     JOIN subscriptions s ON sa.subscription_id = s.id
     WHERE (sa.is_dismissed = 0 OR $1 = 1)
+      AND sa.is_actioned = 0
       AND s.status IN ('active', 'keep', 'review')
       AND ${activeSubscriptionAlertPredicate('sa')}
     ORDER BY
@@ -483,17 +580,21 @@ async function getSubscriptionAlerts(options = {}) {
     [include_dismissed ? 1 : 0]
   );
 
-  const alerts = alertsResult.rows || [];
+  const alerts = (alertsResult.rows || []).map(parseStoredAlert);
 
   // Detect new alerts from patterns
   const subscriptionResult = await getSubscriptions({ locale });
-  const newAlerts = await detectNewAlerts(locale, subscriptionResult);
+  const detectedAlerts = await detectNewAlerts(locale, subscriptionResult);
+  const newAlerts = await persistDetectedAlerts(detectedAlerts);
+  const storedIdentities = new Set(alerts.map((alert) => alert.identity_key).filter(Boolean));
+  const freshAlerts = newAlerts.filter((alert) => !storedIdentities.has(alert.identity_key));
+  const combined = [...alerts, ...freshAlerts];
 
   return {
-    alerts: [...alerts, ...newAlerts],
-    total_count: alerts.length + newAlerts.length,
-    critical_count: [...alerts, ...newAlerts].filter(a => a.severity === 'critical').length,
-    warning_count: [...alerts, ...newAlerts].filter(a => a.severity === 'warning').length,
+    alerts: combined,
+    total_count: combined.length,
+    critical_count: combined.filter(a => a.severity === 'critical').length,
+    warning_count: combined.filter(a => a.severity === 'warning').length,
     truthRevision: subscriptionResult.truthRevision || 0,
     refreshState: 'ready',
   };
@@ -510,6 +611,43 @@ async function detectNewAlerts(locale = 'he', existingSubscriptionResult = null)
   const today = new Date();
 
   for (const sub of subscriptions) {
+    if (sub.status === 'cancelled' && sub.id && sub.last_charge_date) {
+      const cancellationResult = await database.query(`
+        SELECT event_date
+        FROM subscription_history
+        WHERE subscription_id = $1
+          AND event_type = 'status_change'
+          AND new_value = 'cancelled'
+        ORDER BY event_date DESC, id DESC
+        LIMIT 1
+      `, [sub.id]);
+      const cancelledAt = String(cancellationResult.rows?.[0]?.event_date || '').slice(0, 10);
+      if (cancelledAt && String(sub.last_charge_date).slice(0, 10) > cancelledAt) {
+        const evidenceDate = String(sub.last_charge_date).slice(0, 10);
+        alerts.push({
+          id: null,
+          identity_key: `subscription:${sub.id}:cancelled_still_charging:${evidenceDate}`,
+          subscription_id: sub.id,
+          financial_pattern_id: sub.patternId || sub.financial_pattern_id || null,
+          subscription_name: sub.display_name,
+          alert_type: 'cancelled_still_charging',
+          severity: 'critical',
+          title: `${sub.display_name} charged after cancellation`,
+          description: `A charge was detected on ${evidenceDate}, after cancellation on ${cancelledAt}`,
+          old_amount: null,
+          new_amount: sub.user_amount || sub.detected_amount || null,
+          percentage_change: null,
+          evidence_start_date: cancelledAt,
+          evidence_end_date: evidenceDate,
+          time_scope: { kind: 'evidence_range', start: cancelledAt, end: evidenceDate },
+          correction_capabilities: ['suppress_pattern', 'end_pattern', 'override_pattern'],
+          expires_at: `${addCalendarDays(evidenceDate, PRICE_CHANGE_FRESHNESS_DAYS)}T23:59:59.999Z`,
+          is_dismissed: 0,
+          created_at: new Date().toISOString(),
+        });
+      }
+      continue;
+    }
     if (sub.status !== 'active' && sub.status !== 'keep') continue;
 
     // Check for price increases
@@ -562,6 +700,7 @@ async function detectNewAlerts(locale = 'he', existingSubscriptionResult = null)
         if (percentChange >= 5) {
           alerts.push({
             id: null, // Not stored yet
+            identity_key: `subscription:${sub.id}:price_increase:${currentChargeDate}:${Math.round(current * 100)}`,
             subscription_id: sub.id,
             financial_pattern_id: sub.patternId || sub.financial_pattern_id || null,
             subscription_name: sub.display_name,
@@ -582,10 +721,87 @@ async function detectNewAlerts(locale = 'he', existingSubscriptionResult = null)
               end: currentChargeDate,
             },
             correction_capabilities: ['suppress_pattern', 'end_pattern', 'pause_pattern', 'override_pattern'],
+            expires_at: `${addCalendarDays(currentChargeDate, PRICE_CHANGE_FRESHNESS_DAYS)}T23:59:59.999Z`,
             is_dismissed: 0,
             created_at: new Date().toISOString()
           });
         }
+      } else if (hasFreshEvidence && previous > 0 && current < previous) {
+        const percentChange = ((current - previous) / previous) * 100;
+        if (percentChange <= -5) {
+          alerts.push({
+            id: null,
+            identity_key: `subscription:${sub.id}:price_decrease:${currentChargeDate}:${Math.round(current * 100)}`,
+            subscription_id: sub.id,
+            financial_pattern_id: sub.patternId || sub.financial_pattern_id || null,
+            subscription_name: sub.display_name,
+            alert_type: 'price_decrease',
+            severity: 'info',
+            title: `Price decrease detected for ${sub.display_name}`,
+            description: `The price decreased from ${previous.toFixed(2)} to ${current.toFixed(2)} (${Math.abs(percentChange).toFixed(1)}% decrease)`,
+            old_amount: previous,
+            new_amount: current,
+            percentage_change: Math.round(percentChange * 100) / 100,
+            evidence_start_date: previousChargeDate,
+            evidence_end_date: currentChargeDate,
+            time_scope: { kind: 'evidence_range', start: previousChargeDate, end: currentChargeDate },
+            correction_capabilities: ['override_pattern'],
+            expires_at: `${addCalendarDays(currentChargeDate, PRICE_CHANGE_FRESHNESS_DAYS)}T23:59:59.999Z`,
+            is_dismissed: 0,
+            created_at: new Date().toISOString(),
+          });
+        }
+      }
+    }
+
+    if (sub.id) {
+      const duplicateResult = await database.query(`
+        SELECT substr(t.date, 1, 10) AS charge_date,
+          ROUND(ABS(t.price), 2) AS amount,
+          COUNT(*) AS charge_count
+        FROM transactions t
+        WHERE LOWER(TRIM(COALESCE(t.name, t.vendor))) = LOWER(TRIM($1))
+          AND t.status = 'completed'
+          AND t.category_type = 'expense'
+          AND t.price < 0
+          AND t.date >= date('now', '-14 days')
+        GROUP BY substr(t.date, 1, 10), ROUND(ABS(t.price), 2)
+        HAVING COUNT(*) >= 2
+        ORDER BY charge_date DESC
+        LIMIT 1
+      `, [sub.display_name]);
+      const duplicate = duplicateResult.rows?.[0];
+      if (duplicate) {
+        const duplicateDate = String(duplicate.charge_date).slice(0, 10);
+        const amount = Number(duplicate.amount) || 0;
+        const duplicatePatternId = sub.patternId || sub.financial_pattern_id || null;
+        const occurrenceId = duplicatePatternId
+          ? `pattern:${duplicatePatternId}:${duplicateDate}`
+          : null;
+        alerts.push({
+          id: null,
+          identity_key: `subscription:${sub.id}:duplicate:${duplicateDate}:${Math.round(amount * 100)}`,
+          subscription_id: sub.id,
+          financial_pattern_id: duplicatePatternId,
+          occurrence_id: occurrenceId,
+          subscription_name: sub.display_name,
+          alert_type: 'duplicate',
+          severity: 'warning',
+          title: `Possible duplicate charge for ${sub.display_name}`,
+          description: `${duplicate.charge_count} charges of ${amount.toFixed(2)} were detected on ${duplicateDate}`,
+          old_amount: amount,
+          new_amount: amount,
+          percentage_change: 0,
+          evidence_start_date: duplicateDate,
+          evidence_end_date: duplicateDate,
+          time_scope: { kind: 'evidence_range', start: duplicateDate, end: duplicateDate },
+          correction_capabilities: occurrenceId
+            ? ['skip_occurrence', 'override_pattern']
+            : ['override_pattern'],
+          expires_at: `${addCalendarDays(duplicateDate, PRICE_CHANGE_FRESHNESS_DAYS)}T23:59:59.999Z`,
+          is_dismissed: 0,
+          created_at: new Date().toISOString(),
+        });
       }
     }
 
@@ -601,6 +817,7 @@ async function detectNewAlerts(locale = 'he', existingSubscriptionResult = null)
           : null;
         alerts.push({
           id: null,
+          identity_key: `subscription:${sub.id}:missed_charge:${sub.next_expected_date}`,
           subscription_id: sub.id,
           financial_pattern_id: patternId,
           occurrence_id: occurrenceId,
@@ -623,8 +840,36 @@ async function detectNewAlerts(locale = 'he', existingSubscriptionResult = null)
           correction_capabilities: occurrenceId
             ? ['skip_occurrence', 'suppress_pattern', 'end_pattern', 'pause_pattern', 'override_pattern']
             : ['suppress_pattern', 'end_pattern', 'pause_pattern', 'override_pattern'],
+          expires_at: `${addCalendarDays(sub.next_expected_date, freshnessDays)}T23:59:59.999Z`,
           is_dismissed: 0,
           created_at: new Date().toISOString()
+        });
+      }
+    }
+
+    const effectiveFrequency = sub.user_frequency || sub.detected_frequency;
+    if (sub.next_expected_date && ['quarterly', 'yearly'].includes(effectiveFrequency)) {
+      const daysUntilRenewal = -calendarDaysSince(sub.next_expected_date, today);
+      if (daysUntilRenewal >= 0 && daysUntilRenewal <= 14) {
+        alerts.push({
+          id: null,
+          identity_key: `subscription:${sub.id}:upcoming_renewal:${sub.next_expected_date}`,
+          subscription_id: sub.id,
+          financial_pattern_id: sub.patternId || sub.financial_pattern_id || null,
+          subscription_name: sub.display_name,
+          alert_type: 'upcoming_renewal',
+          severity: 'info',
+          title: `${sub.display_name} renews soon`,
+          description: `The next expected charge is ${sub.next_expected_date}`,
+          old_amount: null,
+          new_amount: sub.user_amount || sub.detected_amount || null,
+          percentage_change: null,
+          expected_date: sub.next_expected_date,
+          time_scope: { kind: 'upcoming_until', end: sub.next_expected_date },
+          correction_capabilities: ['pause_pattern', 'end_pattern', 'override_pattern'],
+          expires_at: `${sub.next_expected_date}T23:59:59.999Z`,
+          is_dismissed: 0,
+          created_at: new Date().toISOString(),
         });
       }
     }

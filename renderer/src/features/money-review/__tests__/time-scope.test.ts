@@ -76,6 +76,18 @@ describe('Money Review time scopes', () => {
     });
   });
 
+  it('shows the expected date for upcoming renewal alerts', () => {
+    expect(buildMoneyReviewTimeScopeLabel({
+      ...baseItem,
+      metadata: {
+        timeScope: { kind: 'upcoming_until', end: '2026-09-02' },
+      },
+    }, 'en')).toEqual({
+      key: 'timeScope.upcomingOn',
+      values: { date: 'Sep 2, 2026' },
+    });
+  });
+
   it('dates legacy cash items that do not yet carry explicit scope metadata', () => {
     expect(buildMoneyReviewTimeScopeLabel(baseItem, 'en')).toEqual({
       key: 'timeScope.detectedOn',

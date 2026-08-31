@@ -63,7 +63,7 @@ describe('notifications service', () => {
     });
 
     vi.spyOn(database, 'getClient').mockResolvedValue(client);
-    vi.spyOn(forecastService, 'generateDailyForecast').mockResolvedValue({
+    vi.spyOn(forecastService, 'getForecast').mockResolvedValue({
       generated: '2026-02-09T12:00:00.000Z',
       budgetOutlook: [],
     });
@@ -110,7 +110,7 @@ describe('notifications service', () => {
       return { rows: [] };
     });
     vi.spyOn(database, 'getClient').mockResolvedValue(client);
-    vi.spyOn(forecastService, 'generateDailyForecast').mockResolvedValue({ budgetOutlook: [] });
+    vi.spyOn(forecastService, 'getForecast').mockResolvedValue({ budgetOutlook: [] });
 
     const result = await notificationsService.getNotifications({ type: 'budget_warning' });
 
@@ -125,7 +125,7 @@ describe('notifications service', () => {
   it('generates projected-budget alerts from forecast output', async () => {
     const client = createMockClient();
     vi.spyOn(database, 'getClient').mockResolvedValue(client);
-    vi.spyOn(forecastService, 'generateDailyForecast').mockResolvedValue({
+    vi.spyOn(forecastService, 'getForecast').mockResolvedValue({
       generated: '2026-02-09T12:00:00.000Z',
       budgetOutlook: [
         {
@@ -198,7 +198,7 @@ describe('notifications service', () => {
     });
 
     vi.spyOn(database, 'getClient').mockResolvedValue(client);
-    vi.spyOn(forecastService, 'generateDailyForecast').mockResolvedValue({
+    vi.spyOn(forecastService, 'getForecast').mockResolvedValue({
       generated: '2026-02-09T12:00:00.000Z',
       budgetOutlook: [],
     });
@@ -243,7 +243,7 @@ describe('notifications service', () => {
     });
 
     vi.spyOn(database, 'getClient').mockResolvedValue(client);
-    vi.spyOn(forecastService, 'generateDailyForecast').mockResolvedValue({
+    vi.spyOn(forecastService, 'getForecast').mockResolvedValue({
       generated: '2026-02-09T12:00:00.000Z',
       budgetOutlook: [],
     });
@@ -270,7 +270,7 @@ describe('notifications service', () => {
     });
 
     vi.spyOn(database, 'getClient').mockResolvedValue(client);
-    vi.spyOn(forecastService, 'generateDailyForecast').mockResolvedValue({
+    vi.spyOn(forecastService, 'getForecast').mockResolvedValue({
       generated: '2026-02-09T12:00:00.000Z',
       budgetOutlook: [],
     });
@@ -292,7 +292,7 @@ describe('notifications service', () => {
     });
 
     vi.spyOn(database, 'getClient').mockResolvedValue(client);
-    vi.spyOn(forecastService, 'generateDailyForecast').mockResolvedValue({
+    vi.spyOn(forecastService, 'getForecast').mockResolvedValue({
       generated: '2026-02-09T12:00:00.000Z',
       budgetOutlook: [],
     });
@@ -334,7 +334,7 @@ describe('notifications service', () => {
     });
 
     vi.spyOn(database, 'getClient').mockResolvedValue(client);
-    vi.spyOn(forecastService, 'generateDailyForecast').mockResolvedValue({
+    vi.spyOn(forecastService, 'getForecast').mockResolvedValue({
       generated: '2026-02-09T12:00:00.000Z',
       budgetOutlook: [],
     });
@@ -379,7 +379,7 @@ describe('notifications service', () => {
     });
 
     vi.spyOn(database, 'getClient').mockResolvedValue(client);
-    vi.spyOn(forecastService, 'generateDailyForecast').mockResolvedValue({
+    vi.spyOn(forecastService, 'getForecast').mockResolvedValue({
       generated: '2026-02-09T12:00:00.000Z',
       budgetOutlook: [],
     });
@@ -421,7 +421,7 @@ describe('notifications service', () => {
     });
 
     vi.spyOn(database, 'getClient').mockResolvedValueOnce(newVendorClient);
-    vi.spyOn(forecastService, 'generateDailyForecast').mockResolvedValue({
+    vi.spyOn(forecastService, 'getForecast').mockResolvedValue({
       generated: '2026-02-09T12:00:00.000Z',
       budgetOutlook: [],
     });
@@ -470,7 +470,7 @@ describe('notifications service', () => {
     });
 
     vi.spyOn(database, 'getClient').mockResolvedValue(client);
-    vi.spyOn(forecastService, 'generateDailyForecast').mockResolvedValue({
+    vi.spyOn(forecastService, 'getForecast').mockResolvedValue({
       generated: '2026-02-09T12:00:00.000Z',
       budgetOutlook: [],
     });
@@ -485,7 +485,7 @@ describe('notifications service', () => {
   it('does not fail notifications when forecast generation fails for budget projected type', async () => {
     const client = createMockClient();
     vi.spyOn(database, 'getClient').mockResolvedValue(client);
-    vi.spyOn(forecastService, 'generateDailyForecast').mockRejectedValue(new Error('forecast unavailable'));
+    vi.spyOn(forecastService, 'getForecast').mockRejectedValue(new Error('forecast unavailable'));
 
     const result = await notificationsService.getNotifications({ type: 'budget_projected' });
 
@@ -516,7 +516,7 @@ describe('notifications service', () => {
     });
 
     vi.spyOn(database, 'getClient').mockResolvedValue(client);
-    vi.spyOn(forecastService, 'generateDailyForecast').mockResolvedValue({
+    vi.spyOn(forecastService, 'getForecast').mockResolvedValue({
       generated: '2026-02-09T12:00:00.000Z',
       budgetOutlook: [],
     });
