@@ -1235,9 +1235,33 @@ const TABLE_DEFINITIONS = [
       is_actioned INTEGER DEFAULT 0 CHECK(is_actioned IN (0, 1)),
       actioned_at TEXT,
       action_taken TEXT,
+      identity_key TEXT,
+      evidence_start_date TEXT,
+      evidence_end_date TEXT,
+      expected_date TEXT,
+      days_past_due INTEGER,
+      occurrence_id TEXT,
+      correction_capabilities_json TEXT NOT NULL DEFAULT '[]',
+      time_scope_json TEXT NOT NULL DEFAULT '{}',
       created_at TEXT NOT NULL DEFAULT (datetime('now')),
       expires_at TEXT,
       FOREIGN KEY (subscription_id) REFERENCES subscriptions(id) ON DELETE CASCADE
+    );`,
+  `CREATE TABLE IF NOT EXISTS forecast_prediction_snapshots (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      generated_date TEXT NOT NULL,
+      target_date TEXT NOT NULL,
+      truth_revision INTEGER NOT NULL DEFAULT 0,
+      horizon_days INTEGER NOT NULL,
+      expected_income REAL NOT NULL DEFAULT 0,
+      expected_expenses REAL NOT NULL DEFAULT 0,
+      expected_cash_flow REAL NOT NULL DEFAULT 0,
+      p10_cash_flow REAL,
+      p50_cash_flow REAL,
+      p90_cash_flow REAL,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+      UNIQUE(generated_date, target_date, truth_revision)
     );`,
   `CREATE TABLE IF NOT EXISTS financial_patterns (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -1519,7 +1543,9 @@ const INDEX_STATEMENTS = [
   'CREATE INDEX IF NOT EXISTS idx_subscription_alerts_type ON subscription_alerts(alert_type);',
   'CREATE INDEX IF NOT EXISTS idx_subscription_alerts_dismissed ON subscription_alerts(is_dismissed);',
   'CREATE INDEX IF NOT EXISTS idx_subscription_alerts_severity ON subscription_alerts(severity);',
-  'CREATE INDEX IF NOT EXISTS idx_subscription_alerts_created ON subscription_alerts(created_at DESC);'
+  'CREATE INDEX IF NOT EXISTS idx_subscription_alerts_created ON subscription_alerts(created_at DESC);',
+  'CREATE UNIQUE INDEX IF NOT EXISTS idx_subscription_alerts_identity ON subscription_alerts(identity_key) WHERE identity_key IS NOT NULL;',
+  'CREATE INDEX IF NOT EXISTS idx_forecast_prediction_snapshots_target ON forecast_prediction_snapshots(target_date, horizon_days);'
 ];
 
 // FTS5 Full-Text Search Setup for SQLite

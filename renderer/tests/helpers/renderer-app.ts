@@ -1513,7 +1513,11 @@ export async function setupRendererTest(
 
 export const goHome = async (page: Page) => {
   await page.goto('/#/', { waitUntil: 'domcontentloaded' });
-  await expect(page.getByRole('banner').getByText('ShekelSync', { exact: true })).toBeVisible();
+  // Parallel workers can remain on the launch screen while Vite compiles the
+  // application shell. Keep this aligned with the dashboard readiness budget.
+  await expect(page.getByRole('banner').getByText('ShekelSync', { exact: true })).toBeVisible({
+    timeout: 30_000,
+  });
   await expect(page.locator('[data-dashboard-ready="true"]')).toBeVisible({ timeout: 30_000 });
 };
 

@@ -81,14 +81,16 @@ function createSqliteDb() {
 function buildApp(
   generateForecast = createGenerateForecastMock(),
   sqliteDb = createSqliteDb(),
+  evaluateForecast = vi.fn().mockResolvedValue({ available: false, sampleCount: 0 }),
 ) {
   const app = express();
   app.use(express.json());
   app.use('/api/forecast', createForecastRouter({
     sqliteDb,
     generateForecast,
+    evaluateForecast,
   }));
-  return { app, generateForecast };
+  return { app, generateForecast, evaluateForecast };
 }
 
 describe('Shared /api/forecast routes', () => {
@@ -338,5 +340,28 @@ describe('Shared /api/forecast routes', () => {
     expect(invalidBudgetDays.body.error).toBe('budgetDays must be between 1 and 365');
     expect(invalidMonths.body.error).toBe('months must be between 1 and 24');
     expect(generateForecast).not.toHaveBeenCalled();
+  });
+
+  it('exposes bounded realized forecast accuracy without generating a new forecast', async () => {
+    const { app, generateForecast, evaluateForecast } = buildApp();
+    evaluateForecast.mockResolvedValue({
+      available: true,
+      evaluationWindowDays: 120,
+      sampleCount: 42,
+      expenseMae: 18.5,
+    });
+
+    const response = await request(app)
+      .get('/api/forecast/accuracy?days=120')
+      .expect(200);
+
+    expect(response.body).toMatchObject({ available: true, sampleCount: 42, expenseMae: 18.5 });
+    expect(evaluateForecast).toHaveBeenCalledWith({ days: 120 });
+    expect(generateForecast).not.toHaveBeenCalled();
+
+    const invalid = await request(app)
+      .get('/api/forecast/accuracy?days=2')
+      .expect(400);
+    expect(invalid.body.error).toBe('days must be between 7 and 365');
   });
 });

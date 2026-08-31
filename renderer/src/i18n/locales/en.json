@@ -59,6 +59,21 @@
     "subtitle": "Your most important financial tasks, ordered by priority and ready to act on.",
     "updatedAt": "Updated at {{time}}",
     "loading": "Loading Money Review",
+    "forecastAccuracy": {
+      "collecting": "Forecast learning · {{count}} days",
+      "provisional": "Forecast provisional · {{mape}}% error",
+      "established": "Forecast measured · {{mape}}% error",
+      "details": "{{samples}} realized predictions · average expense error {{mae}} · uncertainty coverage {{coverage}}"
+    },
+    "timeScope": {
+      "currentMonth": "{{month}}",
+      "rollingDays": "Last {{count}} days",
+      "rollingRange": "{{count}}-day window · {{start}}–{{end}}",
+      "evidenceRange": "Charges from {{start}} to {{end}}",
+      "overdueSince": "Overdue since {{date}}",
+      "upcomingOn": "Expected on {{date}}",
+      "detectedOn": "Detected on {{date}}"
+    },
     "dashboard": {
       "summary": "{{count}} items · ~{{minutes}} min",
       "reviewAll": "Review all",
@@ -178,8 +193,12 @@
       "dismiss": "Dismiss",
       "dismissHint": "Remove this item from your review",
       "more": "More actions",
+      "details": "Review details",
       "reopen": "Reopen",
       "reopenNow": "Bring back now",
+      "acceptQuest": "Accept challenge",
+      "viewQuest": "View challenge",
+      "declineQuest": "Not now",
       "clearFilter": "Clear filter"
     },
     "snooze": {
@@ -235,6 +254,8 @@
       },
       "resolved": "Item completed.",
       "dismissed": "Item dismissed.",
+      "questAccepted": "Challenge accepted.",
+      "questDeclined": "Challenge removed.",
       "syncStarted": "Account sync started."
     },
     "privacy": "Money Review is generated and stored locally. External AI is not required."
@@ -3968,6 +3989,7 @@
     "amount": "Amount",
     "frequency": "Frequency",
     "nextExpectedDate": "Next expected date",
+    "notSubscription": "This is recurring, but not a subscription (keep it in the forecast)",
     "calculating": "Calculating impact…",
     "impactTitle": "What will change",
     "impactValues": "Estimated impact: {{monthly}} per month · {{sixMonth}} over six months",

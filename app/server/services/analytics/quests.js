@@ -24,6 +24,76 @@ function containsInsensitive(column, placeholder) {
   return `LOWER(${column}) LIKE '%' || LOWER(${placeholder}) || '%'`;
 }
 
+async function getCategoryQuestTransactions(client, categoryDefinitionId, startDate, endDate = null) {
+  const endClause = endDate ? 'AND t.date <= $3' : '';
+  const params = endDate
+    ? [categoryDefinitionId, startDate, endDate]
+    : [categoryDefinitionId, startDate];
+  const result = await client.query(`
+    WITH RECURSIVE category_tree(id) AS (
+      SELECT id FROM category_definitions WHERE id = $1
+      UNION ALL
+      SELECT child.id FROM category_definitions child
+      JOIN category_tree parent ON child.parent_id = parent.id
+    )
+    SELECT t.identifier, t.vendor, ABS(t.price) AS amount
+    FROM transactions t
+    LEFT JOIN (SELECT DISTINCT transaction_identifier, transaction_vendor FROM transaction_pairing_exclusions) excluded
+      ON excluded.transaction_identifier = t.identifier AND excluded.transaction_vendor = t.vendor
+    WHERE t.category_definition_id IN (SELECT id FROM category_tree)
+      AND t.status = 'completed'
+      AND t.date >= $2
+      ${endClause}
+      AND t.price < 0
+      AND excluded.transaction_identifier IS NULL
+  `, params);
+  return result.rows || [];
+}
+
+function summarizeQuestTransactions(rows) {
+  const amounts = (rows || []).map((row) => coerceNumber(row.amount));
+  return {
+    count: amounts.length,
+    total: amounts.reduce((sum, amount) => sum + amount, 0),
+    average: amounts.length ? amounts.reduce((sum, amount) => sum + amount, 0) / amounts.length : 0,
+  };
+}
+
+async function getFilteredQuestMetric(client, criteria, startDate, endDate) {
+  if (criteria.type === 'spending_limit' || criteria.type === 'budget_adherence' || criteria.type === 'fixed_cost_reduction') {
+    const rows = await getCategoryQuestTransactions(
+      client,
+      criteria.category_definition_id,
+      startDate,
+      endDate,
+    );
+    return summarizeQuestTransactions(rows);
+  }
+
+  let extraCondition = '';
+  const params = [startDate, endDate];
+  if (criteria.type === 'merchant_frequency_limit') {
+    extraCondition = `AND ${containsInsensitive('COALESCE(t.name, t.vendor)', '$3')}`;
+    params.push(criteria.merchant_pattern);
+  } else if (criteria.type === 'weekend_spending_limit') {
+    extraCondition = "AND CAST(strftime('%w', t.date) AS INTEGER) IN (0, 5, 6)";
+  } else {
+    return { count: 0, total: 0, average: 0 };
+  }
+  const result = await client.query(`
+    SELECT t.identifier, t.vendor, ABS(t.price) AS amount
+    FROM transactions t
+    LEFT JOIN (SELECT DISTINCT transaction_identifier, transaction_vendor FROM transaction_pairing_exclusions) excluded
+      ON excluded.transaction_identifier = t.identifier AND excluded.transaction_vendor = t.vendor
+    WHERE t.status = 'completed'
+      AND t.date >= $1 AND t.date <= $2
+      AND t.price < 0
+      AND excluded.transaction_identifier IS NULL
+      ${extraCondition}
+  `, params);
+  return summarizeQuestTransactions(result.rows || []);
+}
+
 function quoteSqliteIdentifier(value) {
   return `"${String(value).replace(/"/g, '""')}"`;
 }
@@ -266,6 +336,17 @@ function coerceNumber(value) {
   return Number.isFinite(num) ? num : 0;
 }
 
+function parseQuestJson(value) {
+  if (!value) return {};
+  if (typeof value === 'object') return value;
+  try {
+    const parsed = JSON.parse(value);
+    return parsed && typeof parsed === 'object' ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
 function computeWeeklyBaselineStats(weeklyTotals) {
   const totals = Array.isArray(weeklyTotals) ? weeklyTotals.map(coerceNumber) : [];
   const weeksWithSpend = totals.filter((amount) => amount > 0).length;
@@ -340,6 +421,23 @@ function isPatternStale(pattern) {
 function normalizeCategoryKey(value) {
   if (!value) return '';
   return String(value).trim().toLowerCase();
+}
+
+function buildQuestRecurrenceKey(quest, now = new Date()) {
+  const metadata = parseQuestJson(quest?.metadata);
+  const merchantKey = String(metadata.merchant_name || '')
+    .trim()
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}]+/gu, '_')
+    .replace(/^_+|_+$/g, '')
+    .slice(0, 80);
+  const subjectKey = quest?.trigger_category_id
+    ? `category_${quest.trigger_category_id}`
+    : merchantKey
+      ? `merchant_${merchantKey}`
+      : 'global';
+  const recurrencePrefix = `${now.getFullYear()}_${String(now.getMonth() + 1).padStart(2, '0')}`;
+  return `${quest.action_type}_${subjectKey}_${recurrencePrefix}`;
 }
 
 function resolveCategoryId(pattern, categoryIdByName) {
@@ -753,7 +851,7 @@ async function getActiveQuestCount(client) {
     SELECT COUNT(*) as count
     FROM smart_action_items
     WHERE action_type LIKE 'quest_%'
-      AND user_status = 'accepted'
+      AND user_status IN ('active', 'accepted')
   `);
   return parseInt(result.rows[0]?.count || 0, 10);
 }
@@ -773,7 +871,7 @@ async function generateQuests(params = {}) {
     // Check current active quest count
     const activeCount = await getActiveQuestCount(client);
     console.log('[Quests] Active quest count:', activeCount, 'MAX:', MAX_ACTIVE_QUESTS);
-    if (activeCount >= MAX_ACTIVE_QUESTS && !force) {
+    if (activeCount >= MAX_ACTIVE_QUESTS) {
       return {
         success: true,
         message: `Maximum active quests reached (${MAX_ACTIVE_QUESTS})`,
@@ -1009,6 +1107,8 @@ async function generateQuests(params = {}) {
           type: 'budget_adherence',
           category_definition_id: item.categoryDefinitionId,
           budget_id: item.budgetId,
+          target_amount: remainingBudget,
+          baseline_spent: item.actualSpent,
           target_limit: item.limit,
           comparison: 'less_than_or_equal',
         }),
@@ -1233,10 +1333,9 @@ async function generateQuests(params = {}) {
     // Save quests to database
     let created = 0;
     const now = new Date();
-    const recurrencePrefix = `${now.getFullYear()}_${String(now.getMonth() + 1).padStart(2, '0')}`;
 
     for (const quest of quests) {
-      const recurrenceKey = `${quest.action_type}_${quest.trigger_category_id || 'global'}_${recurrencePrefix}`;
+      const recurrenceKey = buildQuestRecurrenceKey(quest, now);
 
       // Check for existing quest
       const existingResult = await client.query(`
@@ -1451,32 +1550,29 @@ async function verifyQuestCompletion(questId, manualResult = null) {
           const startDate = quest.accepted_at;
           const endDate = quest.deadline || new Date().toISOString();
 
-          const spendingResult = await client.query(`
-            SELECT COALESCE(SUM(ABS(price)), 0) as total_spent
-            FROM transactions
-            WHERE category_definition_id = $1
-              AND date >= $2 AND date <= $3
-              AND price < 0
-          `, [criteria.category_definition_id, startDate.split('T')[0], endDate.split('T')[0]]);
-
-          actualValue = parseFloat(spendingResult.rows[0]?.total_spent || 0);
+          const metric = await getFilteredQuestMetric(
+            client,
+            criteria,
+            startDate.split('T')[0],
+            endDate.split('T')[0],
+          );
+          actualValue = metric.total;
           success = actualValue <= criteria.target_amount;
           achievementPct = criteria.target_amount > 0 ? Math.round((1 - actualValue / criteria.target_amount) * 100 + 100) : 100;
           break;
         }
 
         case 'budget_adherence': {
-          const spendingResult = await client.query(`
-            SELECT COALESCE(SUM(ABS(price)), 0) as total_spent
-            FROM transactions
-            WHERE category_definition_id = $1
-              AND date >= $2 AND date <= $3
-              AND price < 0
-          `, [criteria.category_definition_id, quest.accepted_at.split('T')[0], (quest.deadline || new Date().toISOString()).split('T')[0]]);
-
-          actualValue = parseFloat(spendingResult.rows[0]?.total_spent || 0);
-          success = actualValue <= criteria.target_limit;
-          achievementPct = criteria.target_limit > 0 ? Math.round((1 - actualValue / criteria.target_limit) * 100 + 100) : 100;
+          const metric = await getFilteredQuestMetric(
+            client,
+            criteria,
+            quest.accepted_at.split('T')[0],
+            (quest.deadline || new Date().toISOString()).split('T')[0],
+          );
+          const target = Number(criteria.target_amount ?? criteria.target_limit) || 0;
+          actualValue = metric.total;
+          success = actualValue <= target;
+          achievementPct = target > 0 ? Math.round((1 - actualValue / target) * 100 + 100) : 100;
           break;
         }
 
@@ -1494,15 +1590,13 @@ async function verifyQuestCompletion(questId, manualResult = null) {
 
         case 'fixed_cost_reduction': {
           // Compare recent spending to baseline
-          const recentResult = await client.query(`
-            SELECT AVG(ABS(price)) as avg_recent
-            FROM transactions
-            WHERE category_definition_id = $1
-              AND date >= $2
-              AND price < 0
-          `, [criteria.category_definition_id, quest.accepted_at.split('T')[0]]);
-
-          actualValue = parseFloat(recentResult.rows[0]?.avg_recent || criteria.baseline_amount);
+          const metric = await getFilteredQuestMetric(
+            client,
+            criteria,
+            quest.accepted_at.split('T')[0],
+            (quest.deadline || new Date().toISOString()).split('T')[0],
+          );
+          actualValue = metric.count > 0 ? metric.average : criteria.baseline_amount;
           success = actualValue < criteria.baseline_amount;
           achievementPct = success ? Math.round((1 - actualValue / criteria.baseline_amount) * 100 + 100) : 0;
           break;
@@ -1520,19 +1614,10 @@ async function verifyQuestCompletion(questId, manualResult = null) {
 
         case 'merchant_frequency_limit': {
           // Count transactions matching merchant pattern during quest period
-          const merchantCount = await client.query(`
-            SELECT COUNT(*) as cnt
-            FROM transactions
-            WHERE date >= $1 AND date <= $2
-              AND ${containsInsensitive('name', '$3')}
-              AND price < 0
-          `, [
+          const metric = await getFilteredQuestMetric(client, criteria,
             quest.accepted_at.split('T')[0],
-            (quest.deadline || new Date().toISOString()).split('T')[0],
-            criteria.merchant_pattern,
-          ]);
-
-          actualValue = parseInt(merchantCount.rows[0]?.cnt || 0, 10);
+            (quest.deadline || new Date().toISOString()).split('T')[0]);
+          actualValue = metric.count;
           success = actualValue <= criteria.max_transactions;
           // Achievement: how much under the limit (inverted scale)
           achievementPct = criteria.max_transactions > 0
@@ -1544,18 +1629,10 @@ async function verifyQuestCompletion(questId, manualResult = null) {
 
         case 'weekend_spending_limit': {
           // Sum weekend spending during quest period
-          const weekendSpending = await client.query(`
-            SELECT COALESCE(SUM(ABS(price)), 0) as total
-            FROM transactions
-            WHERE date >= $1 AND date <= $2
-              AND price < 0
-              AND CAST(strftime('%w', date) AS INTEGER) IN (0, 5, 6)
-          `, [
+          const metric = await getFilteredQuestMetric(client, criteria,
             quest.accepted_at.split('T')[0],
-            (quest.deadline || new Date().toISOString()).split('T')[0],
-          ]);
-
-          actualValue = parseFloat(weekendSpending.rows[0]?.total || 0);
+            (quest.deadline || new Date().toISOString()).split('T')[0]);
+          actualValue = metric.total;
           success = actualValue <= criteria.target_amount;
           achievementPct = criteria.target_amount > 0
             ? Math.round((1 - actualValue / criteria.target_amount) * 100 + 100)
@@ -1754,16 +1831,14 @@ async function getActiveQuests(params = {}) {
 
         if (criteria.type === 'spending_limit' || criteria.type === 'budget_adherence') {
           const startDate = row.accepted_at;
-          const spendingResult = await client.query(`
-            SELECT COALESCE(SUM(ABS(price)), 0) as total_spent
-            FROM transactions
-            WHERE category_definition_id = $1
-              AND date >= $2
-              AND price < 0
-          `, [criteria.category_definition_id, startDate.split('T')[0]]);
-
-          const spent = parseFloat(spendingResult.rows[0]?.total_spent || 0);
-          const target = criteria.target_amount || criteria.target_limit || 0;
+          const metric = await getFilteredQuestMetric(
+            client,
+            criteria,
+            startDate.split('T')[0],
+            (row.deadline || new Date().toISOString()).split('T')[0],
+          );
+          const spent = metric.total;
+          const target = Number(criteria.target_amount ?? criteria.target_limit) || 0;
           progress = {
             current: spent,
             target,
@@ -1772,15 +1847,13 @@ async function getActiveQuests(params = {}) {
           };
         } else if (criteria.type === 'merchant_frequency_limit') {
           const startDate = row.accepted_at;
-          const countResult = await client.query(`
-            SELECT COUNT(*) as cnt
-            FROM transactions
-            WHERE date >= $1
-              AND ${containsInsensitive('name', '$2')}
-              AND price < 0
-          `, [startDate.split('T')[0], criteria.merchant_pattern]);
-
-          const current = parseInt(countResult.rows[0]?.cnt || 0, 10);
+          const metric = await getFilteredQuestMetric(
+            client,
+            criteria,
+            startDate.split('T')[0],
+            (row.deadline || new Date().toISOString()).split('T')[0],
+          );
+          const current = metric.count;
           const target = criteria.max_transactions || 0;
           progress = {
             current,
@@ -1790,15 +1863,13 @@ async function getActiveQuests(params = {}) {
           };
         } else if (criteria.type === 'weekend_spending_limit') {
           const startDate = row.accepted_at;
-          const spendingResult = await client.query(`
-            SELECT COALESCE(SUM(ABS(price)), 0) as total_spent
-            FROM transactions
-            WHERE date >= $1
-              AND price < 0
-              AND CAST(strftime('%w', date) AS INTEGER) IN (0, 5, 6)
-          `, [startDate.split('T')[0]]);
-
-          const spent = parseFloat(spendingResult.rows[0]?.total_spent || 0);
+          const metric = await getFilteredQuestMetric(
+            client,
+            criteria,
+            startDate.split('T')[0],
+            (row.deadline || new Date().toISOString()).split('T')[0],
+          );
+          const spent = metric.total;
           const target = criteria.target_amount || 0;
           progress = {
             current: spent,
@@ -1978,6 +2049,7 @@ module.exports = {
     isBaselineMeaningful,
     isPatternStale,
     normalizeCategoryKey,
+    buildQuestRecurrenceKey,
     resolveCategoryId,
     computeReductionPct,
     getDaysRemainingInMonth,

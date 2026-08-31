@@ -48,7 +48,7 @@ describe('subscriptions service', () => {
   });
 
   it('merges detected patterns with stored and manual subscriptions', async () => {
-    configureService({
+    const { query } = configureService({
       patterns: [
         {
           pattern_key: 'netflix',
@@ -124,6 +124,45 @@ describe('subscriptions service', () => {
     expect(result.subscriptions[0].category_name).toBe('Entertainment');
     expect(result.subscriptions[1].display_name).toBe('Gym Membership');
     expect(result.subscriptions[1].occurrence_count).toBe(0);
+  });
+
+  it('removes recurring patterns explicitly classified as non-subscriptions', async () => {
+    configureService({
+      patterns: [{
+        pattern_key: 'rent',
+        display_name: 'Rent',
+        detected_frequency: 'monthly',
+        detected_amount: 5000,
+        last_charge_date: '2026-02-01',
+        first_detected_date: '2025-01-01',
+        occurrence_count: 12,
+        total_spent: 60000,
+      }],
+      queryImpl: async (sql) => {
+        if (String(sql).includes('FROM subscriptions s')) {
+          return { rows: [{
+            id: 5,
+            pattern_key: 'rent',
+            display_name: 'Rent',
+            status: 'active',
+            financial_pattern_id: 77,
+            is_manual: 0,
+          }] };
+        }
+        return { rows: [] };
+      },
+    });
+    subscriptionsService.__setFinancialTruth({
+      getProjectionSnapshot: () => ({
+        truthRevision: 12,
+        patterns: [{ id: 77, normalizedName: 'rent', isSubscription: false, state: 'active' }],
+      }),
+    });
+
+    const result = await subscriptionsService.getSubscriptions({ locale: 'en' });
+
+    expect(result.subscriptions).toEqual([]);
+    expect(result.truthRevision).toBe(12);
   });
 
   it('calculates monthly and yearly summary totals and breakdowns', async () => {
@@ -312,7 +351,7 @@ describe('subscriptions service', () => {
   });
 
   it('combines persisted alerts with newly detected price-increase and missed-charge alerts', async () => {
-    configureService({
+    const { query } = configureService({
       patterns: [
         {
           pattern_key: 'netflix',
@@ -323,7 +362,7 @@ describe('subscriptions service', () => {
           consistency_score: 0.9,
           category_name: 'בידור',
           category_name_en: 'Entertainment',
-          last_charge_date: '2025-11-01',
+          last_charge_date: '2025-12-01',
           first_detected_date: '2025-01-01',
           occurrence_count: 10,
           total_spent: 1000,
@@ -360,11 +399,59 @@ describe('subscriptions service', () => {
 
     const result = await subscriptionsService.getSubscriptionAlerts({ locale: 'en' });
 
+    const storedAlertQuery = query.mock.calls.find(([sql]) => String(sql).includes('FROM subscription_alerts sa'));
+    expect(String(storedAlertQuery?.[0])).toContain("sa.created_at >= datetime('now', '-90 days')");
     expect(result.total_count).toBe(3);
     expect(result.critical_count).toBe(1);
     expect(result.warning_count).toBeGreaterThanOrEqual(1);
     expect(result.alerts.some((alert) => alert.alert_type === 'price_increase')).toBe(true);
     expect(result.alerts.some((alert) => alert.alert_type === 'missed_charge')).toBe(true);
+  });
+
+  it('persists detected alerts with deterministic identities and reuses the stored row', async () => {
+    const { query } = configureService({
+      patterns: [{
+        pattern_key: 'netflix',
+        display_name: 'Netflix',
+        detected_frequency: 'monthly',
+        detected_amount: 100,
+        amount_is_fixed: true,
+        consistency_score: 0.9,
+        last_charge_date: '2026-02-01',
+        first_detected_date: '2025-01-01',
+        occurrence_count: 10,
+        total_spent: 1000,
+      }],
+      queryImpl: async (sql) => {
+        const text = String(sql);
+        if (text.includes('FROM subscription_alerts sa')) return { rows: [] };
+        if (text.includes('FROM subscriptions s')) {
+          return { rows: [{ id: 5, pattern_key: 'netflix', display_name: 'Netflix', status: 'active', is_manual: 0 }] };
+        }
+        if (text.includes('ORDER BY charge_date DESC')) {
+          return { rows: [
+            { charge_date: '2026-02-01', amount: 120 },
+            { charge_date: '2026-01-01', amount: 100 },
+          ] };
+        }
+        if (text.includes('INSERT INTO subscription_alerts')) {
+          return { rows: [{ id: 91, is_dismissed: 0, is_actioned: 0, created_at: '2026-02-10T10:00:00Z' }] };
+        }
+        return { rows: [] };
+      },
+    });
+
+    const result = await subscriptionsService.getSubscriptionAlerts({ locale: 'en' });
+    const persistCall = query.mock.calls.find(([sql]) => String(sql).includes('INSERT INTO subscription_alerts'));
+
+    expect(result.alerts).toContainEqual(expect.objectContaining({
+      id: 91,
+      identity_key: 'subscription:5:price_increase:2026-02-01:12000',
+      correction_capabilities: ['suppress_pattern', 'end_pattern', 'pause_pattern', 'override_pattern'],
+    }));
+    expect(String(persistCall?.[0])).toContain('ON CONFLICT(identity_key) WHERE identity_key IS NOT NULL');
+    expect(persistCall?.[1]?.[0]).toBe(5);
+    expect(persistCall?.[1]?.[8]).toBe('subscription:5:price_increase:2026-02-01:12000');
   });
 
   it('returns upcoming renewals sorted by nearest expected date', async () => {
@@ -830,8 +917,63 @@ describe('subscriptions service', () => {
     expect(result.total_count).toBe(3);
     expect(result.critical_count).toBe(1);
     expect(result.warning_count).toBe(2);
-    expect(result.alerts.some((alert) => alert.alert_type === 'price_increase' && alert.severity === 'warning')).toBe(true);
-    expect(result.alerts.some((alert) => alert.alert_type === 'missed_charge' && alert.severity === 'warning')).toBe(true);
+    expect(result.alerts).toContainEqual(expect.objectContaining({
+      alert_type: 'price_increase',
+      severity: 'warning',
+      evidence_start_date: '2026-01-01',
+      evidence_end_date: '2026-02-01',
+      time_scope: {
+        kind: 'evidence_range',
+        start: '2026-01-01',
+        end: '2026-02-01',
+      },
+      detected_amount: 100,
+      detected_frequency: 'monthly',
+      correction_capabilities: ['suppress_pattern', 'end_pattern', 'pause_pattern', 'override_pattern'],
+    }));
+    expect(result.alerts).toContainEqual(expect.objectContaining({
+      alert_type: 'missed_charge',
+      severity: 'warning',
+      expected_date: '2025-12-31',
+      detected_amount: 100,
+      detected_frequency: 'monthly',
+      time_scope: { kind: 'overdue_since', start: '2025-12-31' },
+    }));
+  });
+
+  it('does not regenerate price changes or missed charges from stale evidence', async () => {
+    configureService({
+      patterns: [{
+        pattern_key: 'old-cloud-sub',
+        display_name: 'Old Cloud Sub',
+        detected_frequency: 'monthly',
+        detected_amount: 100,
+        amount_is_fixed: true,
+        consistency_score: 0.9,
+        last_charge_date: '2025-09-01',
+        first_detected_date: '2025-01-01',
+        occurrence_count: 8,
+        total_spent: 800,
+      }],
+      queryImpl: async (sql) => {
+        const text = String(sql);
+        if (text.includes('FROM subscription_alerts sa')) return { rows: [] };
+        if (text.includes('FROM subscriptions s')) return { rows: [] };
+        if (text.includes('ORDER BY charge_date DESC')) {
+          return {
+            rows: [
+              { charge_date: '2025-12-01', amount: 120 },
+              { charge_date: '2025-11-01', amount: 100 },
+            ],
+          };
+        }
+        return { rows: [] };
+      },
+    });
+
+    const result = await subscriptionsService.getSubscriptionAlerts({ locale: 'en' });
+
+    expect(result.alerts).toEqual([]);
   });
 
   it('updates subscription without history rows when status and amount are unchanged', async () => {

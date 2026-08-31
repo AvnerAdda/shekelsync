@@ -6,6 +6,7 @@ const database = require('../database.js');
 const forecastService = require('../forecast.js');
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const notificationsService = require('../notifications.js');
+const ORIGINAL_TZ = process.env.TZ;
 
 function createMockClient(queryImplementation?: (sql: string, params?: unknown[]) => Promise<{ rows: any[] }>) {
   const query = vi.fn(queryImplementation || (async () => ({ rows: [] })));
@@ -22,6 +23,8 @@ describe('notifications service', () => {
   });
 
   afterEach(() => {
+    if (ORIGINAL_TZ === undefined) delete process.env.TZ;
+    else process.env.TZ = ORIGINAL_TZ;
     vi.useRealTimers();
     vi.restoreAllMocks();
   });
@@ -60,7 +63,7 @@ describe('notifications service', () => {
     });
 
     vi.spyOn(database, 'getClient').mockResolvedValue(client);
-    vi.spyOn(forecastService, 'generateDailyForecast').mockResolvedValue({
+    vi.spyOn(forecastService, 'getForecast').mockResolvedValue({
       generated: '2026-02-09T12:00:00.000Z',
       budgetOutlook: [],
     });
@@ -74,15 +77,55 @@ describe('notifications service', () => {
     expect(result.data.notifications).toHaveLength(1);
     expect(result.data.notifications[0].type).toBe('budget_exceeded');
     expect(result.data.notifications[0].severity).toBe('critical');
+    expect(result.data.notifications[0].data.time_scope).toEqual({
+      kind: 'current_month',
+      start: '2026-02-01',
+      end: '2026-02-28',
+    });
     expect(result.data.summary.by_type.budget_exceeded).toBe(1);
     expect(result.metadata.filters.limit).toBe(1);
     expect(client.release).toHaveBeenCalledTimes(1);
   });
 
+  it('keeps current-month transaction boundaries in the local calendar', async () => {
+    process.env.TZ = 'Asia/Jerusalem';
+    vi.setSystemTime(new Date('2026-08-15T12:00:00.000Z'));
+    let spentParams: unknown[] = [];
+    const client = createMockClient(async (sql, params = []) => {
+      const text = String(sql);
+      if (text.includes('FROM category_budgets')) {
+        return {
+          rows: [{
+            id: 1,
+            category_definition_id: 11,
+            budget_limit: 1000,
+            category_name: 'Groceries',
+          }],
+        };
+      }
+      if (text.includes('AS spent')) {
+        spentParams = params;
+        return { rows: [{ spent: 800 }] };
+      }
+      return { rows: [] };
+    });
+    vi.spyOn(database, 'getClient').mockResolvedValue(client);
+    vi.spyOn(forecastService, 'getForecast').mockResolvedValue({ budgetOutlook: [] });
+
+    const result = await notificationsService.getNotifications({ type: 'budget_warning' });
+
+    expect(spentParams).toEqual([11, '2026-08-01', '2026-08-31']);
+    expect(result.data.notifications[0].data.time_scope).toEqual({
+      kind: 'current_month',
+      start: '2026-08-01',
+      end: '2026-08-31',
+    });
+  });
+
   it('generates projected-budget alerts from forecast output', async () => {
     const client = createMockClient();
     vi.spyOn(database, 'getClient').mockResolvedValue(client);
-    vi.spyOn(forecastService, 'generateDailyForecast').mockResolvedValue({
+    vi.spyOn(forecastService, 'getForecast').mockResolvedValue({
       generated: '2026-02-09T12:00:00.000Z',
       budgetOutlook: [
         {
@@ -116,7 +159,11 @@ describe('notifications service', () => {
       type: 'budget_projected',
       severity: 'warning',
     });
-    expect(result.data.notifications[0].data.category_definition_id).toBe(7);
+    expect(result.data.notifications[0].data).toMatchObject({
+      category_definition_id: 7,
+      projected_total: 1300,
+      correction_capabilities: ['set_category_expectation'],
+    });
     expect(client.query).not.toHaveBeenCalled();
     expect(client.release).toHaveBeenCalledTimes(1);
   });
@@ -151,7 +198,7 @@ describe('notifications service', () => {
     });
 
     vi.spyOn(database, 'getClient').mockResolvedValue(client);
-    vi.spyOn(forecastService, 'generateDailyForecast').mockResolvedValue({
+    vi.spyOn(forecastService, 'getForecast').mockResolvedValue({
       generated: '2026-02-09T12:00:00.000Z',
       budgetOutlook: [],
     });
@@ -196,7 +243,7 @@ describe('notifications service', () => {
     });
 
     vi.spyOn(database, 'getClient').mockResolvedValue(client);
-    vi.spyOn(forecastService, 'generateDailyForecast').mockResolvedValue({
+    vi.spyOn(forecastService, 'getForecast').mockResolvedValue({
       generated: '2026-02-09T12:00:00.000Z',
       budgetOutlook: [],
     });
@@ -223,7 +270,7 @@ describe('notifications service', () => {
     });
 
     vi.spyOn(database, 'getClient').mockResolvedValue(client);
-    vi.spyOn(forecastService, 'generateDailyForecast').mockResolvedValue({
+    vi.spyOn(forecastService, 'getForecast').mockResolvedValue({
       generated: '2026-02-09T12:00:00.000Z',
       budgetOutlook: [],
     });
@@ -245,7 +292,7 @@ describe('notifications service', () => {
     });
 
     vi.spyOn(database, 'getClient').mockResolvedValue(client);
-    vi.spyOn(forecastService, 'generateDailyForecast').mockResolvedValue({
+    vi.spyOn(forecastService, 'getForecast').mockResolvedValue({
       generated: '2026-02-09T12:00:00.000Z',
       budgetOutlook: [],
     });
@@ -275,7 +322,7 @@ describe('notifications service', () => {
       { identifier: 'n5', vendor: 'coffee', name: 'Coffee', date: '2026-01-24', amount: 100, resolved_category_id: 77, resolved_category_name: 'Food' },
       { identifier: 'n6', vendor: 'coffee', name: 'Coffee', date: '2026-01-25', amount: 100, resolved_category_id: 77, resolved_category_name: 'Food' },
       { identifier: 'n7', vendor: 'coffee', name: 'Coffee', date: '2026-01-26', amount: 100, resolved_category_id: 77, resolved_category_name: 'Food' },
-      { identifier: 'n8', vendor: 'coffee', name: 'Coffee', date: '2026-02-08', amount: 1000, resolved_category_id: 77, resolved_category_name: 'Food' },
+      { identifier: 'n8', vendor: 'coffee', name: 'Coffee', date: '2026-02-03', amount: 1000, resolved_category_id: 77, resolved_category_name: 'Food' },
     ];
 
     const client = createMockClient(async (sql) => {
@@ -287,7 +334,7 @@ describe('notifications service', () => {
     });
 
     vi.spyOn(database, 'getClient').mockResolvedValue(client);
-    vi.spyOn(forecastService, 'generateDailyForecast').mockResolvedValue({
+    vi.spyOn(forecastService, 'getForecast').mockResolvedValue({
       generated: '2026-02-09T12:00:00.000Z',
       budgetOutlook: [],
     });
@@ -298,6 +345,12 @@ describe('notifications service', () => {
     expect(result.data.notifications).toHaveLength(1);
     expect(result.data.notifications[0].type).toBe('unusual_spending');
     expect(result.data.notifications[0].data.transaction_id).toBe('n8');
+    expect(result.data.notifications[0].data.time_scope).toEqual({
+      kind: 'rolling_days',
+      days: 7,
+      start: '2026-02-03',
+      end: '2026-02-09',
+    });
     expect(result.data.notifications[0].actions[0].action).toBe('view_transaction');
     expect(result.data.notifications[0].actions[0].params).toEqual({ id: 'n8', vendor: 'coffee' });
     expect(result.data.notifications[0].actions[1].params).toEqual({ id: 'n8', vendor: 'coffee' });
@@ -326,7 +379,7 @@ describe('notifications service', () => {
     });
 
     vi.spyOn(database, 'getClient').mockResolvedValue(client);
-    vi.spyOn(forecastService, 'generateDailyForecast').mockResolvedValue({
+    vi.spyOn(forecastService, 'getForecast').mockResolvedValue({
       generated: '2026-02-09T12:00:00.000Z',
       budgetOutlook: [],
     });
@@ -337,6 +390,12 @@ describe('notifications service', () => {
     expect(result.data.notifications).toHaveLength(1);
     expect(result.data.notifications[0].type).toBe('high_transaction');
     expect(result.data.notifications[0].data.transaction_id).toBe('t10');
+    expect(result.data.notifications[0].data.time_scope).toEqual({
+      kind: 'rolling_days',
+      days: 3,
+      start: '2026-02-07',
+      end: '2026-02-09',
+    });
     expect(result.data.notifications[0].actions[0].params).toEqual({
       id: 't10',
       vendor: 'electronics',
@@ -362,7 +421,7 @@ describe('notifications service', () => {
     });
 
     vi.spyOn(database, 'getClient').mockResolvedValueOnce(newVendorClient);
-    vi.spyOn(forecastService, 'generateDailyForecast').mockResolvedValue({
+    vi.spyOn(forecastService, 'getForecast').mockResolvedValue({
       generated: '2026-02-09T12:00:00.000Z',
       budgetOutlook: [],
     });
@@ -394,6 +453,11 @@ describe('notifications service', () => {
     expect(cashFlowResult.data.notifications[0].type).toBe('cash_flow_alert');
     expect(cashFlowResult.data.notifications[0].severity).toBe('warning');
     expect(cashFlowResult.data.notifications[0].data.days_remaining).toBeLessThan(10);
+    expect(cashFlowResult.data.notifications[0].data.time_scope).toMatchObject({
+      kind: 'current_month',
+      start: '2026-02-01',
+      end: '2026-02-28',
+    });
   });
 
   it('marks uncategorized notifications as warning when count is high', async () => {
@@ -406,7 +470,7 @@ describe('notifications service', () => {
     });
 
     vi.spyOn(database, 'getClient').mockResolvedValue(client);
-    vi.spyOn(forecastService, 'generateDailyForecast').mockResolvedValue({
+    vi.spyOn(forecastService, 'getForecast').mockResolvedValue({
       generated: '2026-02-09T12:00:00.000Z',
       budgetOutlook: [],
     });
@@ -421,7 +485,7 @@ describe('notifications service', () => {
   it('does not fail notifications when forecast generation fails for budget projected type', async () => {
     const client = createMockClient();
     vi.spyOn(database, 'getClient').mockResolvedValue(client);
-    vi.spyOn(forecastService, 'generateDailyForecast').mockRejectedValue(new Error('forecast unavailable'));
+    vi.spyOn(forecastService, 'getForecast').mockRejectedValue(new Error('forecast unavailable'));
 
     const result = await notificationsService.getNotifications({ type: 'budget_projected' });
 
@@ -452,7 +516,7 @@ describe('notifications service', () => {
     });
 
     vi.spyOn(database, 'getClient').mockResolvedValue(client);
-    vi.spyOn(forecastService, 'generateDailyForecast').mockResolvedValue({
+    vi.spyOn(forecastService, 'getForecast').mockResolvedValue({
       generated: '2026-02-09T12:00:00.000Z',
       budgetOutlook: [],
     });

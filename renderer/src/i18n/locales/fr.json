@@ -59,6 +59,21 @@
     "subtitle": "Vos tâches financières les plus importantes, classées par priorité et prêtes à être traitées.",
     "updatedAt": "Actualisé à {{time}}",
     "loading": "Chargement de la revue financière",
+    "forecastAccuracy": {
+      "collecting": "Prévision en apprentissage · {{count}} jours",
+      "provisional": "Prévision provisoire · erreur de {{mape}} %",
+      "established": "Prévision mesurée · erreur de {{mape}} %",
+      "details": "{{samples}} prévisions réalisées · erreur moyenne des dépenses {{mae}} · couverture de l’incertitude {{coverage}}"
+    },
+    "timeScope": {
+      "currentMonth": "{{month}}",
+      "rollingDays": "Sur les {{count}} derniers jours",
+      "rollingRange": "Période de {{count}} jours · du {{start}} au {{end}}",
+      "evidenceRange": "Prélèvements du {{start}} au {{end}}",
+      "overdueSince": "En retard depuis le {{date}}",
+      "upcomingOn": "Prévu le {{date}}",
+      "detectedOn": "Détecté le {{date}}"
+    },
     "dashboard": {
       "summary": "{{count}} éléments · ~{{minutes}} min",
       "reviewAll": "Tout examiner",
@@ -178,8 +193,12 @@
       "dismiss": "Ignorer",
       "dismissHint": "Retirer cet élément de votre revue",
       "more": "Plus d’actions",
+      "details": "Voir les détails",
       "reopen": "Rouvrir",
       "reopenNow": "Réactiver maintenant",
+      "acceptQuest": "Accepter le défi",
+      "viewQuest": "Voir le défi",
+      "declineQuest": "Pas maintenant",
       "clearFilter": "Effacer le filtre"
     },
     "snooze": {
@@ -235,6 +254,8 @@
       },
       "resolved": "Élément terminé.",
       "dismissed": "Élément ignoré.",
+      "questAccepted": "Défi accepté.",
+      "questDeclined": "Défi retiré.",
       "syncStarted": "Synchronisation des comptes démarrée."
     },
     "privacy": "La revue financière est générée et stockée localement. Aucune IA externe n'est nécessaire."
@@ -3964,6 +3985,7 @@
     "amount": "Montant",
     "frequency": "Fréquence",
     "nextExpectedDate": "Prochaine date prévue",
+    "notSubscription": "Cette dépense est récurrente, mais ce n’est pas un abonnement (la conserver dans la prévision)",
     "calculating": "Calcul de l’impact…",
     "impactTitle": "Ce qui va changer",
     "impactValues": "Impact estimé : {{monthly}} par mois · {{sixMonth}} sur six mois",

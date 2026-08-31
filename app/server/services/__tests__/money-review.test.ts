@@ -1,9 +1,27 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const moneyReview = require('../money-review.js');
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const forecastService = require('../forecast.js');
 
 describe('Money Review service contracts', () => {
+  it('includes forecast calibration when available and degrades safely when unavailable', () => {
+    const accuracy = {
+      available: true,
+      readiness: 'provisional',
+      observedDays: 18,
+      sampleCount: 52,
+    };
+    const accuracySpy = vi.spyOn(forecastService, 'getForecastAccuracy').mockReturnValue(accuracy);
+    expect(moneyReview.utils.loadForecastAccuracy()).toBe(accuracy);
+    expect(accuracySpy).toHaveBeenCalledWith({ days: 90 });
+
+    accuracySpy.mockImplementation(() => { throw new Error('database unavailable'); });
+    expect(moneyReview.utils.loadForecastAccuracy()).toBeNull();
+    accuracySpy.mockRestore();
+  });
+
   it('adapts actionable notifications into durable smart actions', () => {
     const action = moneyReview.utils.notificationToSmartAction({
       id: 'budget_7',
@@ -13,7 +31,11 @@ describe('Money Review service contracts', () => {
       message: 'Dining is over budget',
       timestamp: '2026-08-24T10:00:00.000Z',
       actionable: true,
-      data: { spent: 1400, budget: 1000 },
+      data: {
+        spent: 1400,
+        budget: 1000,
+        time_scope: { kind: 'current_month', start: '2026-08-01', end: '2026-08-31' },
+      },
       actions: [{ action: 'edit_budget', label: 'Adjust budget', params: { category_definition_id: 7 } }],
     });
 
@@ -25,6 +47,7 @@ describe('Money Review service contracts', () => {
       metadata: {
         source: 'notification',
         notificationType: 'budget_exceeded',
+        timeScope: { kind: 'current_month', start: '2026-08-01', end: '2026-08-31' },
       },
     });
   });
@@ -53,18 +76,57 @@ describe('Money Review service contracts', () => {
       description: 'The monthly charge increased',
       old_amount: 40,
       new_amount: 52,
+      evidence_start_date: '2026-07-24',
+      evidence_end_date: '2026-08-24',
+      detected_frequency: 'monthly',
+      correction_capabilities: ['suppress_pattern', 'override_pattern'],
+      time_scope: { kind: 'evidence_range', start: '2026-07-24', end: '2026-08-24' },
       created_at: '2026-08-24T10:00:00.000Z',
     });
 
     expect(action).toMatchObject({
       actionType: 'fixed_recurring_change',
       severity: 'high',
-      recurrenceKey: 'money_review:subscription:14:price_increase',
+      recurrenceKey: 'money_review:subscription:14:price_increase:2026-08-24',
       potentialImpact: 12,
       metadata: {
         source: 'subscription',
         subscriptionId: 14,
         subscriptionAlertType: 'price_increase',
+        correctionCapabilities: ['suppress_pattern', 'override_pattern'],
+        timeScope: { kind: 'evidence_range', start: '2026-07-24', end: '2026-08-24' },
+      },
+    });
+  });
+
+  it('keeps the canonical occurrence identity for a missed recurring charge', () => {
+    const action = moneyReview.utils.subscriptionAlertToSmartAction({
+      id: null,
+      subscription_id: 14,
+      financial_pattern_id: 9,
+      occurrence_id: 'pattern:9:2026-08-24',
+      subscription_name: 'Cloud storage',
+      alert_type: 'missed_charge',
+      severity: 'warning',
+      title: 'Expected charge not found',
+      expected_date: '2026-08-24',
+      detected_amount: 52,
+      detected_frequency: 'monthly',
+      correction_capabilities: ['skip_occurrence', 'suppress_pattern', 'override_pattern'],
+      created_at: '2026-08-30T10:00:00.000Z',
+    });
+
+    expect(action).toMatchObject({
+      recurrenceKey: 'money_review:subscription:14:missed_charge:2026-08-24',
+      metadata: {
+        patternId: 9,
+        occurrenceId: 'pattern:9:2026-08-24',
+        correctionCapabilities: ['skip_occurrence', 'suppress_pattern', 'override_pattern'],
+        data: {
+          detected_amount: 52,
+          detected_frequency: 'monthly',
+          expected_date: '2026-08-24',
+        },
       },
     });
   });

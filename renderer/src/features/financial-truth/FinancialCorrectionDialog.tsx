@@ -3,6 +3,7 @@ import {
   Alert,
   Box,
   Button,
+  Checkbox,
   Chip,
   CircularProgress,
   Dialog,
@@ -27,6 +28,7 @@ import { useTranslation } from 'react-i18next';
 import { useFinancePrivacy } from '@app/contexts/FinancePrivacyContext';
 import { useFinancialTruth } from './useFinancialTruth';
 import type { CorrectionAction, CorrectionDraft, CorrectionPreview, CorrectionTarget } from './types';
+import { toLocalDateInputValue } from './local-date';
 
 interface Props {
   open: boolean;
@@ -61,11 +63,12 @@ const FinancialCorrectionDialog: React.FC<Props> = ({
   const isCategory = target?.kind === 'category';
   const defaultAction: CorrectionAction = isCategory ? 'set_category_expectation' : target?.occurrenceId ? 'skip_occurrence' : 'suppress_pattern';
   const [action, setAction] = useState<CorrectionAction>(defaultAction);
-  const [effectiveDate, setEffectiveDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [effectiveDate, setEffectiveDate] = useState(() => toLocalDateInputValue());
   const [amount, setAmount] = useState<number | ''>('');
   const [frequency, setFrequency] = useState(target?.frequency || 'monthly');
   const [nextExpectedDate, setNextExpectedDate] = useState(target?.nextExpectedDate || '');
   const [ongoing, setOngoing] = useState(false);
+  const [notSubscription, setNotSubscription] = useState(false);
   const [preview, setPreview] = useState<CorrectionPreview | null>(null);
   const [previewLoading, setPreviewLoading] = useState(false);
 
@@ -75,8 +78,9 @@ const FinancialCorrectionDialog: React.FC<Props> = ({
     setAmount(target.amount ?? '');
     setFrequency(target.frequency || 'monthly');
     setNextExpectedDate(target.nextExpectedDate || '');
-    setEffectiveDate(new Date().toISOString().slice(0, 10));
+    setEffectiveDate(toLocalDateInputValue());
     setOngoing(false);
+    setNotSubscription(false);
     setPreview(null);
   }, [open, target]);
 
@@ -110,6 +114,7 @@ const FinancialCorrectionDialog: React.FC<Props> = ({
           amount: amount === '' ? undefined : Number(amount),
           frequency,
           nextExpectedDate: nextExpectedDate || undefined,
+          isSubscription: notSubscription ? false : undefined,
         }
         : action === 'set_category_expectation'
           ? { monthlyAmount: amount === '' ? 0 : Number(amount) }
@@ -120,7 +125,8 @@ const FinancialCorrectionDialog: React.FC<Props> = ({
   useEffect(() => {
     if (!open || !target) return;
     const draft = buildDraft();
-    if (!draft || ((action === 'override_pattern' || action === 'set_category_expectation') && amount === '')) return;
+    if (!draft || (action === 'set_category_expectation' && amount === '')
+      || (action === 'override_pattern' && amount === '' && !notSubscription)) return;
     let active = true;
     const timer = window.setTimeout(() => {
       setPreviewLoading(true);
@@ -132,14 +138,27 @@ const FinancialCorrectionDialog: React.FC<Props> = ({
     return () => { active = false; window.clearTimeout(timer); };
     // buildDraft deliberately reflects the primitive controls below.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, target, action, amount, frequency, nextExpectedDate, effectiveDate, ongoing]);
+  }, [open, target, action, amount, frequency, nextExpectedDate, effectiveDate, ongoing, notSubscription]);
 
   const submit = async () => {
     const draft = buildDraft();
     if (!draft) return;
-    await truth.create(draft);
-    onApplied?.(target?.patternId, action);
-    onClose();
+    try {
+      await truth.create(draft);
+      onApplied?.(target?.patternId, action);
+      onClose();
+    } catch {
+      // useFinancialTruth owns the user-facing error state.
+    }
+  };
+
+  const undoLastCorrection = async () => {
+    if (!truth.lastCorrection) return;
+    try {
+      await truth.revert(truth.lastCorrection.id);
+    } catch {
+      // Keep the Snackbar open and let useFinancialTruth retain the error.
+    }
   };
 
   return (
@@ -208,6 +227,20 @@ const FinancialCorrectionDialog: React.FC<Props> = ({
                 slotProps={{ inputLabel: { shrink: true } }}
                 fullWidth
               />
+              {target?.isSubscription && (
+                <FormControlLabel
+                  control={(
+                    <Checkbox
+                      checked={notSubscription}
+                      onChange={(event) => setNotSubscription(event.target.checked)}
+                    />
+                  )}
+                  label={t(
+                    'financialTruth.notSubscription',
+                    'This is a recurring expense, but not a subscription (keep it in the forecast)',
+                  )}
+                />
+              )}
             </Stack>
           )}
 
@@ -241,7 +274,7 @@ const FinancialCorrectionDialog: React.FC<Props> = ({
         autoHideDuration={8000}
         onClose={truth.clearLastCorrection}
         message={t('financialTruth.saved', 'Correction saved. Updating your plan…')}
-        action={<Button color="inherit" size="small" disabled={truth.busy} onClick={() => truth.lastCorrection && void truth.revert(truth.lastCorrection.id)}>{t('actions.undo', 'Undo')}</Button>}
+        action={<Button color="inherit" size="small" disabled={truth.busy} onClick={() => void undoLastCorrection()}>{t('actions.undo', 'Undo')}</Button>}
       />
     </>
   );

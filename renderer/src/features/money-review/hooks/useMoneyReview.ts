@@ -214,10 +214,46 @@ export function useMoneyReview({
       case 'view_quests':
         navigate('/analysis?tab=actions');
         return;
+      case 'accept_quest': {
+        setUpdatingId(item.id);
+        try {
+          const result = await apiClient.post<{ success?: boolean }>(
+            `/api/analytics/quests/${encodeURIComponent(String(params.quest_id || item.id))}/accept`,
+            {},
+          );
+          if (!result.ok || result.data?.success === false) throw new Error(t('errors.update'));
+          showNotification(t('messages.questAccepted', { defaultValue: 'Challenge accepted' }), 'success');
+          await loadReview(true);
+          onReviewChanged?.();
+        } catch (questError) {
+          showNotification(questError instanceof Error ? questError.message : t('errors.update'), 'error');
+        } finally {
+          setUpdatingId(null);
+        }
+        return;
+      }
+      case 'decline_quest': {
+        setUpdatingId(item.id);
+        try {
+          const result = await apiClient.post<{ success?: boolean }>(
+            `/api/analytics/quests/${encodeURIComponent(String(params.quest_id || item.id))}/decline`,
+            {},
+          );
+          if (!result.ok || result.data?.success === false) throw new Error(t('errors.update'));
+          showNotification(t('messages.questDeclined', { defaultValue: 'Challenge removed' }), 'info');
+          await loadReview(true);
+          onReviewChanged?.();
+        } catch (questError) {
+          showNotification(questError instanceof Error ? questError.message : t('errors.update'), 'error');
+        } finally {
+          setUpdatingId(null);
+        }
+        return;
+      }
       default:
         if (typeof params.path === 'string') navigate(params.path);
     }
-  }, [navigate, onExternalAction, showNotification, t, updateStatus]);
+  }, [loadReview, navigate, onExternalAction, onReviewChanged, showNotification, t, updateStatus]);
 
   return {
     response,

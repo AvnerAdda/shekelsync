@@ -2054,6 +2054,187 @@ function buildEmptyForecastResult(startDate, endDate, truthSnapshot, monteCarloR
   };
 }
 
+function recordForecastPredictionSnapshots(db, result, generatedDate = new Date()) {
+  if (!db || !result?.dailyForecasts?.length) return;
+  const generatedDateKey = formatDate(generatedDate);
+  const scenarioMaps = Object.fromEntries(['p10', 'p50', 'p90'].map((key) => [
+    key,
+    new Map((result.scenarios?.[key]?.dailyResults || []).map((day) => [day.date, day])),
+  ]));
+  try {
+    const insert = db.prepare(`
+      INSERT INTO forecast_prediction_snapshots (
+        generated_date, target_date, truth_revision, horizon_days,
+        expected_income, expected_expenses, expected_cash_flow,
+        p10_cash_flow, p50_cash_flow, p90_cash_flow, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
+      ON CONFLICT(generated_date, target_date, truth_revision) DO UPDATE SET
+        horizon_days = excluded.horizon_days,
+        expected_income = excluded.expected_income,
+        expected_expenses = excluded.expected_expenses,
+        expected_cash_flow = excluded.expected_cash_flow,
+        p10_cash_flow = excluded.p10_cash_flow,
+        p50_cash_flow = excluded.p50_cash_flow,
+        p90_cash_flow = excluded.p90_cash_flow,
+        updated_at = datetime('now')
+    `);
+    const write = db.transaction(() => {
+      result.dailyForecasts.forEach((day) => {
+        const target = parseLocalDate(day.date);
+        const horizonDays = Math.max(0, Math.round(
+          (target.getTime() - parseLocalDate(generatedDateKey).getTime()) / 86400000,
+        ));
+        insert.run(
+          generatedDateKey,
+          day.date,
+          Number(result.truthRevision) || 0,
+          horizonDays,
+          Number(day.expectedIncome) || 0,
+          Number(day.expectedExpenses) || 0,
+          Number(day.expectedCashFlow) || 0,
+          Number(scenarioMaps.p10.get(day.date)?.cashFlow) || 0,
+          Number(scenarioMaps.p50.get(day.date)?.cashFlow) || 0,
+          Number(scenarioMaps.p90.get(day.date)?.cashFlow) || 0,
+        );
+      });
+    });
+    write();
+  } catch (error) {
+    // Compatibility for test fixtures and databases awaiting the v8 migration.
+    if (process.env.NODE_ENV !== 'test') {
+      console.warn('[Forecast] Could not record accuracy snapshots:', error?.message || error);
+    }
+  }
+}
+
+function summarizeAccuracyRows(rows) {
+  if (!rows.length) {
+    return {
+      sampleCount: 0,
+      expenseMae: null,
+      expenseMape: null,
+      cashFlowMae: null,
+      cashFlowBias: null,
+      intervalCoverage: null,
+    };
+  }
+  let expenseAbsoluteError = 0;
+  let cashFlowAbsoluteError = 0;
+  let cashFlowError = 0;
+  let percentageError = 0;
+  let percentageSamples = 0;
+  let covered = 0;
+  let coverageSamples = 0;
+  rows.forEach((row) => {
+    const actualExpenses = Number(row.actual_expenses) || 0;
+    const expectedExpenses = Number(row.expected_expenses) || 0;
+    const actualCashFlow = Number(row.actual_cash_flow) || 0;
+    const expectedCashFlow = Number(row.expected_cash_flow) || 0;
+    expenseAbsoluteError += Math.abs(expectedExpenses - actualExpenses);
+    cashFlowAbsoluteError += Math.abs(expectedCashFlow - actualCashFlow);
+    cashFlowError += expectedCashFlow - actualCashFlow;
+    if (actualExpenses > 0) {
+      percentageError += Math.abs(expectedExpenses - actualExpenses) / actualExpenses;
+      percentageSamples += 1;
+    }
+    const hasInterval = row.p10_cash_flow != null && row.p90_cash_flow != null;
+    const low = Number(row.p10_cash_flow);
+    const high = Number(row.p90_cash_flow);
+    if (hasInterval && Number.isFinite(low) && Number.isFinite(high)) {
+      coverageSamples += 1;
+      if (actualCashFlow >= Math.min(low, high) && actualCashFlow <= Math.max(low, high)) covered += 1;
+    }
+  });
+  const round = (value) => Math.round(value * 100) / 100;
+  return {
+    sampleCount: rows.length,
+    expenseMae: round(expenseAbsoluteError / rows.length),
+    expenseMape: percentageSamples ? round((percentageError / percentageSamples) * 100) : null,
+    cashFlowMae: round(cashFlowAbsoluteError / rows.length),
+    cashFlowBias: round(cashFlowError / rows.length),
+    intervalCoverage: coverageSamples ? round((covered / coverageSamples) * 100) : null,
+  };
+}
+
+function summarizeAccuracyReadiness(rows) {
+  const targetDates = [...new Set((rows || []).map((row) => String(row.target_date || '')).filter(Boolean))].sort();
+  const observedDays = targetDates.length;
+  const sampleCount = rows?.length || 0;
+  const readiness = observedDays >= 30 && sampleCount >= 100
+    ? 'established'
+    : observedDays >= 14 && sampleCount >= 30
+      ? 'provisional'
+      : 'collecting';
+  return {
+    readiness,
+    observedDays,
+    evaluatedFrom: targetDates[0] || null,
+    evaluatedThrough: targetDates[targetDates.length - 1] || null,
+  };
+}
+
+function getForecastAccuracy(options = {}) {
+  const days = Math.max(7, Math.min(365, Number.parseInt(options.days, 10) || 90));
+  const db = openForecastDb();
+  try {
+    const rows = db.prepare(`
+      WITH actuals AS (
+        SELECT substr(t.date, 1, 10) AS target_date,
+          SUM(CASE WHEN t.category_type = 'income' AND t.price > 0 THEN t.price ELSE 0 END) AS actual_income,
+          SUM(CASE WHEN t.category_type = 'expense' AND t.price < 0 THEN ABS(t.price) ELSE 0 END) AS actual_expenses
+        FROM transactions t
+        LEFT JOIN (SELECT DISTINCT transaction_identifier, transaction_vendor FROM transaction_pairing_exclusions) excluded
+          ON excluded.transaction_identifier = t.identifier AND excluded.transaction_vendor = t.vendor
+        WHERE t.status = 'completed'
+          AND excluded.transaction_identifier IS NULL
+          AND t.category_type IN ('income', 'expense')
+        GROUP BY substr(t.date, 1, 10)
+      )
+      SELECT snapshot.*,
+        COALESCE(actual.actual_income, 0) AS actual_income,
+        COALESCE(actual.actual_expenses, 0) AS actual_expenses,
+        COALESCE(actual.actual_income, 0) - COALESCE(actual.actual_expenses, 0) AS actual_cash_flow
+      FROM forecast_prediction_snapshots snapshot
+      LEFT JOIN actuals actual ON actual.target_date = snapshot.target_date
+      WHERE snapshot.target_date < date('now', 'localtime')
+        AND snapshot.target_date >= date('now', 'localtime', ?)
+        AND snapshot.target_date <= (SELECT MAX(target_date) FROM actuals)
+        AND snapshot.horizon_days BETWEEN 1 AND 90
+      ORDER BY snapshot.target_date, snapshot.horizon_days
+    `).all(`-${days} days`);
+    const buckets = [
+      { key: 'days_1_7', min: 1, max: 7 },
+      { key: 'days_8_30', min: 8, max: 30 },
+      { key: 'days_31_90', min: 31, max: 90 },
+    ];
+    return {
+      available: rows.length > 0,
+      evaluationWindowDays: days,
+      ...summarizeAccuracyReadiness(rows),
+      ...summarizeAccuracyRows(rows),
+      byHorizon: Object.fromEntries(buckets.map((bucket) => [
+        bucket.key,
+        summarizeAccuracyRows(rows.filter((row) => (
+          Number(row.horizon_days) >= bucket.min && Number(row.horizon_days) <= bucket.max
+        ))),
+      ])),
+    };
+  } catch (error) {
+    if (String(error?.message || '').includes('no such table')) {
+      return {
+        available: false,
+        evaluationWindowDays: days,
+        ...summarizeAccuracyReadiness([]),
+        ...summarizeAccuracyRows([]),
+        byHorizon: {},
+      };
+    }
+    throw error;
+  } finally {
+    db.close();
+  }
+}
+
 // ==================== MAIN EXPORT ====================
 async function generateDailyForecastLocal(options = {}) {
   const now = new Date();
@@ -2305,6 +2486,10 @@ results.scenarios = {
   p50: withCumulative(monteCarloResults.base),
   p90: withCumulative(monteCarloResults.best),
 };
+
+    if (options.recordSnapshot !== false) {
+      recordForecastPredictionSnapshots(db, results, now);
+    }
 
     if (!skipCache) {
       forecastResultCache.set(cacheKey, { value: results, expiresAt: Date.now() + cacheDurationMs });
@@ -2719,6 +2904,7 @@ async function getForecast(options = {}) {
 module.exports = {
   generateDailyForecast,
   getForecast,
+  getForecastAccuracy,
   clearCache() {
     forecastResultCache.clear();
     forecastInFlight.clear();
@@ -2772,10 +2958,13 @@ module.exports = {
     resolvePatternKeyForTransaction,
     resolveForecastDbPath,
     resolveForecastWindow,
+    recordForecastPredictionSnapshots,
     runMonteCarloSimulation,
     sampleAmount,
     simulateScenario,
     standardDeviation,
+    summarizeAccuracyReadiness,
+    summarizeAccuracyRows,
     willOccur,
   },
 };

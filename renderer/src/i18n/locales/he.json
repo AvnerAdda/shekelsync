@@ -59,6 +59,21 @@
     "subtitle": "המשימות הפיננסיות החשובות ביותר שלך, לפי סדר עדיפות ומוכנות לפעולה.",
     "updatedAt": "עודכן ב־{{time}}",
     "loading": "טוען את סקירת הכסף",
+    "forecastAccuracy": {
+      "collecting": "התחזית לומדת · {{count}} ימים",
+      "provisional": "תחזית זמנית · שגיאה של {{mape}}%",
+      "established": "תחזית נמדדת · שגיאה של {{mape}}%",
+      "details": "{{samples}} תחזיות שהתממשו · שגיאת הוצאה ממוצעת {{mae}} · כיסוי טווח אי־הוודאות {{coverage}}"
+    },
+    "timeScope": {
+      "currentMonth": "{{month}}",
+      "rollingDays": "{{count}} הימים האחרונים",
+      "rollingRange": "חלון של {{count}} ימים · {{start}}–{{end}}",
+      "evidenceRange": "חיובים מ־{{start}} עד {{end}}",
+      "overdueSince": "באיחור מאז {{date}}",
+      "upcomingOn": "צפוי ב־{{date}}",
+      "detectedOn": "זוהה ב־{{date}}"
+    },
     "dashboard": {
       "summary": "{{count}} פריטים · כ־{{minutes}} דק׳",
       "reviewAll": "הצגת הכול",
@@ -178,8 +193,12 @@
       "dismiss": "הסרה",
       "dismissHint": "הפריט יוסר מהסקירה",
       "more": "פעולות נוספות",
+      "details": "פרטי הסקירה",
       "reopen": "פתיחה מחדש",
       "reopenNow": "החזרה עכשיו",
+      "acceptQuest": "קבלת האתגר",
+      "viewQuest": "הצגת האתגר",
+      "declineQuest": "לא עכשיו",
       "clearFilter": "ניקוי הסינון"
     },
     "snooze": {
@@ -235,6 +254,8 @@
       },
       "resolved": "הפריט הושלם.",
       "dismissed": "הפריט הוסר.",
+      "questAccepted": "האתגר התקבל.",
+      "questDeclined": "האתגר הוסר.",
       "syncStarted": "סנכרון החשבונות התחיל."
     },
     "privacy": "סקירת הכסף נוצרת ונשמרת מקומית. אין צורך בבינה מלאכותית חיצונית."
@@ -3981,6 +4002,7 @@
     "amount": "סכום",
     "frequency": "תדירות",
     "nextExpectedDate": "התאריך הצפוי הבא",
+    "notSubscription": "זו הוצאה קבועה, אך לא מנוי (להשאיר אותה בתחזית)",
     "calculating": "מחשב השפעה…",
     "impactTitle": "מה ישתנה",
     "impactValues": "השפעה משוערת: {{monthly}} לחודש · {{sixMonth}} בשישה חודשים",

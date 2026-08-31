@@ -101,9 +101,24 @@ function parseBooleanQueryParam(value) {
   return raw === 'true' || raw === '1' || raw === true;
 }
 
-function createForecastRouter({ sqliteDb = null, generateForecast = forecastService.generateDailyForecast } = {}) {
+function createForecastRouter({
+  sqliteDb = null,
+  generateForecast = forecastService.generateDailyForecast,
+  evaluateForecast = forecastService.getForecastAccuracy,
+} = {}) {
   const router = express.Router();
   const getDbInstance = () => sqliteDb || getDatabase();
+
+  router.get('/accuracy', async (req, res) => {
+    try {
+      const days = parseIntegerQueryParam(req.query.days, 'days', { min: 7, max: 365 }) || 90;
+      res.json(await evaluateForecast({ days }));
+    } catch (error) {
+      res.status(error?.status || 500).json({
+        error: error?.message || 'Failed to evaluate forecast accuracy',
+      });
+    }
+  });
 
   router.get('/daily', async (req, res) => {
     try {
