@@ -32,6 +32,7 @@ import { onStartupReady, scheduleStartupIdleWork } from '@renderer/app/startup/s
 import { useMoneyReview } from '../hooks/useMoneyReview';
 import type { MoneyReviewGroup, MoneyReviewItem } from '../types';
 import MoneyReviewItemDetailDialog from './MoneyReviewItemDetailDialog';
+import { buildMoneyReviewTimeScopeLabel } from '../time-scope';
 
 const MoneyReviewPage = lazy(() => import('../pages/MoneyReviewPage'));
 
@@ -52,7 +53,7 @@ const isOpenItem = (item: MoneyReviewItem) => ['active', 'accepted'].includes(it
 const MoneyReviewDashboardSection: React.FC = () => {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
-  const { t } = useTranslation('translation', { keyPrefix: 'moneyReview' });
+  const { t, i18n } = useTranslation('translation', { keyPrefix: 'moneyReview' });
   const { formatCurrency } = useFinancePrivacy();
   const [searchParams, setSearchParams] = useSearchParams();
   const scrollerRef = useRef<HTMLDivElement | null>(null);
@@ -242,6 +243,7 @@ const MoneyReviewDashboardSection: React.FC = () => {
           {openItems.map((item, index) => {
             const palette = theme.palette[GROUP_COLORS[item.group]];
             const minutes = item.group === 'data' ? 1 : 2;
+            const timeScopeLabel = buildMoneyReviewTimeScopeLabel(item, i18n?.language || 'en');
             return (
               <Card
                 key={item.id}
@@ -328,6 +330,11 @@ const MoneyReviewDashboardSection: React.FC = () => {
                         <ScheduleIcon sx={{ fontSize: 14 }} />
                         {t('dashboard.minutes', { count: minutes })}
                       </Typography>
+                      {timeScopeLabel && (
+                        <Typography variant="caption" color="text.secondary">
+                          {t(timeScopeLabel.key, timeScopeLabel.values)}
+                        </Typography>
+                      )}
                       {item.potentialImpact > 0 && (
                         <Typography variant="caption" color="success.main" sx={{ fontWeight: 800 }}>
                           {t('dashboard.impact', { amount: formatCurrency(item.potentialImpact) })}

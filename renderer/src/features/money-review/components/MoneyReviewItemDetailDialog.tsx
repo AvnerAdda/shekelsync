@@ -1,5 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import {
+  Alert,
   Box,
   Button,
   Chip,
@@ -22,6 +23,7 @@ import AutoAwesomeIcon from '@mui/icons-material/AutoAwesome';
 import CloseIcon from '@mui/icons-material/Close';
 import DataObjectIcon from '@mui/icons-material/DataObject';
 import InsightsIcon from '@mui/icons-material/Insights';
+import ScheduleIcon from '@mui/icons-material/Schedule';
 import ShieldOutlinedIcon from '@mui/icons-material/ShieldOutlined';
 import { useTranslation } from 'react-i18next';
 import { useFinancePrivacy } from '@app/contexts/FinancePrivacyContext';
@@ -37,6 +39,8 @@ import MoneyReviewItemActions from './MoneyReviewItemActions';
 import FinancialCorrectionDialog from '@renderer/features/financial-truth/FinancialCorrectionDialog';
 import type { CorrectionTarget } from '@renderer/features/financial-truth/types';
 import { useFinancialTruth } from '@renderer/features/financial-truth/useFinancialTruth';
+import { buildMoneyReviewTimeScopeLabel } from '../time-scope';
+import { buildMoneyReviewCorrectionTarget } from '../correction-target';
 
 const GROUP_ICONS: Record<MoneyReviewGroup, React.ReactNode> = {
   data: <DataObjectIcon />,
@@ -79,14 +83,26 @@ const MoneyReviewItemDetailDialog: React.FC<MoneyReviewItemDetailDialogProps> = 
   const { t: tRoot } = useTranslation('translation');
   const { formatCurrency } = useFinancePrivacy();
   const insight = useMemo(() => item ? buildMoneyReviewInsight(item) : null, [item]);
+  const timeScopeLabel = item
+    ? buildMoneyReviewTimeScopeLabel(item, i18n?.language || 'en')
+    : null;
   const [correctionTarget, setCorrectionTarget] = useState<CorrectionTarget | null>(null);
   const truth = useFinancialTruth();
-  const patternId = Number(item?.metadata?.patternId);
-  const metadataData = item?.metadata?.data && typeof item.metadata.data === 'object'
-    ? item.metadata.data as Record<string, unknown>
-    : {};
-  const categoryDefinitionId = Number(metadataData.category_definition_id || metadataData.categoryDefinitionId);
+  const availableCorrectionTarget = useMemo(
+    () => item ? buildMoneyReviewCorrectionTarget(item) : null,
+    [item],
+  );
   const returnCorrectionId = item?.metadata?.source === 'financial_truth' ? Number(item.metadata?.correctionId) : null;
+
+  const restorePrediction = async () => {
+    if (!Number.isSafeInteger(returnCorrectionId) || Number(returnCorrectionId) <= 0) return;
+    try {
+      await truth.revert(Number(returnCorrectionId));
+      onClose();
+    } catch {
+      // The hook exposes the failure below without leaking a rejected promise.
+    }
+  };
 
   const formatValue = (value: number | string, format: 'currency' | 'number' | 'text' = 'text') => {
     if (format === 'currency') return formatCurrency(Number(value));
@@ -165,6 +181,15 @@ const MoneyReviewItemDetailDialog: React.FC<MoneyReviewItemDetailDialogProps> = 
                     label={t(`priority.${item.severity}`)}
                     sx={{ height: 23 }}
                   />
+                  {timeScopeLabel && (
+                    <Chip
+                      size="small"
+                      variant="outlined"
+                      icon={<ScheduleIcon />}
+                      label={t(timeScopeLabel.key, timeScopeLabel.values)}
+                      sx={{ height: 23 }}
+                    />
+                  )}
                 </Stack>
                 <Typography id="money-review-item-title" component="h2" variant="h5" sx={{ mt: 0.75, fontWeight: 850, lineHeight: 1.25 }}>
                   {item.title}
@@ -289,19 +314,12 @@ const MoneyReviewItemDetailDialog: React.FC<MoneyReviewItemDetailDialogProps> = 
 
           <DialogActions sx={{ px: { xs: 2, sm: 3 }, py: 2, borderTop: '1px solid', borderColor: 'divider' }}>
             <Box sx={{ width: '100%' }}>
-              {((Number.isSafeInteger(patternId) && patternId > 0) || (Number.isSafeInteger(categoryDefinitionId) && categoryDefinitionId > 0)) && (
+              {truth.error && <Alert severity="error" sx={{ mb: 1 }}>{truth.error}</Alert>}
+              {availableCorrectionTarget && (
                 <Button
                   size="small"
                   color="warning"
-                  onClick={() => setCorrectionTarget({
-                    kind: patternId > 0 ? 'pattern' : 'category',
-                    patternId: patternId > 0 ? patternId : undefined,
-                    categoryDefinitionId: categoryDefinitionId > 0 ? categoryDefinitionId : undefined,
-                    title: item.title,
-                    amount: Number(metadataData.detected_amount || metadataData.projected_total || metadataData.projectedTotal) || item.potentialImpact,
-                    nextExpectedDate: String(metadataData.next_expected_date || metadataData.nextExpectedDate || '') || undefined,
-                    capabilities: patternId > 0 ? ['suppress_pattern', 'end_pattern', 'pause_pattern', 'override_pattern'] : ['set_category_expectation'],
-                  })}
+                  onClick={() => setCorrectionTarget(availableCorrectionTarget)}
                   sx={{ mb: 1 }}
                 >
                   {tRoot('financialTruth.notAccurate', { defaultValue: 'Not accurate' })}
@@ -312,7 +330,7 @@ const MoneyReviewItemDetailDialog: React.FC<MoneyReviewItemDetailDialogProps> = 
                   size="small"
                   variant="contained"
                   disabled={truth.busy}
-                  onClick={() => void truth.revert(Number(returnCorrectionId)).then(() => onClose())}
+                  onClick={() => void restorePrediction()}
                   sx={{ mb: 1, ml: 1 }}
                 >
                   {tRoot('financialTruth.restorePrediction', { defaultValue: 'Restore prediction' })}
@@ -336,7 +354,12 @@ const MoneyReviewItemDetailDialog: React.FC<MoneyReviewItemDetailDialogProps> = 
       sourceFeature="money_review"
       sourceKey={item?.sourceKey}
       onClose={() => setCorrectionTarget(null)}
-      onApplied={() => onClose()}
+      onApplied={() => {
+        if (!item) return;
+        void onUpdateStatus(item, 'resolved').then((updated) => {
+          if (updated) onClose();
+        });
+      }}
     />
     </>
   );

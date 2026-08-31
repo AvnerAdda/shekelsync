@@ -82,11 +82,16 @@ describe('Financial truth resolution', () => {
       occurrence_count: 5,
       is_subscription: 1,
     }, [
-      { id: 1, action: 'override_pattern', overrides_json: '{"amount":55,"frequency":"quarterly"}', status: 'active' },
+      { id: 1, action: 'override_pattern', overrides_json: '{"amount":55,"frequency":"quarterly","isSubscription":false}', status: 'active' },
       { id: 2, action: 'skip_occurrence', occurrence_id: 'pattern:4:2026-09-01', overrides_json: '{}', status: 'active' },
     ]);
 
-    expect(resolved).toMatchObject({ amount: 55, frequency: 'quarterly', state: 'active' });
+    expect(resolved).toMatchObject({
+      amount: 55,
+      frequency: 'quarterly',
+      isSubscription: false,
+      state: 'active',
+    });
     expect(resolved.skippedOccurrences).toEqual(['pattern:4:2026-09-01']);
     expect(resolved.nextExpectedDate).toBe('2026-12-01');
   });

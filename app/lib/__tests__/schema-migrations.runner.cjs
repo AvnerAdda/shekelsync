@@ -114,6 +114,54 @@ const scenarios = {
       assert.equal(result.toVersion, CURRENT_SCHEMA_VERSION);
       assert.equal(getSchemaVersion(db), CURRENT_SCHEMA_VERSION);
       assert.equal(MIGRATIONS[MIGRATIONS.length - 1].version, CURRENT_SCHEMA_VERSION);
+      assert.ok(db.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'forecast_prediction_snapshots'").get());
+    }),
+
+  'review-forecast-v8-from-legacy': () =>
+    withDatabase((db, dbPath) => {
+      db.exec(`
+        CREATE TABLE subscription_alerts (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          subscription_id INTEGER NOT NULL,
+          alert_type TEXT NOT NULL,
+          severity TEXT,
+          title TEXT NOT NULL,
+          description TEXT,
+          old_amount REAL,
+          new_amount REAL,
+          percentage_change REAL,
+          is_dismissed INTEGER DEFAULT 0,
+          dismissed_at TEXT,
+          is_actioned INTEGER DEFAULT 0,
+          actioned_at TEXT,
+          action_taken TEXT,
+          created_at TEXT DEFAULT (datetime('now')),
+          expires_at TEXT
+        );
+        PRAGMA user_version = 7;
+      `);
+
+      runSchemaMigrations(db, { dbPath, logger: { log: () => {} } });
+
+      const columns = new Set(db.prepare("PRAGMA table_info('subscription_alerts')").all().map((column) => column.name));
+      assert.ok(columns.has('identity_key'));
+      assert.ok(columns.has('occurrence_id'));
+      assert.ok(columns.has('correction_capabilities_json'));
+      assert.ok(columns.has('time_scope_json'));
+      assert.ok(db.prepare("SELECT 1 FROM sqlite_master WHERE type = 'index' AND name = 'idx_subscription_alerts_identity'").get());
+      assert.ok(db.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'forecast_prediction_snapshots'").get());
+
+      const upsert = db.prepare(`
+        INSERT INTO subscription_alerts (subscription_id, alert_type, severity, title, identity_key)
+        VALUES (?, ?, ?, ?, ?)
+        ON CONFLICT(identity_key) WHERE identity_key IS NOT NULL DO UPDATE SET title = excluded.title
+      `);
+      upsert.run(4, 'price_increase', 'warning', 'First', 'subscription:4:price:2026-08-01');
+      upsert.run(4, 'price_increase', 'warning', 'Updated', 'subscription:4:price:2026-08-01');
+      assert.deepEqual(
+        db.prepare('SELECT COUNT(*) AS count, MAX(title) AS title FROM subscription_alerts').get(),
+        { count: 1, title: 'Updated' },
+      );
     }),
 
   'migrates-legacy-investment-assets': () =>

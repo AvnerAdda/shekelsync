@@ -57,6 +57,12 @@ describe('schema migrations (PRAGMA user_version)', () => {
     expect(result.stdout).toContain('schema-migrations:default-registry:ok');
   });
 
+  it('upgrades legacy alert storage and supports deterministic alert upserts', () => {
+    const result = runScenario('review-forecast-v8-from-legacy');
+    expect(result.status, result.stderr || result.stdout).toBe(0);
+    expect(result.stdout).toContain('schema-migrations:review-forecast-v8-from-legacy:ok');
+  });
+
   it('migrates legacy assets once, preserves ledger data, and mirrors later updates', () => {
     const result = runScenario('migrates-legacy-investment-assets');
     expect(result.status, result.stderr || result.stdout).toBe(0);

@@ -54,6 +54,8 @@ vi.mock('react-i18next', () => ({
       if (key === 'dashboard.minutes') return `~${values?.count} min`;
       if (key === 'dashboard.impact') return `${values?.amount} potential`;
       if (key === 'dashboard.openItem') return `Review ${values?.title}`;
+      if (key === 'timeScope.rollingDays') return `Last ${values?.count} days`;
+      if (key === 'timeScope.rollingRange') return `${values?.count}-day window · ${values?.start}–${values?.end}`;
       if (key.startsWith('groups.')) return key.includes('.data.') ? 'Fix the data' : key;
       return translations[key] || key;
     },
@@ -99,7 +101,14 @@ const response = {
     confidence: 0.9,
     priority: 90,
     primaryAction: null,
-    metadata: {},
+    metadata: {
+      timeScope: {
+        kind: 'rolling_days',
+        days: 7,
+        start: '2026-08-21',
+        end: '2026-08-27',
+      },
+    },
   }],
 };
 
@@ -122,12 +131,14 @@ describe('MoneyReviewDashboardSection', () => {
     expect(await screen.findByText('Refresh one account')).toBeInTheDocument();
     expect(screen.getByTestId('money-review-carousel')).toBeInTheDocument();
     expect(screen.getByText('1 items · ~1 min')).toBeInTheDocument();
+    expect(screen.getByText('7-day window · Aug 21, 2026–Aug 27, 2026')).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: 'Review Refresh one account' }));
 
     const dialog = await screen.findByRole('dialog');
     expect(await screen.findByRole('heading', { name: 'Refresh one account' })).toBeInTheDocument();
     expect(dialog).toHaveTextContent('Why this appeared');
+    expect(dialog).toHaveTextContent('7-day window · Aug 21, 2026–Aug 27, 2026');
     expect(dialog).not.toHaveTextContent('Full review queue');
 
     fireEvent.click(screen.getByRole('button', { name: 'Close item' }));

@@ -55,8 +55,12 @@ const FinancialCorrectionsDialog: React.FC<Props> = ({ open, onClose }) => {
   useEffect(() => { if (open) void load(); }, [load, open]);
 
   const restore = async (id: number) => {
-    await truth.revert(id);
-    await load();
+    try {
+      await truth.revert(id);
+      await load();
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : 'Could not restore this prediction');
+    }
   };
 
   return (

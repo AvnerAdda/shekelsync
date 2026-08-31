@@ -14,6 +14,9 @@ const webServerCommand = process.env.PLAYWRIGHT_USE_PREVIEW === 'true'
 export default defineConfig({
   testDir: './tests',
   timeout: 60_000,
+  // Vite compiles renderer chunks on demand; more workers overload the shared
+  // dev server and turn ordinary UI transitions into timeout-prone waits.
+  workers: 2,
   retries: process.env.CI ? 1 : 0,
   use: {
     baseURL: baseUrl,

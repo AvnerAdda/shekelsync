@@ -49,6 +49,11 @@ const MoneyReviewItemActions: React.FC<MoneyReviewItemActionsProps> = ({
   const isQuest = item.actionType.startsWith('quest_');
   const isCompleted = ['resolved', 'dismissed'].includes(item.status);
   const isSnoozed = item.status === 'snoozed';
+  const primaryActionLabel = item.primaryAction?.action === 'accept_quest'
+    ? t('actions.acceptQuest')
+    : item.primaryAction?.action === 'view_quests'
+      ? t('actions.viewQuest')
+      : item.primaryAction?.label || t('actions.open');
 
   const handleSnooze = (preset: SnoozePreset) => {
     setSnoozeAnchor(null);
@@ -64,7 +69,7 @@ const MoneyReviewItemActions: React.FC<MoneyReviewItemActionsProps> = ({
       onClick={() => void onPrimaryAction(item, item.primaryAction!)}
       sx={{ minWidth: { sm: 148 } }}
     >
-      {item.primaryAction.label || t('actions.open')}
+      {primaryActionLabel}
     </Button>
   ) : item.status === 'active' && !isQuest ? (
     <Button
@@ -91,7 +96,24 @@ const MoneyReviewItemActions: React.FC<MoneyReviewItemActionsProps> = ({
           '& > .MuiButton-root': { width: { xs: '100%', sm: 'auto' } },
         }}
       >
-        {isQuest ? primaryButton : isCompleted ? (
+        {isQuest ? (
+          <>
+            {primaryButton}
+            {item.status === 'active' && (
+              <Button
+                size="small"
+                variant="outlined"
+                disabled={busy}
+                onClick={() => void onPrimaryAction(item, {
+                  action: 'decline_quest',
+                  params: { quest_id: item.id },
+                })}
+              >
+                {t('actions.declineQuest', { defaultValue: 'Not now' })}
+              </Button>
+            )}
+          </>
+        ) : isCompleted ? (
           <Button
             size="small"
             startIcon={busy ? <CircularProgress size={16} /> : <ReplayIcon />}

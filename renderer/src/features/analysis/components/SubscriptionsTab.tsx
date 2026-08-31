@@ -296,6 +296,7 @@ const SubscriptionsTab: React.FC = () => {
             amount: subscription.user_amount || subscription.detected_amount,
             frequency: subscription.user_frequency || subscription.detected_frequency,
             nextExpectedDate: subscription.next_expected_date || undefined,
+            isSubscription: true,
             capabilities: subscription.correctionCapabilities,
           });
         }}

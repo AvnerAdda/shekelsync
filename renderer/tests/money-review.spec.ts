@@ -43,7 +43,7 @@ const reviewItems = [
     primaryAction: { label: 'Review budget', action: 'view_budgets', params: {} },
     metadata: {
       notificationType: 'budget_exceeded',
-      data: { spent: 1700, budget: 1000, category_name: 'Dining' },
+      data: { spent: 1700, budget: 1000, category_name: 'Dining', category_definition_id: 7 },
     },
   },
   {
@@ -155,6 +155,7 @@ test('Money Review prioritizes work and exposes flexible lifecycle controls', as
   await expect(reviewDialog.getByText('What the numbers show')).toBeVisible();
   await expect(reviewDialog.getByText('Spent')).toBeVisible();
   await expect(reviewDialog.getByText('Budget', { exact: true })).toBeVisible();
+  await expect(reviewDialog.getByRole('button', { name: 'Not accurate' })).toHaveCount(0);
 
   await reviewDialog.getByRole('button', { name: 'Snooze' }).click();
   await page.getByRole('menuitem', { name: /One month/ }).click();

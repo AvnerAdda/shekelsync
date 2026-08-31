@@ -34,6 +34,16 @@ const translate = vi.hoisted(() => (key: string, options?: Record<string, unknow
     'actions.snooze': 'Snooze',
     'actions.dismiss': 'Dismiss',
     'actions.more': 'More actions',
+    'actions.details': 'Review details',
+    'actions.acceptQuest': 'Accept challenge',
+    'actions.viewQuest': 'View challenge',
+    'actions.declineQuest': 'Not now',
+    'messages.questAccepted': 'Challenge accepted',
+    'messages.questDeclined': 'Challenge removed',
+    'forecastAccuracy.collecting': `Forecast learning · ${options?.count} days`,
+    'forecastAccuracy.provisional': `Forecast provisional · ${options?.mape}% error`,
+    'forecastAccuracy.established': `Forecast measured · ${options?.mape}% error`,
+    'forecastAccuracy.details': `${options?.samples} realized predictions`,
     'item.nextUp': 'Next up',
     'snooze.month': 'One month',
     'snooze.monthHint': 'Bring it back next month',
@@ -130,6 +140,42 @@ describe('Money Review page', () => {
     expect(get).toHaveBeenCalledWith('/api/money-review', { cacheMode: 'no-store' });
   });
 
+  it('opens the full review detail flow from the page queue', async () => {
+    render(<MemoryRouter><MoneyReviewPage /></MemoryRouter>);
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Review details' }));
+
+    expect(await screen.findByRole('dialog')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Transactions need categorization', level: 2 })).toBeInTheDocument();
+  });
+
+  it('shows forecast calibration readiness without overstating early accuracy', async () => {
+    get.mockResolvedValue({
+      ok: true,
+      data: {
+        ...response(),
+        forecastAccuracy: {
+          available: true,
+          evaluationWindowDays: 90,
+          readiness: 'provisional',
+          observedDays: 16,
+          evaluatedFrom: '2026-08-01',
+          evaluatedThrough: '2026-08-16',
+          sampleCount: 48,
+          expenseMae: 42,
+          expenseMape: 18.4,
+          cashFlowMae: 51,
+          cashFlowBias: 4,
+          intervalCoverage: 76,
+        },
+      },
+    });
+
+    render(<MemoryRouter><MoneyReviewPage /></MemoryRouter>);
+
+    expect(await screen.findByText('Forecast provisional · 18% error')).toBeInTheDocument();
+  });
+
   it('reuses the dashboard response when Review all opens', async () => {
     render(
       <React.StrictMode>
@@ -158,7 +204,8 @@ describe('Money Review page', () => {
     expect(await screen.findByText("You're all caught up")).toBeInTheDocument();
   });
 
-  it('routes challenges to their owning flow without bypassing quest lifecycle rules', async () => {
+  it('accepts a proposed challenge directly through the quest lifecycle endpoint', async () => {
+    post.mockResolvedValue({ ok: true, data: { success: true } });
     get.mockResolvedValue({
       ok: true,
       data: response([{
@@ -167,15 +214,42 @@ describe('Money Review page', () => {
         group: 'improve',
         actionType: 'quest_savings_target',
         title: 'Save more this month',
-        primaryAction: { label: 'View challenge', action: 'view_quests', params: {} },
+        primaryAction: { label: 'Accept challenge', action: 'accept_quest', params: { quest_id: 18 } },
       }]),
     });
     render(<MemoryRouter><MoneyReviewPage /></MemoryRouter>);
 
-    fireEvent.click(await screen.findByRole('button', { name: 'View challenge' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Accept challenge' }));
 
+    await waitFor(() => {
+      expect(post).toHaveBeenCalledWith('/api/analytics/quests/18/accept', {});
+    });
     expect(put).not.toHaveBeenCalled();
     expect(screen.queryByRole('button', { name: 'Done' })).not.toBeInTheDocument();
+    expect(showNotification).toHaveBeenCalledWith('Challenge accepted', 'success');
+  });
+
+  it('declines a proposed challenge from the review queue', async () => {
+    post.mockResolvedValue({ ok: true, data: { success: true } });
+    get.mockResolvedValue({
+      ok: true,
+      data: response([{
+        ...reviewItem,
+        id: 18,
+        group: 'improve',
+        actionType: 'quest_savings_target',
+        title: 'Save more this month',
+        primaryAction: { label: 'Accept challenge', action: 'accept_quest', params: { quest_id: 18 } },
+      }]),
+    });
+    render(<MemoryRouter><MoneyReviewPage /></MemoryRouter>);
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Not now' }));
+
+    await waitFor(() => {
+      expect(post).toHaveBeenCalledWith('/api/analytics/quests/18/decline', {});
+    });
+    expect(showNotification).toHaveBeenCalledWith('Challenge removed', 'info');
   });
 
   it('offers meaningful snooze periods instead of a single fixed delay', async () => {

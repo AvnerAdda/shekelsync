@@ -21,6 +21,7 @@ import AssignmentTurnedInIcon from '@mui/icons-material/AssignmentTurnedIn';
 import ArrowForwardIcon from '@mui/icons-material/ArrowForward';
 import CloseIcon from '@mui/icons-material/Close';
 import DoneAllIcon from '@mui/icons-material/DoneAll';
+import QueryStatsIcon from '@mui/icons-material/QueryStats';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import SavingsIcon from '@mui/icons-material/Savings';
 import ScheduleIcon from '@mui/icons-material/Schedule';
@@ -31,6 +32,7 @@ import LoadingState from '@renderer/components/LoadingState';
 import LockedPagePlaceholder from '@renderer/shared/empty-state/LockedPagePlaceholder';
 import { resolveOnboardingGate } from '@renderer/features/layout/components/onboarding-gate';
 import MoneyReviewCard from '../components/MoneyReviewCard';
+import MoneyReviewItemDetailDialog from '../components/MoneyReviewItemDetailDialog';
 import { useMoneyReview } from '../hooks/useMoneyReview';
 import { filterMoneyReviewItems, type MoneyReviewFilter } from '../review-helpers';
 import type { MoneyReviewGroup, MoneyReviewResponse } from '../types';
@@ -67,6 +69,7 @@ const MoneyReviewPage: React.FC<MoneyReviewPageProps> = ({
   const [filter, setFilter] = useState<MoneyReviewFilter>('open');
   const [groupFilter, setGroupFilter] = useState<MoneyReviewGroupFilter>('all');
   const [correctionsOpen, setCorrectionsOpen] = useState(false);
+  const [detailItemId, setDetailItemId] = useState<number | null>(null);
   const {
     response,
     loading,
@@ -106,6 +109,10 @@ const MoneyReviewPage: React.FC<MoneyReviewPageProps> = ({
     () => response.items.find((item) => ['active', 'accepted'].includes(item.status)) || null,
     [response.items],
   );
+  const detailItem = useMemo(
+    () => response.items.find((item) => item.id === detailItemId) || null,
+    [detailItemId, response.items],
+  );
   const generatedTime = useMemo(() => {
     if (!response.generatedAt) return '';
     const generatedAt = new Date(response.generatedAt);
@@ -115,6 +122,20 @@ const MoneyReviewPage: React.FC<MoneyReviewPageProps> = ({
       minute: '2-digit',
     }).format(generatedAt);
   }, [i18n?.language, response.generatedAt]);
+  const forecastAccuracy = response.forecastAccuracy;
+  const forecastAccuracyLabel = forecastAccuracy
+    ? t(`forecastAccuracy.${forecastAccuracy.readiness}`, {
+      count: forecastAccuracy.observedDays,
+      mape: forecastAccuracy.expenseMape == null ? '—' : Math.round(forecastAccuracy.expenseMape),
+    })
+    : null;
+  const forecastAccuracyDetails = forecastAccuracy
+    ? t('forecastAccuracy.details', {
+      samples: forecastAccuracy.sampleCount,
+      mae: forecastAccuracy.expenseMae == null ? '—' : formatCurrency(forecastAccuracy.expenseMae),
+      coverage: forecastAccuracy.intervalCoverage == null ? '—' : `${Math.round(forecastAccuracy.intervalCoverage)}%`,
+    })
+    : '';
 
   const handleFilterChange = (_event: React.SyntheticEvent, value: MoneyReviewFilter) => {
     setFilter(value);
@@ -202,6 +223,19 @@ const MoneyReviewPage: React.FC<MoneyReviewPageProps> = ({
           </Stack>
 
           <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center', alignSelf: { xs: 'stretch', md: 'flex-start' } }}>
+            {forecastAccuracy && forecastAccuracyLabel && (
+              <Tooltip title={forecastAccuracyDetails}>
+                <Chip
+                  size="small"
+                  icon={<QueryStatsIcon />}
+                  label={forecastAccuracyLabel}
+                  color={forecastAccuracy.readiness === 'established'
+                    ? (forecastAccuracy.expenseMape != null && forecastAccuracy.expenseMape > 35 ? 'warning' : 'success')
+                    : forecastAccuracy.readiness === 'provisional' ? 'info' : 'default'}
+                  variant="outlined"
+                />
+              </Tooltip>
+            )}
             {generatedTime && (
               <Typography variant="caption" color="text.secondary" sx={{ flex: { xs: 1, md: 'initial' } }}>
                 {t('updatedAt', { time: generatedTime })}
@@ -419,6 +453,7 @@ const MoneyReviewPage: React.FC<MoneyReviewPageProps> = ({
                     busy={updatingId === item.id}
                     onPrimaryAction={performPrimaryAction}
                     onUpdateStatus={updateStatus}
+                    onOpenDetails={(item) => setDetailItemId(item.id)}
                   />
                 ))}
               </Stack>
@@ -436,6 +471,15 @@ const MoneyReviewPage: React.FC<MoneyReviewPageProps> = ({
         </>
       )}
       <FinancialCorrectionsDialog open={correctionsOpen} onClose={() => setCorrectionsOpen(false)} />
+      <MoneyReviewItemDetailDialog
+        open={detailItemId !== null}
+        item={detailItem}
+        loading={false}
+        busy={detailItem?.id === updatingId}
+        onClose={() => setDetailItemId(null)}
+        onPrimaryAction={performPrimaryAction}
+        onUpdateStatus={updateStatus}
+      />
     </Box>
   );
 };

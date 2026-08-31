@@ -792,6 +792,50 @@ const MIGRATIONS = [
       }
     },
   },
+  {
+    version: 8,
+    name: 'review-feedback-alert-identity-and-forecast-evaluation',
+    mutatesSchema: true,
+    up: (db) => {
+      addColumnIfMissing(db, 'subscription_alerts', 'identity_key', 'TEXT');
+      addColumnIfMissing(db, 'subscription_alerts', 'evidence_start_date', 'TEXT');
+      addColumnIfMissing(db, 'subscription_alerts', 'evidence_end_date', 'TEXT');
+      addColumnIfMissing(db, 'subscription_alerts', 'expected_date', 'TEXT');
+      addColumnIfMissing(db, 'subscription_alerts', 'days_past_due', 'INTEGER');
+      addColumnIfMissing(db, 'subscription_alerts', 'occurrence_id', 'TEXT');
+      addColumnIfMissing(db, 'subscription_alerts', 'correction_capabilities_json', "TEXT NOT NULL DEFAULT '[]'");
+      addColumnIfMissing(db, 'subscription_alerts', 'time_scope_json', "TEXT NOT NULL DEFAULT '{}'");
+
+      if (tableExists(db, 'subscription_alerts')) {
+        db.exec(`
+          CREATE UNIQUE INDEX IF NOT EXISTS idx_subscription_alerts_identity
+            ON subscription_alerts(identity_key) WHERE identity_key IS NOT NULL;
+        `);
+      }
+
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS forecast_prediction_snapshots (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          generated_date TEXT NOT NULL,
+          target_date TEXT NOT NULL,
+          truth_revision INTEGER NOT NULL DEFAULT 0,
+          horizon_days INTEGER NOT NULL,
+          expected_income REAL NOT NULL DEFAULT 0,
+          expected_expenses REAL NOT NULL DEFAULT 0,
+          expected_cash_flow REAL NOT NULL DEFAULT 0,
+          p10_cash_flow REAL,
+          p50_cash_flow REAL,
+          p90_cash_flow REAL,
+          created_at TEXT NOT NULL DEFAULT (datetime('now')),
+          updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+          UNIQUE(generated_date, target_date, truth_revision)
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_forecast_prediction_snapshots_target
+          ON forecast_prediction_snapshots(target_date, horizon_days);
+      `);
+    },
+  },
 ];
 
 const CURRENT_SCHEMA_VERSION = MIGRATIONS.length

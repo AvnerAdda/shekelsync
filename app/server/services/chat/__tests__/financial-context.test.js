@@ -304,6 +304,10 @@ describe('financial-context service', () => {
       { spendingCategory: 'growth', targetPercentage: 20, actualPercentage: 40, driftPercentage: 20, amount: 400 },
     ]);
     expect(db.query).toHaveBeenCalledTimes(16);
+    const subscriptionAlertQuery = db.query.mock.calls
+      .map(([sql]) => String(sql))
+      .find((sql) => sql.includes('FROM subscription_alerts alert'));
+    expect(subscriptionAlertQuery).toContain("alert.created_at >= datetime('now', '-90 days')");
   });
 
   it('swallows investment-query failures while keeping analytics context', async () => {

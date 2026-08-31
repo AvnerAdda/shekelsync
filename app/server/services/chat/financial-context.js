@@ -7,6 +7,7 @@ const { dialect } = require('../../../lib/sql-dialect.js');
 const { resolveDateRange } = require('../../../lib/server/query-utils.js');
 const { BANK_CATEGORY_NAME } = require('../../../lib/category-constants.js');
 const optimizerService = require('../optimizer.js');
+const { activeSubscriptionAlertPredicate } = require('../subscription-alert-policy.js');
 
 const TARGET_SPENDING_CATEGORIES = new Set(['essential', 'growth', 'stability', 'reward']);
 
@@ -210,7 +211,7 @@ async function getSubscriptionContext(db) {
       FROM subscription_alerts alert
       LEFT JOIN subscriptions subscription ON subscription.id = alert.subscription_id
       WHERE COALESCE(alert.is_dismissed, 0) = 0
-        AND (alert.expires_at IS NULL OR alert.expires_at > datetime('now'))
+        AND ${activeSubscriptionAlertPredicate('alert')}
         AND (alert.subscription_id IS NULL OR subscription.status IN ('active', 'keep', 'review'))
       GROUP BY severity
     `),
