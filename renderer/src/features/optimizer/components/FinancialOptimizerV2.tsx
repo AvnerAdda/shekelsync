@@ -98,7 +98,11 @@ function dateLabel(value: string | null | undefined): string {
   return Number.isNaN(parsed.getTime()) ? value : parsed.toLocaleDateString();
 }
 
-const FinancialOptimizerV2: React.FC = () => {
+interface FinancialOptimizerV2Props {
+  showLauncher?: boolean;
+}
+
+const FinancialOptimizerV2: React.FC<FinancialOptimizerV2Props> = ({ showLauncher = true }) => {
   const theme = useTheme();
   const { t, i18n } = useTranslation('translation', { keyPrefix: 'optimizerV2' });
   const { t: tRoot } = useTranslation('translation');
@@ -658,11 +662,11 @@ const FinancialOptimizerV2: React.FC = () => {
   const stepIndex = STEPS.findIndex((step) => step.key === view);
   return (
     <>
-      <Tooltip title={t('open', 'Open Optimizator')} placement="left">
+      {showLauncher && <Tooltip title={t('open', 'Open Optimizator')} placement="left">
         <Fab color="secondary" size="medium" onClick={() => setOpen(true)} aria-label="Open Optimizator" sx={{ position: 'fixed', insetInlineEnd: 24, bottom: 92, zIndex: theme.zIndex.speedDial }}>
           <TipsAndUpdatesIcon />
         </Fab>
-      </Tooltip>
+      </Tooltip>}
       <Drawer
         anchor="right" open={open} onClose={() => setOpen(false)}
         slotProps={{ paper: { sx: { width: { xs: '100%', sm: DRAWER_WIDTH }, maxWidth: '100vw', bgcolor: alpha(theme.palette.background.default, 0.98) } } }}

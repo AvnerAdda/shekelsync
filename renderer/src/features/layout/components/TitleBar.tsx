@@ -17,7 +17,9 @@ import { alpha, useTheme } from '@mui/material/styles';
 import AboutIcon from '@mui/icons-material/Info';
 import AccountsIcon from '@mui/icons-material/AccountBalance';
 import AnalyticsIcon from '@mui/icons-material/Analytics';
+import AssistantIcon from '@mui/icons-material/AutoAwesome';
 import CategoryIcon from '@mui/icons-material/Category';
+import ChatIcon from '@mui/icons-material/ChatOutlined';
 import CloseIcon from '@mui/icons-material/Close';
 import CoffeeIcon from '@mui/icons-material/LocalCafe';
 import CopyIcon from '@mui/icons-material/ContentCopy';
@@ -48,8 +50,10 @@ import SaveIcon from '@mui/icons-material/Save';
 import SearchIcon from '@mui/icons-material/Search';
 import SettingsIcon from '@mui/icons-material/Settings';
 import ReviewIcon from '@mui/icons-material/AssignmentTurnedIn';
+import ActivityIcon from '@mui/icons-material/ReceiptLong';
 import ShieldIcon from '@mui/icons-material/Shield';
 import TranslateIcon from '@mui/icons-material/Translate';
+import OptimizerIcon from '@mui/icons-material/TipsAndUpdatesOutlined';
 import UndoIcon from '@mui/icons-material/Undo';
 import ViewIcon from '@mui/icons-material/Visibility';
 import ZoomInIcon from '@mui/icons-material/ZoomIn';
@@ -86,6 +90,7 @@ const TitleBar: React.FC<TitleBarProps> = ({ sessionDisplayName, authLoading }) 
   const [isMaximized, setIsMaximized] = useState(false);
   const [windowClassesApplied, setWindowClassesApplied] = useState(false);
   const [langMenuAnchor, setLangMenuAnchor] = useState<null | HTMLElement>(null);
+  const [assistantMenuAnchor, setAssistantMenuAnchor] = useState<null | HTMLElement>(null);
   const [moreActionsAnchor, setMoreActionsAnchor] = useState<null | HTMLElement>(null);
   const [securityDetailsOpen, setSecurityDetailsOpen] = useState(false);
   const [donationModalOpen, setDonationModalOpen] = useState(false);
@@ -113,7 +118,6 @@ const TitleBar: React.FC<TitleBarProps> = ({ sessionDisplayName, authLoading }) 
 
   // Platform detection
   const isMacOS = window.electronAPI?.platform?.isMacOS;
-  const reduceVisualEffects = window.electronAPI?.platform?.reduceVisualEffects === true;
   const modifierKeyLabel = isMacOS ? '⌘' : 'Ctrl+';
   const searchShortcutLabel = `${modifierKeyLabel}K`;
 
@@ -150,47 +154,55 @@ const TitleBar: React.FC<TitleBarProps> = ({ sessionDisplayName, authLoading }) 
       },
       {
         label: t('titleBar.search.options.review'),
-        path: '/?moneyReview=all',
+        path: '/review',
         icon: <ReviewIcon fontSize="small" />,
+        shortcut: `${modifierKeyLabel}2`,
         keywords: getKeywords('review', ['actions', 'inbox', 'alerts', 'tasks', 'money review']),
       },
       {
-        label: t('titleBar.search.options.analysis'),
-        path: '/analysis',
+        label: t('titleBar.search.options.activity', { defaultValue: 'Activity' }),
+        path: '/activity',
+        icon: <ActivityIcon fontSize="small" />,
+        shortcut: `${modifierKeyLabel}3`,
+        keywords: getKeywords('activity', ['transactions', 'payments', 'ledger', 'purchases']),
+      },
+      {
+        label: t('titleBar.search.options.plan', { defaultValue: 'Plan' }),
+        path: '/plan',
         icon: <AnalyticsIcon fontSize="small" />,
-        shortcut: `${modifierKeyLabel}2`,
+        shortcut: `${modifierKeyLabel}4`,
         keywords: getKeywords('analysis', ['analytics', 'spending', 'budget', 'reports', 'charts']),
       },
       {
-        label: t('titleBar.search.options.investments'),
-        path: '/investments',
+        label: t('titleBar.search.options.wealth', { defaultValue: 'Wealth' }),
+        path: '/wealth',
         icon: <InvestmentsIcon fontSize="small" />,
-        shortcut: `${modifierKeyLabel}3`,
+        shortcut: `${modifierKeyLabel}5`,
         keywords: getKeywords('investments', ['portfolio', 'stocks', 'holdings', 'wealth', 'assets']),
       },
       {
         label: t('titleBar.search.options.settings'),
         path: '/settings',
         icon: <SettingsIcon fontSize="small" />,
-        shortcut: `${modifierKeyLabel}4`,
+        shortcut: `${modifierKeyLabel}6`,
         keywords: getKeywords('settings', ['preferences', 'config', 'theme', 'language', 'profile']),
       },
       // Dashboard sub-sections
       {
         label: t('titleBar.search.options.transactions'),
-        path: '/#transactions',
+        path: '/activity',
         icon: <CategoryIcon fontSize="small" />,
         keywords: getKeywords('transactions', ['history', 'payments', 'purchases', 'expenses', 'income']),
       },
       {
         label: t('titleBar.search.options.breakdown'),
-        path: '/#breakdown',
+        path: '/plan?tab=spending',
         icon: <CategoryIcon fontSize="small" />,
         keywords: getKeywords('breakdown', ['categories', 'pie', 'chart', 'spending breakdown']),
       },
       {
         label: t('titleBar.search.options.vendors'),
-        path: '/analysis',
+        path: '/plan?tab=spending',
         icon: <AccountsIcon fontSize="small" />,
         keywords: getKeywords('vendors', ['merchants', 'stores', 'shops', 'where']),
       },
@@ -222,13 +234,13 @@ const TitleBar: React.FC<TitleBarProps> = ({ sessionDisplayName, authLoading }) 
       // Investments sub-sections
       {
         label: t('titleBar.search.options.portfolio'),
-        path: '/investments',
+        path: '/wealth',
         icon: <InvestmentsIcon fontSize="small" />,
         keywords: getKeywords('portfolio', ['total', 'value', 'performance']),
       },
       {
         label: t('titleBar.search.options.holdings'),
-        path: '/investments?tab=holdings',
+        path: '/wealth?tab=holdings',
         icon: <InvestmentsIcon fontSize="small" />,
         keywords: getKeywords('holdings', ['positions', 'shares', 'funds']),
       },
@@ -533,17 +545,11 @@ const TitleBar: React.FC<TitleBarProps> = ({ sessionDisplayName, authLoading }) 
         right: 0,
         height: 64,
         zIndex: (muiTheme) => muiTheme.zIndex.drawer + 1,
-        backgroundColor: reduceVisualEffects
-          ? theme.palette.background.paper
-          : theme.palette.mode === 'dark'
-            ? 'rgba(10, 10, 10, 0.8)'
-            : 'rgba(255, 255, 255, 0.8)',
-        backdropFilter: reduceVisualEffects ? 'none' : 'blur(20px)',
-        WebkitBackdropFilter: reduceVisualEffects ? 'none' : 'blur(20px)',
-        boxShadow: reduceVisualEffects
-          ? `0 1px 0 ${alpha(theme.palette.divider, 0.18)}`
-          : `0 4px 30px ${alpha(theme.palette.common.black, 0.1)}`,
-        borderBottom: `1px solid ${alpha(theme.palette.divider, 0.1)}`,
+        backgroundColor: theme.palette.background.paper,
+        backdropFilter: 'none',
+        WebkitBackdropFilter: 'none',
+        boxShadow: `0 1px 0 ${theme.palette.divider}`,
+        borderBottom: `1px solid ${theme.palette.divider}`,
         borderTopLeftRadius: 'var(--app-window-radius, 12px)',
         borderTopRightRadius: 'var(--app-window-radius, 12px)',
         overflow: 'hidden',
@@ -629,13 +635,11 @@ const TitleBar: React.FC<TitleBarProps> = ({ sessionDisplayName, authLoading }) 
             width: 36,
             height: 36,
             borderRadius: '10px',
-            background: `linear-gradient(135deg, ${theme.palette.primary.main} 0%, ${theme.palette.secondary.main} 100%)`,
-            boxShadow: `0 4px 12px ${alpha(theme.palette.primary.main, 0.3)}`,
+            background: theme.palette.primary.main,
+            boxShadow: `0 2px 6px ${alpha(theme.palette.primary.main, 0.22)}`,
             padding: '7px',
-            transition: 'transform 0.2s',
-            '&:hover': {
-              transform: 'scale(1.05)',
-            }
+            transition: 'background-color 160ms ease',
+            '&:hover': { backgroundColor: theme.palette.primary.dark },
           }}
         >
           <img
@@ -653,11 +657,7 @@ const TitleBar: React.FC<TitleBarProps> = ({ sessionDisplayName, authLoading }) 
           sx={{
             fontWeight: 800,
             fontSize: '1.1rem',
-            background: `linear-gradient(135deg, ${theme.palette.primary.main} 0%, ${theme.palette.secondary.main} 100%)`,
-            backgroundClip: 'text',
-            textFillColor: 'transparent',
-            WebkitBackgroundClip: 'text',
-            WebkitTextFillColor: 'transparent',
+            color: theme.palette.primary.dark,
             letterSpacing: '-0.5px',
             userSelect: 'none',
           }}
@@ -743,16 +743,17 @@ const TitleBar: React.FC<TitleBarProps> = ({ sessionDisplayName, authLoading }) 
                       pr: 8,
                       fontSize: '0.9rem',
                       borderRadius: 3,
-                      backgroundColor: alpha(theme.palette.text.primary, 0.05),
-                      transition: 'all 0.2s ease-in-out',
-                      '& fieldset': { border: 'none' },
+                      backgroundColor: theme.palette.background.default,
+                      transition: 'background-color 160ms ease, box-shadow 160ms ease',
+                      '& fieldset': { borderColor: theme.palette.divider },
                       '&:hover': {
-                        backgroundColor: alpha(theme.palette.text.primary, 0.08),
-                        transform: 'translateY(-1px)',
+                        backgroundColor: theme.palette.background.paper,
+                        '& fieldset': { borderColor: alpha(theme.palette.primary.main, 0.45) },
                       },
                       '&.Mui-focused': {
-                        backgroundColor: alpha(theme.palette.background.paper, 0.8),
-                        boxShadow: `0 4px 12px ${alpha(theme.palette.common.black, 0.1)}`,
+                        backgroundColor: theme.palette.background.paper,
+                        boxShadow: `0 0 0 3px ${alpha(theme.palette.primary.main, 0.12)}`,
+                        '& fieldset': { borderColor: theme.palette.primary.main },
                         '& .MuiInputAdornment-root': {
                           color: theme.palette.primary.main,
                         }
@@ -809,9 +810,9 @@ const TitleBar: React.FC<TitleBarProps> = ({ sessionDisplayName, authLoading }) 
               height: 32,
               fontSize: '0.8rem',
               fontWeight: 500,
-              backgroundColor: alpha(theme.palette.primary.main, 0.1),
-              borderColor: alpha(theme.palette.primary.main, 0.2),
-              color: theme.palette.primary.main,
+              backgroundColor: alpha(theme.palette.primary.main, 0.08),
+              borderColor: alpha(theme.palette.primary.main, 0.24),
+              color: theme.palette.primary.dark,
               borderRadius: 2,
             }}
           />
@@ -918,6 +919,57 @@ const TitleBar: React.FC<TitleBarProps> = ({ sessionDisplayName, authLoading }) 
         <GuideTips />
 
         <SmartNotifications />
+
+        <Tooltip title={t('titleBar.tooltips.financialTools', { defaultValue: 'Financial tools' })}>
+          <IconButton
+            size="small"
+            aria-label={t('titleBar.tooltips.financialTools', { defaultValue: 'Financial tools' })}
+            onClick={(event) => setAssistantMenuAnchor(event.currentTarget)}
+            sx={{
+              width: 36,
+              height: 36,
+              color: theme.palette.primary.main,
+              borderRadius: 2,
+              bgcolor: alpha(theme.palette.primary.main, 0.08),
+              '&:hover': { bgcolor: alpha(theme.palette.primary.main, 0.14) },
+            }}
+          >
+            <AssistantIcon sx={{ fontSize: 20 }} />
+          </IconButton>
+        </Tooltip>
+        <Menu
+          anchorEl={assistantMenuAnchor}
+          open={Boolean(assistantMenuAnchor)}
+          onClose={() => setAssistantMenuAnchor(null)}
+          anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+          transformOrigin={{ vertical: 'top', horizontal: 'right' }}
+          slotProps={{ paper: { sx: { mt: 1, minWidth: 220 } } }}
+        >
+          <MenuItem
+            onClick={() => {
+              setAssistantMenuAnchor(null);
+              window.dispatchEvent(new CustomEvent('openChatbotDrawer'));
+            }}
+          >
+            <ListItemIcon><ChatIcon fontSize="small" color="primary" /></ListItemIcon>
+            <ListItemText
+              primary={t('titleBar.financialTools.assistant', { defaultValue: 'Ask the assistant' })}
+              secondary={t('titleBar.financialTools.assistantHint', { defaultValue: 'Explore your local financial data' })}
+            />
+          </MenuItem>
+          <MenuItem
+            onClick={() => {
+              setAssistantMenuAnchor(null);
+              window.dispatchEvent(new CustomEvent('openOptimizerDrawer'));
+            }}
+          >
+            <ListItemIcon><OptimizerIcon fontSize="small" color="secondary" /></ListItemIcon>
+            <ListItemText
+              primary={t('titleBar.financialTools.optimizer', { defaultValue: 'Find opportunities' })}
+              secondary={t('titleBar.financialTools.optimizerHint', { defaultValue: 'Review evidence-backed actions' })}
+            />
+          </MenuItem>
+        </Menu>
 
         <Tooltip title={t('titleBar.tooltips.moreActions', { defaultValue: 'More actions' })}>
           <IconButton

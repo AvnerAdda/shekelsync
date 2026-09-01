@@ -1333,6 +1333,41 @@ const defaultHandlers: Record<string, Handler> = {
   'POST /api/scrape/bulk': respondOK,
   'GET /api/categories/hierarchy': respondWith(categoryHierarchy),
   'GET /api/categories/transactions': respondWith({ transactions: [] }),
+  'GET /api/transactions/search': respondWith({
+    transactions: [
+      {
+        identifier: 'activity-income-1',
+        vendor: 'demo-payroll',
+        name: 'Monthly salary',
+        category_name: 'Salary',
+        parent_name: 'Income',
+        category_type: 'income',
+        memo: null,
+        tags: [],
+        price: 12000,
+        date: '2025-09-20T08:00:00.000Z',
+        processed_date: null,
+        status: 'completed',
+      },
+      {
+        identifier: 'activity-expense-1',
+        vendor: 'demo-market',
+        name: 'Neighborhood market',
+        category_name: 'Groceries',
+        parent_name: 'Expenses',
+        category_type: 'expense',
+        memo: null,
+        tags: [],
+        price: -245,
+        date: '2025-09-19T16:30:00.000Z',
+        processed_date: null,
+        status: 'completed',
+      },
+    ],
+    count: 2,
+    searchQuery: '',
+    filters: {},
+  }),
   'GET /api/get_all_categories': respondWith([
     { category: 'Housing', count: 12 },
     { category: 'Transportation', count: 6 },
@@ -1523,9 +1558,9 @@ export const goHome = async (page: Page) => {
 
 export const openAnalysisPage = async (page: Page, mode: 'sidebar' | 'route' = 'sidebar') => {
   if (mode === 'route') {
-    await page.goto('/#/analysis', { waitUntil: 'domcontentloaded' });
+    await page.goto('/#/plan', { waitUntil: 'domcontentloaded' });
   } else {
-    await page.getByRole('button', { name: 'Analysis' }).click();
+    await page.getByRole('button', { name: 'Plan' }).click();
   }
 
   // Analysis chunk compilation can be slow on CI when multiple workers boot together.

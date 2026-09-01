@@ -12,6 +12,35 @@ Release binaries are published at
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-09-01
+
+### Added
+- A first-class Activity ledger for recent transactions, with quick type filters,
+  text search, visible-period totals, localized date groups, and direct access to
+  the existing transaction detail and advanced search workflows.
+- First-class Review, Plan, and Wealth routes. Existing Analysis, Budgets, and
+  Investments deep links remain compatible and resolve to their v0.2 areas.
+- Forecast prediction snapshots and calibration reporting so Money Review can
+  distinguish learning, provisional, and measured forecast accuracy.
+
+### Changed
+- Reframed the desktop app as an action-first daily money cockpit with primary
+  navigation for Home, Review, Activity, Plan, Wealth, and Settings.
+- Redesigned the shell and Home hierarchy around opaque surfaces, clearer type,
+  restrained elevation, a focused cash-flow summary, explicit period controls,
+  and a visible local-device privacy cue.
+- Improved Money Review freshness with evidence dates, recurring-alert identity,
+  precise correction targets, and direct challenge accept/decline workflows.
+- The release migration guard now reviews the versioned runtime migrations and
+  fresh-install schema alongside standalone migration scripts.
+
+### Fixed
+- Prevented stale subscription and notification evidence from resurfacing as new
+  review work, and made forecast evaluation reflect realized local data.
+- Isolated analytics benchmarks in temporary databases, preventing benchmark
+  setup from overwriting a developer database and supporting Electron-native
+  SQLite builds without a local rebuild.
+
 ## [0.1.35] - 2026-08-30
 
 ### Added
@@ -157,7 +186,8 @@ Initial public release series. Highlights across these versions:
 - Numerous scraping-reliability, double-counting, and schema-safety fixes,
   including guarding against unsafe SQLite schema reinitialization.
 
-[Unreleased]: https://github.com/AvnerAdda/shekelsync/compare/v0.1.35...HEAD
+[Unreleased]: https://github.com/AvnerAdda/shekelsync/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/AvnerAdda/shekelsync/compare/v0.1.35...v0.2.0
 [0.1.35]: https://github.com/AvnerAdda/shekelsync/releases/tag/v0.1.35
 [0.1.34]: https://github.com/AvnerAdda/shekelsync/releases/tag/v0.1.34
 [0.1.33]: https://github.com/AvnerAdda/shekelsync/releases/tag/v0.1.33

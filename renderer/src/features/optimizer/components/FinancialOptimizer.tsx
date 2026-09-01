@@ -113,7 +113,11 @@ function parseOptimizerDate(value: string): Date {
   return new Date(normalized);
 }
 
-export const FinancialOptimizerV1: React.FC = () => {
+interface FinancialOptimizerProps {
+  showLauncher?: boolean;
+}
+
+export const FinancialOptimizerV1: React.FC<FinancialOptimizerProps> = ({ showLauncher = true }) => {
   const theme = useTheme();
   const { t, i18n } = useTranslation('translation', { keyPrefix: 'optimizer' });
   const { t: tRoot } = useTranslation('translation');
@@ -858,7 +862,7 @@ export const FinancialOptimizerV1: React.FC = () => {
 
   return (
     <>
-      <Tooltip title={t('fabTooltip', 'Open Optimizator')}>
+      {showLauncher && <Tooltip title={t('fabTooltip', 'Open Optimizator')}>
         <Fab
           color="secondary"
           variant="circular"
@@ -883,7 +887,7 @@ export const FinancialOptimizerV1: React.FC = () => {
         >
           <TipsAndUpdatesIcon />
         </Fab>
-      </Tooltip>
+      </Tooltip>}
       <Drawer
         anchor="right"
         open={open}

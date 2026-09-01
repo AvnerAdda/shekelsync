@@ -19,6 +19,7 @@ import { PortfolioBreakdownItem } from '@renderer/types/investments';
 import { AggregationPeriod } from '@renderer/types/dashboard';
 import { DashboardFiltersProvider, useDashboardFilters } from '@renderer/features/dashboard/DashboardFiltersContext';
 import DashboardSummarySection from '@renderer/features/dashboard/components/DashboardSummarySection';
+import DashboardWelcome from '@renderer/features/dashboard/components/DashboardWelcome';
 import TransactionHistorySection from '@renderer/features/dashboard/components/TransactionHistorySection';
 import BreakdownTabsSection from '@renderer/features/dashboard/components/BreakdownTabsSection';
 import MoneyReviewDashboardSection from '@renderer/features/money-review/components/MoneyReviewDashboardSection';
@@ -751,6 +752,7 @@ const DashboardHomeContent: React.FC = () => {
 
   return (
     <Box data-dashboard-ready="true">
+      <DashboardWelcome />
       {!primaryHasHistory && hasTransactions && (
         <Alert
           severity="info"
