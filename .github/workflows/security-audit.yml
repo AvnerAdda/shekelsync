@@ -18,10 +18,10 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v7
 
       - name: Set up Node.js ${{ matrix.node-version }}
-        uses: actions/setup-node@v3
+        uses: actions/setup-node@v7
         with:
           node-version: ${{ matrix.node-version }}
           cache: 'npm'
@@ -43,7 +43,7 @@ jobs:
           NODE_ENV: test
 
       - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v3
+        uses: codecov/codecov-action@v7
         with:
           files: ./app/coverage/coverage-final.json
           flags: security-tests
@@ -55,23 +55,38 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v7
 
       - name: Set up Node.js
-        uses: actions/setup-node@v3
+        uses: actions/setup-node@v7
         with:
           node-version: '24'
           cache: 'npm'
+          cache-dependency-path: |
+            package-lock.json
+            app/package-lock.json
+            renderer/package-lock.json
 
-      - name: Install dependencies
+      - name: Install root dependencies
         run: npm ci
 
+      - name: Install app dependencies
+        run: npm --prefix app ci
+
+      - name: Install renderer dependencies
+        run: npm --prefix renderer ci
+
       - name: Run npm audit
-        run: npm audit --audit-level=moderate
-        continue-on-error: true
+        run: |
+          npm audit --audit-level=moderate
+          npm --prefix app audit --audit-level=moderate
+          npm --prefix renderer audit --audit-level=moderate
 
       - name: Run npm audit (production only)
-        run: npm audit --production --audit-level=high
+        run: |
+          npm audit --omit=dev --audit-level=high
+          npm --prefix app audit --omit=dev --audit-level=high
+          npm --prefix renderer audit --omit=dev --audit-level=high
 
       - name: Check for known vulnerabilities
         run: |
@@ -97,10 +112,10 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v7
 
       - name: Set up Node.js
-        uses: actions/setup-node@v3
+        uses: actions/setup-node@v7
         with:
           node-version: '24'
           cache: 'npm'
@@ -175,7 +190,7 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v7
 
       - name: Verify security headers implementation
         run: |
@@ -213,7 +228,7 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v7
 
       - name: Verify authentication middleware exists
         run: |
@@ -261,7 +276,7 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v7
 
       - name: Verify secure key manager exists
         run: |
@@ -309,7 +324,7 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v7
 
       - name: Verify input validation exists
         run: |
@@ -354,7 +369,7 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v7
 
       - name: Verify error sanitization exists
         run: |
@@ -410,7 +425,7 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v7
 
       - name: Generate security summary
         run: |
@@ -433,7 +448,7 @@ jobs:
           cat security-report.md
 
       - name: Upload security report
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: security-report
           path: security-report.md
