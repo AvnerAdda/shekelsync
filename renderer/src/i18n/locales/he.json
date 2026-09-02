@@ -20,6 +20,29 @@
     "cancel": "ביטול",
     "apply": "החלה"
   },
+  "dashboardWelcome": {
+    "title": "הכסף שלכם, ברור מתמיד.",
+    "subtitle": "ראו מה השתנה, מה דורש תשומת לב ומה כדאי לעשות עכשיו.",
+    "localFirst": "פרטי במכשיר הזה",
+    "reviewActions": "לסקירת הפעולות"
+  },
+  "activity": {
+    "eyebrow": "יומן עסקאות",
+    "title": "פעילות",
+    "subtitle": "חפשו, בדקו ותקנו כל תנועה במקום אחד.",
+    "advancedSearch": "חיפוש מתקדם",
+    "searchPlaceholder": "חיפוש בית עסק, קטגוריה או הערה…",
+    "search": "חיפוש",
+    "filters": { "all": "הכול", "income": "הכנסות", "expenses": "הוצאות", "investments": "השקעות" },
+    "summary": { "income": "הכנסות בתצוגה", "expenses": "הוצאות בתצוגה", "investments": "השקעות בתצוגה" },
+    "error": "לא ניתן לטעון את הפעילות האחרונה.",
+    "retry": "נסו שוב",
+    "loading": "טוענים פעילות אחרונה…",
+    "emptyTitle": "לא נמצאה פעילות",
+    "emptyDescription": "נסו חיפוש אחר או סנכרנו את החשבונות.",
+    "refresh": "רענון פעילות",
+    "unknownDate": "התאריך אינו זמין"
+  },
   "routeError": {
     "titles": {
       "notFound": "העמוד לא נמצא",
@@ -410,6 +433,11 @@
         "growth": "צמיחה",
         "stability": "יציבות",
         "reward": "פנאי"
+      },
+      "insight": {
+        "label": "דורש תשומת לב:",
+        "exceeded": "{{count}} תקציבים צפויים לסיים את החודש מעל התכנון.",
+        "atRisk": "{{count}} תקציבים נמצאים במגמה מעל התכנון החודשי."
       },
       "budgets": {
         "heading": "תקציבים ({{count}} סה\"כ)",
@@ -3313,6 +3341,11 @@
   },
   "sidebar": {
     "menu": {
+      "home": "בית",
+      "review": "סקירה",
+      "activity": "פעילות",
+      "plan": "תכנון",
+      "wealth": "הון",
       "overview": "סקירה כללית",
       "analysis": "ניתוח",
       "investments": "השקעות",
@@ -3411,7 +3444,14 @@
       "restoreWindow": "שחזר חלון",
       "closeWindow": "סגור חלון",
       "sendFeedback": "שלח משוב",
-      "moreActions": "פעולות נוספות"
+      "moreActions": "פעולות נוספות",
+      "financialTools": "כלים פיננסיים"
+    },
+    "financialTools": {
+      "assistant": "שאלו את העוזר",
+      "assistantHint": "גלו את הנתונים הפיננסיים המקומיים",
+      "optimizer": "מצאו הזדמנויות",
+      "optimizerHint": "בדקו פעולות המבוססות על נתונים"
     },
     "moreActions": {
       "security": "מצב אבטחה",
@@ -3453,6 +3493,9 @@
       "options": {
         "dashboard": "לוח מחוונים",
         "review": "סקירת הכסף",
+        "activity": "פעילות",
+        "plan": "תכנון",
+        "wealth": "הון",
         "analysis": "ניתוח",
         "investments": "השקעות",
         "settings": "הגדרות",

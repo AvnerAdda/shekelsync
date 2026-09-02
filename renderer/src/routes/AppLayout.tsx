@@ -29,7 +29,6 @@ import {
   signalStartupReady,
 } from '@renderer/app/startup/startup-readiness';
 
-const DRAWER_WIDTH_COLLAPSED = 65;
 const FinancialChatbot = lazy(() => import('@renderer/features/chatbot/components/FinancialChatbot'));
 const FinancialOptimizer = lazy(() => import('@renderer/features/optimizer/components/FinancialOptimizer'));
 
@@ -91,7 +90,7 @@ const DeferredFinancialChatbot = () => {
 
   return (
     <Suspense fallback={null}>
-      <FinancialChatbot />
+      <FinancialChatbot showLauncher={false} />
       <ChatbotLoadedSignal
         openOnMount={openOnLoad}
         onLoaded={handleChatbotLoaded}
@@ -158,7 +157,7 @@ const DeferredFinancialOptimizer = () => {
 
   return (
     <Suspense fallback={null}>
-      <FinancialOptimizer />
+      <FinancialOptimizer showLauncher={false} />
       <OptimizerLoadedSignal
         openOnMount={openOnLoad}
         onLoaded={handleOptimizerLoaded}
@@ -169,15 +168,31 @@ const DeferredFinancialOptimizer = () => {
 
 const pageToPath: Record<string, string> = {
   home: '/',
-  analysis: '/analysis',
-  investments: '/investments',
-  budgets: '/budgets',
+  review: '/review',
+  activity: '/activity',
+  plan: '/plan',
+  wealth: '/wealth',
   settings: '/settings',
+};
+
+const legacyPathToPage: Record<string, string> = {
+  '/analysis': 'plan',
+  '/budgets': 'plan',
+  '/investments': 'wealth',
 };
 
 const pathToPage = (pathname: string): string => {
   const match = Object.entries(pageToPath).find(([, value]) => value === pathname);
-  return match ? match[0] : 'home';
+  return match ? match[0] : legacyPathToPage[pathname] ?? 'home';
+};
+
+const primaryNavigationShortcuts: Record<string, string> = {
+  '1': '/',
+  '2': '/review',
+  '3': '/activity',
+  '4': '/plan',
+  '5': '/wealth',
+  '6': '/settings',
 };
 
 export interface AppLayoutContext {
@@ -281,52 +296,15 @@ const AppLayoutContent: React.FC<AppLayoutContentProps> = ({ authLoading, sessio
         setSearchOpen(true);
       }
       
-      // Cmd/Ctrl + 1-4: Navigate between primary pages
+      // Cmd/Ctrl + 1-6: Navigate between primary pages
       if (isModifierPressed(event)) {
-        let handledDigitShortcut = false;
-        switch (event.code) {
-          case 'Digit1':
-            event.preventDefault();
-            navigate('/');
-            handledDigitShortcut = true;
-            break;
-          case 'Digit2':
-            event.preventDefault();
-            navigate('/analysis');
-            handledDigitShortcut = true;
-            break;
-          case 'Digit3':
-            event.preventDefault();
-            navigate('/investments');
-            handledDigitShortcut = true;
-            break;
-          case 'Digit4':
-            event.preventDefault();
-            navigate('/settings');
-            handledDigitShortcut = true;
-            break;
-        }
+        const codeDigit = event.code.startsWith('Digit') ? event.code.slice('Digit'.length) : '';
+        const shortcutPath = primaryNavigationShortcuts[codeDigit]
+          ?? primaryNavigationShortcuts[event.key];
 
-        // Fallback for unusual keyboard layouts where event.code is unavailable
-        if (!handledDigitShortcut) {
-          switch (event.key) {
-            case '1':
-              event.preventDefault();
-              navigate('/');
-              break;
-            case '2':
-              event.preventDefault();
-              navigate('/analysis');
-              break;
-            case '3':
-              event.preventDefault();
-              navigate('/investments');
-              break;
-            case '4':
-              event.preventDefault();
-              navigate('/settings');
-              break;
-          }
+        if (shortcutPath) {
+          event.preventDefault();
+          navigate(shortcutPath);
         }
       }
       
@@ -412,14 +390,17 @@ const AppLayoutContent: React.FC<AppLayoutContentProps> = ({ authLoading, sessio
       return;
     }
 
-    if (targetPath === '/budgets') {
-      navigate('/analysis?tab=budget');
-      return;
-    }
-
-    const query = search ? (search.startsWith('?') ? search : `?${search}`) : '';
+    const canonicalPath = targetPath === '/analysis' || targetPath === '/budgets'
+      ? '/plan'
+      : targetPath === '/investments'
+        ? '/wealth'
+        : targetPath;
+    const canonicalSearch = targetPath === '/budgets' && !search ? 'tab=budget' : search;
+    const query = canonicalSearch
+      ? (canonicalSearch.startsWith('?') ? canonicalSearch : `?${canonicalSearch}`)
+      : '';
     const fragment = hash ? (hash.startsWith('#') ? hash : `#${hash}`) : '';
-    navigate(`${targetPath}${query}${fragment}`);
+    navigate(`${canonicalPath}${query}${fragment}`);
   }, [navigate]);
 
   useEffect(() => {
@@ -428,7 +409,7 @@ const AppLayoutContent: React.FC<AppLayoutContentProps> = ({ authLoading, sessio
     };
 
     const handleNavigateToAnalysis = () => {
-      navigate('/analysis');
+      navigate('/plan');
     };
 
     const handleOpenTransactionDetail = (event: Event) => {
@@ -486,17 +467,7 @@ const AppLayoutContent: React.FC<AppLayoutContentProps> = ({ authLoading, sessio
         position: 'relative',
         borderRadius: 'var(--app-window-radius, 12px)',
         overflow: 'hidden',
-        background: theme.palette.mode === 'dark'
-          ? `
-            radial-gradient(ellipse at 20% 20%, rgba(62,165,77,0.15) 0%, transparent 50%),
-            radial-gradient(ellipse at 80% 80%, rgba(165,77,62,0.15) 0%, transparent 50%),
-            #0a0a0a
-          `
-          : `
-            radial-gradient(ellipse at 20% 20%, rgba(200,250,207,0.4) 0%, transparent 50%),
-            radial-gradient(ellipse at 80% 80%, rgba(250,207,200,0.4) 0%, transparent 50%),
-            #f8fef9
-          `,
+        background: theme.palette.background.default,
       }}
     >
       <TitleBar
@@ -515,9 +486,11 @@ const AppLayoutContent: React.FC<AppLayoutContentProps> = ({ authLoading, sessio
           component="main"
           sx={{
             flexGrow: 1,
-            p: 3,
-            ml: { xs: 0, md: `${DRAWER_WIDTH_COLLAPSED}px` },
+            minWidth: 0,
+            p: { xs: 2, md: 3 },
+            ml: 0,
             overflow: 'auto',
+            scrollbarGutter: 'stable',
             transition: theme.transitions.create(['margin'], {
               easing: theme.transitions.easing.sharp,
               duration: theme.transitions.duration.leavingScreen,

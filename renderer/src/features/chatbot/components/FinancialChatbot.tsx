@@ -148,7 +148,11 @@ interface ChatSuggestion {
 const MIN_DRAWER_WIDTH = 320;
 const MAX_DRAWER_WIDTH_VW = 0.8; // 80vw
 
-const FinancialChatbot: React.FC = () => {
+interface FinancialChatbotProps {
+  showLauncher?: boolean;
+}
+
+const FinancialChatbot: React.FC<FinancialChatbotProps> = ({ showLauncher = true }) => {
   const theme = useTheme();
   const { t, i18n } = useTranslation('translation', {
     keyPrefix: 'chatbotWidget',
@@ -585,8 +589,8 @@ const FinancialChatbot: React.FC = () => {
 
   return (
     <>
-      {/* Floating Chat Button */}
-      <Fab
+      {/* The v0.2 shell can provide a shared launcher for financial tools. */}
+      {showLauncher && <Fab
         color="primary"
         aria-label="chat"
         sx={{
@@ -605,7 +609,7 @@ const FinancialChatbot: React.FC = () => {
         onClick={() => setIsOpen(true)}
       >
         <ChatIcon />
-      </Fab>
+      </Fab>}
       {/* Chat Drawer */}
       <Drawer
         anchor="right"

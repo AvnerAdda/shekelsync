@@ -20,7 +20,12 @@ let mockScrapeEvent: any = null;
 let mockCredentialsOk = true;
 
 const translations: Record<string, string> = {
-  'menu.overview': 'Overview',
+  'menu.home': 'Home',
+  'menu.overview': 'Home',
+  'menu.review': 'Review',
+  'menu.activity': 'Activity',
+  'menu.plan': 'Plan',
+  'menu.wealth': 'Wealth',
   'menu.analysis': 'Analysis',
   'menu.investments': 'Investments',
   'menu.settings': 'Settings',
@@ -245,9 +250,9 @@ describe('Sidebar component', () => {
 
     await renderSidebar({ currentPage: 'home', onPageChange });
 
-    fireEvent.click(screen.getByText('Analysis'));
+    fireEvent.click(screen.getByText('Plan'));
 
-    expect(onPageChange).toHaveBeenCalledWith('analysis');
+    expect(onPageChange).toHaveBeenCalledWith('plan');
   });
 
   it('suppresses lock indicators while onboarding status is unresolved', async () => {
@@ -598,12 +603,56 @@ describe('Sidebar component', () => {
 
     await renderSidebar({ currentPage: 'home', onPageChange });
 
-    expect(screen.getByText('Ctrl+1')).toBeInTheDocument();
-    expect(screen.getByText('Ctrl+2')).toBeInTheDocument();
-    expect(screen.getByText('Ctrl+3')).toBeInTheDocument();
-    expect(screen.getByText('Ctrl+4')).toBeInTheDocument();
-    expect(screen.queryByText('Ctrl+5')).not.toBeInTheDocument();
-    expect(screen.queryByText('Money Review')).not.toBeInTheDocument();
+    expect(screen.getByText('Home')).toBeInTheDocument();
+    expect(screen.getByText('Review')).toBeInTheDocument();
+    expect(screen.getByText('Activity')).toBeInTheDocument();
+    expect(screen.getByText('Plan')).toBeInTheDocument();
+    expect(screen.getByText('Wealth')).toBeInTheDocument();
+    expect(screen.getByText('Settings')).toBeInTheDocument();
+
+    for (const shortcut of ['Ctrl+1', 'Ctrl+2', 'Ctrl+3', 'Ctrl+4', 'Ctrl+5', 'Ctrl+6']) {
+      expect(screen.getByText(shortcut)).toBeInTheDocument();
+    }
+  });
+
+  it('uses the existing analysis and investments onboarding gates for Plan and Wealth', async () => {
+    const onPageChange = vi.fn();
+
+    mockOnboardingStatus = {
+      profileCompleted: true,
+      bankAccountLinked: true,
+      creditCardLinked: true,
+      firstSyncCompleted: true,
+      dismissed: false,
+      stats: {
+        bankCount: 1,
+        creditCardCount: 1,
+        transactionCount: 12,
+      },
+    };
+    getPageAccessStatus.mockImplementation((page: string) => ({
+      isLocked: page === 'analysis' || page === 'investments',
+      reason: page === 'analysis'
+        ? 'Analysis setup required'
+        : page === 'investments'
+          ? 'Investment setup required'
+          : '',
+    }));
+
+    await renderSidebar({ currentPage: 'home', onPageChange });
+
+    expect(Array.from(new Set(getPageAccessStatus.mock.calls.map(([page]) => page)))).toEqual([
+      'home',
+      'review',
+      'activity',
+      'analysis',
+      'investments',
+      'settings',
+    ]);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Analysis setup required' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Investment setup required' }));
+    expect(onPageChange).not.toHaveBeenCalled();
   });
 
   it('does not navigate when a sidebar page is locked', async () => {

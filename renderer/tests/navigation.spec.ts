@@ -29,7 +29,7 @@ test('primary navigation routes render without Next.js', async ({ page }) => {
   await goHome(page);
   await openAnalysisPage(page);
 
-  await page.getByRole('button', { name: 'Overview' }).click();
+  await page.getByRole('button', { name: 'Home' }).click();
   await page.getByRole('button', { name: 'Review all' }).click();
   const reviewDialog = page.getByRole('dialog');
   await expect(reviewDialog.getByRole('heading', { name: 'Money Review' })).toBeVisible({ timeout: 30_000 });
@@ -40,7 +40,14 @@ test('primary navigation routes render without Next.js', async ({ page }) => {
   await expect(page.getByRole('heading', { name: /^Settings$/i })).toBeVisible({ timeout: 30_000 });
   await expect(page.getByRole('tab', { name: 'Appearance' })).toBeVisible({ timeout: 30_000 });
 
-  await page.getByRole('button', { name: 'Investments' }).click();
+  await page.getByRole('button', { name: 'Wealth' }).click();
   await expect(page.getByRole('heading', { name: 'Investments Dashboard' })).toBeVisible({ timeout: 30_000 });
   await expect(page.getByText('Portfolio Value', { exact: true })).toBeVisible({ timeout: 30_000 });
+});
+
+test('legacy budgets links preserve query context and open the budget workspace', async ({ page }) => {
+  await page.goto('/#/budgets?source=legacy');
+
+  await expect(page).toHaveURL(/#\/plan\?(?=[^#]*source=legacy)(?=[^#]*tab=budget)/);
+  await expect(page.getByRole('tab', { name: /budget/i })).toHaveAttribute('aria-selected', 'true');
 });
