@@ -199,7 +199,7 @@
       "forceCodeSigning": true,
       "hardenedRuntime": true,
       "notarize": true,
-      "x64ArchFiles": "**/*darwin-arm64*/**",
+      "x64ArchFiles": "{**/*darwin-arm64*/**,**/better-sqlite3/prebuilds/darwin-*.node}",
       "mergeASARs": true,
       "target": [
         {
