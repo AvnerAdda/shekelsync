@@ -40,6 +40,7 @@ Release binaries are published at
 - Isolated analytics benchmarks in temporary databases, preventing benchmark
   setup from overwriting a developer database and supporting Electron-native
   SQLite builds without a local rebuild.
+- Restored universal macOS packaging after the better-sqlite3 runtime upgrade.
 
 ## [0.1.35] - 2026-08-30
 

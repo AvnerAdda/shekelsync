@@ -1,4 +1,5 @@
 const fs = require('node:fs');
+const { createRequire } = require('node:module');
 const path = require('node:path');
 
 const repositoryRoot = path.resolve(__dirname, '../../..');
@@ -6,10 +7,19 @@ const packageWorkflow = fs.readFileSync(
   path.join(repositoryRoot, '.github/workflows/package.yml'),
   'utf8',
 );
+const ciWorkflow = fs.readFileSync(
+  path.join(repositoryRoot, '.github/workflows/ci.yml'),
+  'utf8',
+);
 const macReleaseValidator = fs.readFileSync(
   path.join(repositoryRoot, '.github/scripts/validate-macos-release.sh'),
   'utf8',
 );
+const appPackage = JSON.parse(
+  fs.readFileSync(path.join(repositoryRoot, 'app/package.json'), 'utf8'),
+);
+const universalRequire = createRequire(require.resolve('@electron/universal/package.json'));
+const { minimatch } = universalRequire('minimatch');
 
 describe('production package workflow', () => {
   it('uses a complete mac signing setup or an explicit unsigned release', () => {
@@ -61,6 +71,31 @@ describe('production package workflow', () => {
     expect(packageWorkflow).toContain('Expected unsigned macOS release output is missing');
     expect(packageWorkflow).toContain('Refusing stale unsigned macOS release output');
     expect(packageWorkflow).toContain('they are not Apple-notarized');
+  });
+
+  it('preserves architecture-specific better-sqlite3 prebuilds in universal macOS packages', () => {
+    const rule = appPackage.build.mac.x64ArchFiles;
+
+    for (const arch of ['arm64', 'x64']) {
+      expect(
+        minimatch(
+          `Contents/Resources/app.asar.unpacked/node_modules/better-sqlite3/prebuilds/darwin-${arch}.node`,
+          rule,
+        ),
+      ).toBe(true);
+    }
+
+    expect(
+      minimatch(
+        'Contents/Resources/app.asar.unpacked/node_modules/unrelated/prebuilds/darwin-x64.node',
+        rule,
+      ),
+    ).toBe(false);
+  });
+
+  it('smoke-tests a universal macOS package before release tags are pushed', () => {
+    expect(ciWorkflow).toContain("if: matrix.os == 'macos-latest'");
+    expect(ciWorkflow).toContain('npm --prefix app run pack -- --mac --universal');
   });
 
   it('checks fresh packaged apps for signature, identity, runtime, and notarization', () => {
