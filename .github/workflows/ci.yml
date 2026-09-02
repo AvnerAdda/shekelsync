@@ -191,7 +191,12 @@ jobs:
         run: npm --prefix renderer run build
 
       - name: Build Electron package (smoke)
+        if: matrix.os != 'macos-latest'
         run: npm --prefix app run pack
+
+      - name: Build universal macOS package (smoke)
+        if: matrix.os == 'macos-latest'
+        run: npm --prefix app run pack -- --mac --universal
 
       - name: Upload package artifacts
         if: always()
