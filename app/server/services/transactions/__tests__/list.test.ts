@@ -40,6 +40,9 @@ describe('transactions list service', () => {
     expect(result.count).toBe(1);
     expect(result.hasMore).toBe(true); // equals limit, so may have more
     expect(queryMock).toHaveBeenCalledTimes(1);
+    expect(String(queryMock.mock.calls[0][0])).toContain(
+      'COALESCE(cd.category_type, t.category_type) AS category_type',
+    );
   });
 
   it('searchTransactions enforces numeric limit and applies filters', async () => {
@@ -60,6 +63,9 @@ describe('transactions list service', () => {
 
     expect(queryMock).toHaveBeenCalledTimes(1);
     const [sql, params] = queryMock.mock.calls[0];
+    expect(String(sql)).toContain(
+      'COALESCE(cd.category_type, t.category_type) AS category_type',
+    );
     if (useSqlite) {
       expect(String(sql)).toContain('transactions_fts MATCH $1');
       expect(String(sql)).toContain('LOWER(t.memo) LIKE LOWER($2)');
@@ -253,6 +259,9 @@ describe('transactions list service', () => {
     expect(result.vendor).toBe('bank');
     expect(result.tags).toEqual(['coffee']);
     expect(result.price).toBe(-14.2);
+    expect(String(queryMock.mock.calls[0][0])).toContain(
+      'COALESCE(cd.category_type, t.category_type) AS category_type',
+    );
   });
 
   it('throws when a single transaction id is invalid', async () => {

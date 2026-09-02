@@ -789,32 +789,59 @@ const SummaryCards: React.FC<SummaryCardsProps> = ({
   return (
     <>
       {forecastSummary && (forecastSummary.atRisk > 0 || forecastSummary.exceeded > 0) && (
-        <Alert severity={forecastSummary.exceeded > 0 ? "error" : "warning"} sx={{ mb: 3, borderRadius: 2 }}>
-          <strong>Proactive Insight:</strong> You have {forecastSummary.exceeded > 0 ? `${forecastSummary.exceeded} budget(s) currently exceeded` : `${forecastSummary.atRisk} budget(s) trending to exceed`} by end of month based on your current burn rate.
+        <Alert
+          severity={forecastSummary.exceeded > 0 ? 'error' : 'warning'}
+          variant="outlined"
+          sx={{
+            mb: 2,
+            bgcolor: alpha(
+              forecastSummary.exceeded > 0
+                ? theme.palette.error.main
+                : theme.palette.warning.main,
+              0.055,
+            ),
+            '& .MuiAlert-message': { fontSize: '0.875rem' },
+          }}
+        >
+          <strong>{t('summary.insight.label', { defaultValue: 'Needs attention:' })}</strong>{' '}
+          {forecastSummary.exceeded > 0
+            ? t('summary.insight.exceeded', {
+                defaultValue: '{{count}} budget(s) are projected to finish over plan this month.',
+                count: forecastSummary.exceeded,
+              })
+            : t('summary.insight.atRisk', {
+                defaultValue: '{{count}} budget(s) are trending above plan this month.',
+                count: forecastSummary.atRisk,
+              })}
         </Alert>
       )}
-      <Grid container spacing={2}>
+      <Grid container spacing={1.5}>
         {cards.map((card) => (
-        <Grid size={{ xs: 12, md: 4 }} key={card.id}>
-          <Card sx={{
-            height: '100%',
-            borderRadius: 2.5,
-            backgroundColor: theme.palette.mode === 'dark' ? 'rgba(30, 30, 30, 0.6)' : 'rgba(255, 255, 255, 0.6)',
-            backdropFilter: 'blur(20px)',
-            border: card.id === 'finance'
-              ? `2px solid ${alpha(theme.palette.primary.main, 0.5)}`
-              : `1px solid ${alpha(theme.palette.divider, 0.1)}`,
-            boxShadow: card.id === 'finance'
-              ? `0 12px 40px ${alpha(theme.palette.primary.main, 0.15)}`
-              : `0 8px 32px ${alpha(theme.palette.common.black, 0.05)}`,
-            transform: 'none',
-            transition: 'transform 300ms cubic-bezier(0.4, 0, 0.2, 1), box-shadow 300ms cubic-bezier(0.4, 0, 0.2, 1)',
-            '&:hover': {
-              transform: 'translateY(-3px)',
-              boxShadow: `0 16px 40px ${alpha(card.color || theme.palette.common.black, 0.2)}`,
-            }
-          }}>
-            <CardContent sx={{ p: 2, '&:last-child': { pb: 2 } }}>
+        <Grid
+          size={{ xs: 12, md: card.id === 'finance' ? 5 : card.id === 'portfolio' ? 3 : 4 }}
+          key={card.id}
+        >
+          <Card
+            data-dashboard-summary-card={card.id}
+            sx={{
+              height: '100%',
+              minHeight: 252,
+              backgroundColor: card.id === 'finance'
+                ? alpha(theme.palette.primary.main, theme.palette.mode === 'dark' ? 0.09 : 0.035)
+                : 'background.paper',
+              borderColor: card.id === 'finance'
+                ? alpha(theme.palette.primary.main, 0.42)
+                : 'divider',
+              boxShadow: card.id === 'finance'
+                ? `0 12px 30px ${alpha(theme.palette.primary.main, 0.09)}`
+                : undefined,
+              '&:hover': {
+                borderColor: alpha(card.color || theme.palette.primary.main, 0.36),
+                boxShadow: `0 10px 28px ${alpha(theme.palette.common.black, theme.palette.mode === 'dark' ? 0.2 : 0.07)}`,
+              },
+            }}
+          >
+            <CardContent sx={{ p: 2.25, '&:last-child': { pb: 2.25 } }}>
               <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
                 <Box sx={{ 
                   color: card.color, 
@@ -837,11 +864,11 @@ const SummaryCards: React.FC<SummaryCardsProps> = ({
                 </Typography>
               </Box>
 
-              <CurrencyTypography variant="h5" sx={{
-                fontWeight: 700, 
+              <CurrencyTypography variant={card.id === 'finance' ? 'h4' : 'h5'} sx={{
+                fontWeight: 750,
                 color: card.color, 
                 mb: 0.5,
-                textShadow: `0 0 20px ${alpha(card.color, 0.3)}`
+                letterSpacing: '-0.025em',
               }}>
                 {card.mainValue}
               </CurrencyTypography>

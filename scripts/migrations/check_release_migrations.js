@@ -3,7 +3,8 @@
  * Release migration guardrail.
  *
  * Purpose:
- * - Compare migration files against the latest release tag (or a provided base tag).
+ * - Compare every shipped schema/migration input against the latest release tag
+ *   (or a provided base tag).
  * - Surface what changed so every release explicitly reviews DB migration rollout.
  *
  * Usage:
@@ -21,6 +22,11 @@ const MIGRATIONS_DIR = path.join(PROJECT_ROOT, 'scripts', 'migrations');
 const APP_PACKAGE_JSON = path.join(PROJECT_ROOT, 'app', 'package.json');
 const CHECKLIST_PATH = path.join(MIGRATIONS_DIR, 'NEXT_RELEASE_CHECKLIST.md');
 const SUPPORTED_EXTENSIONS = new Set(['.sql', '.js']);
+const MIGRATION_REVIEW_PATHS = [
+  'scripts/migrations',
+  'app/lib/schema-migrations.js',
+  'scripts/init_sqlite_db.js',
+];
 
 function runGit(args) {
   try {
@@ -97,6 +103,12 @@ function isMigrationFile(filePath) {
   return SUPPORTED_EXTENSIONS.has(ext);
 }
 
+function isMigrationReviewPath(filePath) {
+  if (!filePath) return false;
+  if (MIGRATION_REVIEW_PATHS.slice(1).includes(filePath)) return true;
+  return filePath.startsWith('scripts/migrations/') && isMigrationFile(filePath);
+}
+
 function listCurrentMigrationFiles() {
   if (!fs.existsSync(MIGRATIONS_DIR)) {
     return [];
@@ -124,9 +136,7 @@ function parseNameStatusRows(raw) {
     const status = parts[0];
     const oldPath = parts.length >= 3 ? parts[1] : null;
     const filePath = parts.length >= 3 ? parts[2] : parts[1];
-    if (!filePath) continue;
-    if (!filePath.startsWith('scripts/migrations/')) continue;
-    if (!isMigrationFile(filePath)) continue;
+    if (!isMigrationReviewPath(filePath) && !isMigrationReviewPath(oldPath)) continue;
 
     entries.push({
       status,
@@ -140,12 +150,18 @@ function parseNameStatusRows(raw) {
 
 function getCommittedChangesSinceTag(baseTag) {
   if (!baseTag) return [];
-  const output = runGit(['diff', '--name-status', `${baseTag}..HEAD`, '--', 'scripts/migrations']);
+  const output = runGit([
+    'diff',
+    '--name-status',
+    `${baseTag}..HEAD`,
+    '--',
+    ...MIGRATION_REVIEW_PATHS,
+  ]);
   return parseNameStatusRows(output);
 }
 
 function getWorkingTreeChanges() {
-  const output = runGit(['status', '--porcelain', '--', 'scripts/migrations']);
+  const output = runGit(['status', '--porcelain', '--', ...MIGRATION_REVIEW_PATHS]);
   if (!output) return [];
 
   const rows = output
@@ -157,8 +173,8 @@ function getWorkingTreeChanges() {
   for (const row of rows) {
     const status = row.slice(0, 2).trim() || '??';
     const filePath = row.slice(3).trim();
-    if (!filePath.startsWith('scripts/migrations/')) continue;
-    if (!isMigrationFile(filePath)) continue;
+    const renamedPaths = filePath.split(' -> ');
+    if (!renamedPaths.some(isMigrationReviewPath)) continue;
     entries.push({ status, filePath });
   }
   return entries;
@@ -225,10 +241,17 @@ function main() {
   process.exit(2);
 }
 
-try {
-  main();
-} catch (error) {
-  console.error(`Migration check failed: ${error.message || error}`);
-  process.exit(1);
+if (require.main === module) {
+  try {
+    main();
+  } catch (error) {
+    console.error(`Migration check failed: ${error.message || error}`);
+    process.exit(1);
+  }
 }
 
+module.exports = {
+  MIGRATION_REVIEW_PATHS,
+  isMigrationReviewPath,
+  parseNameStatusRows,
+};

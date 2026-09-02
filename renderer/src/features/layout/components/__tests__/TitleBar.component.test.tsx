@@ -242,23 +242,43 @@ describe('TitleBar component', () => {
     (window as any).electronAPI = buildElectronApi(false);
   });
 
-  it('navigates to analysis from search selection', async () => {
+  it('navigates to Plan from search selection', async () => {
     const user = userEvent.setup();
 
     await renderTitleBar({ sessionDisplayName: 'Demo User', authLoading: false });
 
     const combobox = screen.getByRole('combobox');
     await user.click(combobox);
-    fireEvent.change(combobox, { target: { value: 'analysis' } });
-    await user.click(await screen.findByRole('option', { name: 'Analysis' }, { timeout: 10_000 }));
+    fireEvent.change(combobox, { target: { value: 'plan' } });
+    await user.click(await screen.findByRole('option', { name: 'Plan' }, { timeout: 10_000 }));
 
-    expect(navigate).toHaveBeenCalledWith('/analysis');
+    expect(navigate).toHaveBeenCalledWith('/plan');
   }, 10_000);
 
   it('shows the global quick-jump shortcut hint', async () => {
     await renderTitleBar({ sessionDisplayName: 'Demo User', authLoading: false });
 
     expect(screen.getByText('Ctrl+K')).toBeInTheDocument();
+  });
+
+  it('opens both financial tools from the unified menu', async () => {
+    const openChatbot = vi.fn();
+    const openOptimizer = vi.fn();
+    window.addEventListener('openChatbotDrawer', openChatbot);
+    window.addEventListener('openOptimizerDrawer', openOptimizer);
+
+    await renderTitleBar({ sessionDisplayName: 'Demo User', authLoading: false });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Financial tools' }));
+    fireEvent.click(screen.getByRole('menuitem', { name: /Ask the assistant/ }));
+    expect(openChatbot).toHaveBeenCalledTimes(1);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Financial tools' }));
+    fireEvent.click(screen.getByRole('menuitem', { name: /Find opportunities/ }));
+    expect(openOptimizer).toHaveBeenCalledTimes(1);
+
+    window.removeEventListener('openChatbotDrawer', openChatbot);
+    window.removeEventListener('openOptimizerDrawer', openOptimizer);
   });
 
   it('opens Money Review in the dashboard modal from quick jump', async () => {
@@ -271,7 +291,7 @@ describe('TitleBar component', () => {
     fireEvent.change(combobox, { target: { value: 'review' } });
     await user.click(await screen.findByRole('option', { name: 'titleBar.search.options.review' }));
 
-    expect(navigate).toHaveBeenCalledWith('/?moneyReview=all');
+    expect(navigate).toHaveBeenCalledWith('/review');
   });
 
   it('navigates to the holdings tab from search selection', async () => {
@@ -284,7 +304,7 @@ describe('TitleBar component', () => {
     fireEvent.change(combobox, { target: { value: 'holdings' } });
     await user.click(await screen.findByRole('option', { name: 'titleBar.search.options.holdings' }, { timeout: 10_000 }));
 
-    expect(navigate).toHaveBeenCalledWith('/investments?tab=holdings');
+    expect(navigate).toHaveBeenCalledWith('/wealth?tab=holdings');
   }, 10_000);
 
   it('toggles theme mode and applies language selection', async () => {

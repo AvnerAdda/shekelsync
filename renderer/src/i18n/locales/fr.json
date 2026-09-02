@@ -20,6 +20,29 @@
     "cancel": "Annuler",
     "apply": "Appliquer"
   },
+  "dashboardWelcome": {
+    "title": "Votre argent, en toute clarté.",
+    "subtitle": "Voyez ce qui a changé, ce qui demande votre attention et quoi faire ensuite.",
+    "localFirst": "Privé sur cet appareil",
+    "reviewActions": "Voir les actions"
+  },
+  "activity": {
+    "eyebrow": "Registre des transactions",
+    "title": "Activité",
+    "subtitle": "Recherchez, vérifiez et corrigez chaque mouvement au même endroit.",
+    "advancedSearch": "Recherche avancée",
+    "searchPlaceholder": "Rechercher un commerçant, une catégorie, une note…",
+    "search": "Rechercher",
+    "filters": { "all": "Tout", "income": "Revenus", "expenses": "Dépenses", "investments": "Investissements" },
+    "summary": { "income": "Revenus affichés", "expenses": "Dépenses affichées", "investments": "Investissements affichés" },
+    "error": "Votre activité récente n’a pas pu être chargée.",
+    "retry": "Réessayer",
+    "loading": "Chargement de l’activité récente…",
+    "emptyTitle": "Aucune activité trouvée",
+    "emptyDescription": "Essayez une autre recherche ou synchronisez vos comptes.",
+    "refresh": "Actualiser l’activité",
+    "unknownDate": "Date indisponible"
+  },
   "routeError": {
     "titles": {
       "notFound": "Page introuvable",
@@ -409,6 +432,11 @@
         "growth": "Croissance",
         "stability": "Stabilité",
         "reward": "Loisirs"
+      },
+      "insight": {
+        "label": "À surveiller :",
+        "exceeded": "{{count}} budget(s) devraient dépasser le plan ce mois-ci.",
+        "atRisk": "{{count}} budget(s) évoluent au-dessus du plan ce mois-ci."
       },
       "budgets": {
         "heading": "Budgets ({{count}} au total)",
@@ -3298,6 +3326,11 @@
   },
   "sidebar": {
     "menu": {
+      "home": "Accueil",
+      "review": "Revue",
+      "activity": "Activité",
+      "plan": "Plan",
+      "wealth": "Patrimoine",
       "overview": "Aperçu",
       "analysis": "Analyse",
       "investments": "Investissements",
@@ -3395,7 +3428,14 @@
       "restoreWindow": "Restaurer la fenêtre",
       "closeWindow": "Fermer la fenêtre",
       "sendFeedback": "Envoyer un commentaire",
-      "moreActions": "Plus d'actions"
+      "moreActions": "Plus d'actions",
+      "financialTools": "Outils financiers"
+    },
+    "financialTools": {
+      "assistant": "Interroger l’assistant",
+      "assistantHint": "Explorer vos données financières locales",
+      "optimizer": "Trouver des opportunités",
+      "optimizerHint": "Examiner des actions étayées"
     },
     "moreActions": {
       "security": "État de sécurité",
@@ -3437,6 +3477,9 @@
       "options": {
         "dashboard": "Tableau de bord",
         "review": "Revue financière",
+        "activity": "Activité",
+        "plan": "Plan",
+        "wealth": "Patrimoine",
         "analysis": "Analyse",
         "investments": "Investissements",
         "settings": "Paramètres",

@@ -28,7 +28,9 @@ import HomeIcon from '@mui/icons-material/Home';
 import InvestmentIcon from '@mui/icons-material/ShowChart';
 import LockIcon from '@mui/icons-material/Lock';
 import MenuIcon from '@mui/icons-material/Menu';
-import AnalysisIcon from '@mui/icons-material/TrendingUp';
+import ActivityIcon from '@mui/icons-material/ReceiptLong';
+import PlanIcon from '@mui/icons-material/TrendingUp';
+import ReviewIcon from '@mui/icons-material/AssignmentTurnedIn';
 import SettingsIcon from '@mui/icons-material/Settings';
 import StorageIcon from '@mui/icons-material/Storage';
 import SyncIcon from '@mui/icons-material/Sync';
@@ -53,8 +55,14 @@ const AccountsModal = React.lazy(() => import('@renderer/shared/modals/AccountsM
 const ScrapeModal = React.lazy(() => import('@renderer/shared/modals/ScrapeModal'));
 const CategoryHierarchyModal = React.lazy(() => import('@renderer/shared/modals/CategoryHierarchyModal'));
 
-const DRAWER_WIDTH = 260;
-const DRAWER_WIDTH_COLLAPSED = 65;
+const DRAWER_WIDTH = 236;
+const DRAWER_WIDTH_COLLAPSED = 72;
+
+const LEGACY_PAGE_ALIASES: Record<string, string> = {
+  analysis: 'plan',
+  budgets: 'plan',
+  investments: 'wealth',
+};
 
 interface SidebarProps {
   currentPage: string;
@@ -122,7 +130,6 @@ const Sidebar: React.FC<SidebarProps> = ({ currentPage, onPageChange, onDataRefr
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
   const { latestEvent: scrapeEvent } = useScrapeProgress();
-  const reduceVisualEffects = window.electronAPI?.platform?.reduceVisualEffects === true;
   const modifierKeyLabel = window.electronAPI?.platform?.isMacOS ? '⌘' : 'Ctrl+';
 
   const openAccountsModal = useCallback((request: AccountsModalOpenRequest | null = null) => {
@@ -136,10 +143,48 @@ const Sidebar: React.FC<SidebarProps> = ({ currentPage, onPageChange, onDataRefr
 
   const menuItems = useMemo(
     () => [
-      { id: 'home', label: t('menu.overview'), icon: <HomeIcon />, shortcut: `${modifierKeyLabel}1` },
-      { id: 'analysis', label: t('menu.analysis'), icon: <AnalysisIcon />, shortcut: `${modifierKeyLabel}2` },
-      { id: 'investments', label: t('menu.investments'), icon: <InvestmentIcon />, shortcut: `${modifierKeyLabel}3` },
-      { id: 'settings', label: t('menu.settings'), icon: <SettingsIcon />, shortcut: `${modifierKeyLabel}4` },
+      {
+        id: 'home',
+        accessPage: 'home',
+        label: t('menu.home', { defaultValue: 'Home' }),
+        icon: <HomeIcon />,
+        shortcut: `${modifierKeyLabel}1`,
+      },
+      {
+        id: 'review',
+        accessPage: 'review',
+        label: t('menu.review', { defaultValue: 'Review' }),
+        icon: <ReviewIcon />,
+        shortcut: `${modifierKeyLabel}2`,
+      },
+      {
+        id: 'activity',
+        accessPage: 'activity',
+        label: t('menu.activity', { defaultValue: 'Activity' }),
+        icon: <ActivityIcon />,
+        shortcut: `${modifierKeyLabel}3`,
+      },
+      {
+        id: 'plan',
+        accessPage: 'analysis',
+        label: t('menu.plan', { defaultValue: 'Plan' }),
+        icon: <PlanIcon />,
+        shortcut: `${modifierKeyLabel}4`,
+      },
+      {
+        id: 'wealth',
+        accessPage: 'investments',
+        label: t('menu.wealth', { defaultValue: 'Wealth' }),
+        icon: <InvestmentIcon />,
+        shortcut: `${modifierKeyLabel}5`,
+      },
+      {
+        id: 'settings',
+        accessPage: 'settings',
+        label: t('menu.settings', { defaultValue: 'Settings' }),
+        icon: <SettingsIcon />,
+        shortcut: `${modifierKeyLabel}6`,
+      },
     ],
     [modifierKeyLabel, t],
   );
@@ -582,13 +627,9 @@ const Sidebar: React.FC<SidebarProps> = ({ currentPage, onPageChange, onDataRefr
             overflowX: 'hidden',
             display: 'flex',
             flexDirection: 'column',
-            backgroundColor: reduceVisualEffects
-              ? theme.palette.background.paper
-              : theme.palette.mode === 'dark'
-                ? 'rgba(10, 10, 10, 0.95)'
-                : '#ffffff',
-            borderRight: `1px solid ${alpha(theme.palette.divider, 0.1)}`,
-            backdropFilter: reduceVisualEffects ? 'none' : 'blur(12px)',
+            backgroundColor: theme.palette.mode === 'dark' ? '#141B17' : '#F9FAF7',
+            borderRight: `1px solid ${theme.palette.divider}`,
+            backdropFilter: 'none',
             paddingTop: '64px', // Account for TitleBar height
             borderTopLeftRadius: 'var(--app-window-radius, 12px)',
             borderBottomLeftRadius: 'var(--app-window-radius, 12px)',
@@ -601,8 +642,8 @@ const Sidebar: React.FC<SidebarProps> = ({ currentPage, onPageChange, onDataRefr
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            padding: '16px 20px',
-            minHeight: 56,
+            padding: '12px 16px 8px',
+            minHeight: 48,
           }}
         >
           <Tooltip title={open ? t('tooltips.collapseSidebar', 'Collapse sidebar') : t('tooltips.expandSidebar')} placement="right">
@@ -613,12 +654,11 @@ const Sidebar: React.FC<SidebarProps> = ({ currentPage, onPageChange, onDataRefr
               aria-expanded={open}
               sx={{
                 color: theme.palette.text.secondary,
-                transition: 'all 0.2s',
+                transition: 'background-color 160ms ease, color 160ms ease',
                 backgroundColor: alpha(theme.palette.primary.main, 0.08),
                 '&:hover': {
                   color: theme.palette.primary.main,
-                  backgroundColor: alpha(theme.palette.primary.main, 0.1),
-                  transform: 'scale(1.1)',
+                  backgroundColor: alpha(theme.palette.primary.main, 0.14),
                 }
               }}
             >
@@ -628,14 +668,15 @@ const Sidebar: React.FC<SidebarProps> = ({ currentPage, onPageChange, onDataRefr
         </Box>
 
         {/* Menu Items */}
-        <List sx={{ flexGrow: 1, px: 1.5 }}>
+        <List sx={{ flexGrow: 1, px: 1.25, display: 'flex', flexDirection: 'column' }}>
           {menuItems.map((item) => {
             const { accessStatus, isLocked } = resolveOnboardingGate(
               onboardingStatus,
               getPageAccessStatus,
-              item.id,
+              item.accessPage,
             );
-            const isActive = currentPage === item.id;
+            const normalizedCurrentPage = LEGACY_PAGE_ALIASES[currentPage] ?? currentPage;
+            const isActive = normalizedCurrentPage === item.id;
             const handleItemClick = () => {
               if (isLocked) {
                 return;
@@ -645,7 +686,11 @@ const Sidebar: React.FC<SidebarProps> = ({ currentPage, onPageChange, onDataRefr
             };
 
             return (
-              <ListItem key={item.id} disablePadding sx={{ mb: 1 }}>
+              <ListItem
+                key={item.id}
+                disablePadding
+                sx={{ mb: 0.5, mt: item.id === 'settings' ? 'auto' : 0 }}
+              >
                 <Tooltip
                   title={isLocked ? accessStatus.reason : (!open ? `${item.label} • ${item.shortcut}` : '')}
                   placement="right"
@@ -656,19 +701,18 @@ const Sidebar: React.FC<SidebarProps> = ({ currentPage, onPageChange, onDataRefr
                     onClick={handleItemClick}
                     aria-disabled={isLocked || undefined}
                     sx={{
-                      minHeight: 48,
+                      minHeight: 44,
                       justifyContent: open ? 'initial' : 'center',
                       px: 2.5,
-                      borderRadius: 3,
+                      borderRadius: 2.25,
                       opacity: isLocked ? 0.5 : 1,
-                      transition: 'all 0.2s ease-in-out',
+                      transition: 'background-color 160ms ease, color 160ms ease',
                       backgroundColor: isActive ? alpha(theme.palette.primary.main, 0.12) : 'transparent',
                       color: isActive ? theme.palette.primary.main : theme.palette.text.secondary,
                       '&:hover': {
                         backgroundColor: isActive 
                           ? alpha(theme.palette.primary.main, 0.20) 
                           : alpha(theme.palette.text.primary, 0.04),
-                        transform: 'translateX(4px)',
                         opacity: isLocked ? 0.6 : 1,
                       },
                       '&.Mui-selected': {

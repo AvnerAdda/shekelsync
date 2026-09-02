@@ -9,6 +9,7 @@ const showNotification = vi.fn();
 const refreshSession = vi.fn();
 
 let latestSearchProps: any = null;
+let latestSidebarProps: any = null;
 let mockAuthState: {
   session: { user: { email: string; name: string } } | null;
   loading: boolean;
@@ -17,7 +18,10 @@ let mockAuthState: {
 };
 
 vi.mock('@renderer/features/layout/components/Sidebar', () => ({
-  default: () => <div data-testid="sidebar" />,
+  default: (props: any) => {
+    latestSidebarProps = props;
+    return <div data-testid="sidebar" data-current-page={props.currentPage} />;
+  },
 }));
 
 vi.mock('@renderer/features/layout/components/TitleBar', () => ({
@@ -119,11 +123,32 @@ function renderAppLayout(initialEntries: string[] = ['/']) {
           element: <LocationIndicator />,
         },
         {
+          path: 'review',
+          element: <LocationIndicator />,
+        },
+        {
+          path: 'activity',
+          element: <LocationIndicator />,
+        },
+        {
+          path: 'plan',
+          element: <LocationIndicator />,
+        },
+        {
+          path: 'wealth',
+          element: <LocationIndicator />,
+        },
+        // Keep the legacy routes available while the new primary IA settles.
+        {
           path: 'analysis',
           element: <LocationIndicator />,
         },
         {
-          path: 'review',
+          path: 'investments',
+          element: <LocationIndicator />,
+        },
+        {
+          path: 'budgets',
           element: <LocationIndicator />,
         },
         {
@@ -146,6 +171,7 @@ describe('AppLayout', () => {
     refreshSession.mockReset();
     refreshSession.mockResolvedValue(undefined);
     latestSearchProps = null;
+    latestSidebarProps = null;
     mockAuthState = {
       session: { user: { email: 'user@example.com', name: 'Test User' } },
       loading: false,
@@ -160,7 +186,7 @@ describe('AppLayout', () => {
     expect(document.body.dataset.appReady).toBeUndefined();
 
     await act(async () => {
-      await router.navigate('/analysis');
+      await router.navigate('/plan');
     });
 
     await waitFor(() => {
@@ -187,7 +213,19 @@ describe('AppLayout', () => {
     expect(refreshSession).toHaveBeenCalledOnce();
   });
 
-  it('remaps /budgets navigation events to the analysis budget tab', async () => {
+  it.each([
+    ['/analysis', 'plan'],
+    ['/budgets', 'plan'],
+    ['/investments', 'wealth'],
+  ])('maps legacy location %s to the %s sidebar item', async (legacyPath, expectedPage) => {
+    renderAppLayout([legacyPath]);
+
+    await waitFor(() => {
+      expect(latestSidebarProps.currentPage).toBe(expectedPage);
+    });
+  });
+
+  it('remaps legacy /budgets navigation events to the canonical Plan budget tab', async () => {
     renderAppLayout();
 
     await act(async () => {
@@ -199,7 +237,7 @@ describe('AppLayout', () => {
     });
 
     await waitFor(() => {
-      expect(screen.getByTestId('location')).toHaveTextContent('/analysis?tab=budget');
+      expect(screen.getByTestId('location')).toHaveTextContent('/plan?tab=budget');
     });
   });
 
@@ -263,7 +301,7 @@ describe('AppLayout', () => {
     });
   });
 
-  it('navigates to analysis from the onboarding shortcut event', async () => {
+  it('preserves the legacy analysis event while navigating to canonical Plan', async () => {
     renderAppLayout();
 
     await act(async () => {
@@ -271,16 +309,25 @@ describe('AppLayout', () => {
     });
 
     await waitFor(() => {
-      expect(screen.getByTestId('location')).toHaveTextContent('/analysis');
+      expect(screen.getByTestId('location')).toHaveTextContent('/plan');
     });
   });
 
-  it('does not reserve the fifth navigation shortcut for a hidden page', async () => {
+  it.each([
+    ['1', 'Digit1', '/'],
+    ['2', 'Digit2', '/review'],
+    ['3', 'Digit3', '/activity'],
+    ['4', 'Digit4', '/plan'],
+    ['5', 'Digit5', '/wealth'],
+    ['6', 'Digit6', '/settings'],
+  ])('maps navigation shortcut %s to %s', async (key, code, expectedPath) => {
     renderAppLayout();
 
-    fireEvent.keyDown(window, { key: '5', code: 'Digit5', ctrlKey: true });
+    fireEvent.keyDown(window, { key, code, ctrlKey: true });
 
-    expect(screen.getByTestId('location')).toHaveTextContent('/');
+    await waitFor(() => {
+      expect(screen.getByTestId('location')).toHaveTextContent(expectedPath);
+    });
   });
 
   it('loads and opens the global transaction detail modal from events', async () => {

@@ -11,7 +11,7 @@ test('investment tabs stay within the viewport at narrow desktop widths', async 
   await page.setViewportSize({ width: 1024, height: 720 });
   await goHome(page);
 
-  await page.getByRole('button', { name: 'Investments' }).click();
+  await page.getByRole('button', { name: 'Wealth' }).click();
   await expect(page.getByRole('heading', { name: /Investments Dashboard/i })).toBeVisible({ timeout: 30000 });
 
   const tabList = page.getByRole('tablist', { name: 'Investment sections' });
@@ -30,7 +30,7 @@ test('investment tabs stay within the viewport at narrow desktop widths', async 
 test('investments accordion reveals account details', async ({ page }) => {
   await goHome(page);
 
-  const investmentsNav = page.getByRole('button', { name: 'Investments' });
+  const investmentsNav = page.getByRole('button', { name: 'Wealth' });
   await expect(investmentsNav).toBeVisible();
   await investmentsNav.click();
   await expect(page.getByRole('heading', { name: /Investments Dashboard/i })).toBeVisible({ timeout: 30000 });

@@ -271,8 +271,8 @@ export const OnboardingProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       };
     }
 
-    // Review, Analysis, Investments, and Budgets require first scrape
-    if (['review', 'analysis', 'investments', 'budgets'].includes(page)) {
+    // Data-backed workspaces require at least one completed sync.
+    if (['review', 'activity', 'analysis', 'investments', 'budgets'].includes(page)) {
       if (!status.completedSteps.firstScrape) {
         return {
           isLocked: true,

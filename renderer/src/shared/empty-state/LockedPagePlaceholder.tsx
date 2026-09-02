@@ -10,6 +10,7 @@ import BarChartIcon from '@mui/icons-material/BarChart';
 import ShowChartIcon from '@mui/icons-material/ShowChart';
 import SavingsIcon from '@mui/icons-material/Savings';
 import AssignmentTurnedInIcon from '@mui/icons-material/AssignmentTurnedIn';
+import ReceiptLongIcon from '@mui/icons-material/ReceiptLong';
 import { useTranslation } from 'react-i18next';
 
 interface OnboardingStatus {
@@ -33,12 +34,13 @@ interface OnboardingStatus {
 }
 
 interface LockedPagePlaceholderProps {
-  page: 'review' | 'analysis' | 'investments' | 'budgets';
+  page: 'review' | 'activity' | 'analysis' | 'investments' | 'budgets';
   onboardingStatus: OnboardingStatus | null;
 }
 
 const pageIcons: Record<string, React.ReactNode> = {
   review: <AssignmentTurnedInIcon sx={{ fontSize: 28, color: 'text.secondary' }} />,
+  activity: <ReceiptLongIcon sx={{ fontSize: 28, color: 'text.secondary' }} />,
   analysis: <BarChartIcon sx={{ fontSize: 28, color: 'text.secondary' }} />,
   investments: <ShowChartIcon sx={{ fontSize: 28, color: 'text.secondary' }} />,
   budgets: <SavingsIcon sx={{ fontSize: 28, color: 'text.secondary' }} />,
@@ -51,10 +53,13 @@ export const LockedPagePlaceholder: React.FC<LockedPagePlaceholderProps> = ({
   const { t } = useTranslation('translation', { keyPrefix: 'lockedPage' });
 
   const title = t(`${page}.title`, page === 'review' ? 'Money Review'
+    : page === 'activity' ? 'Activity ledger'
     : page === 'analysis' ? 'Analysis Dashboard'
     : page === 'investments' ? 'Investment Tracking' : 'Budget Management');
   const description = t(`${page}.description`, page === 'review'
     ? 'Review and resolve the most important items detected in your financial data.'
+    : page === 'activity'
+    ? 'Search and review your synced transactions in one complete ledger.'
     : page === 'analysis'
     ? 'View detailed breakdowns of your spending by category, track trends over time, and discover insights about your financial habits.'
     : page === 'investments'

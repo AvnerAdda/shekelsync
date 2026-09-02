@@ -21,6 +21,10 @@ one-off/developer maintenance only — end users never run them.
 
 ## 1) Run migration review
 
+The release guard checks versioned runtime migrations, the fresh-install schema,
+and one-off migration scripts (`app/lib/schema-migrations.js`,
+`scripts/init_sqlite_db.js`, and `scripts/migrations/`).
+
 ```bash
 npm run release:migrations:check
 ```
@@ -48,4 +52,3 @@ npm run release:migrations:check:allow
 
 - [ ] Archive/remove obsolete migration files when no longer needed.
 - [ ] Keep `scripts/migrations/` focused on active/recent migrations.
-

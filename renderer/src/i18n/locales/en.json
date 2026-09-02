@@ -20,6 +20,29 @@
     "cancel": "Cancel",
     "apply": "Apply"
   },
+  "dashboardWelcome": {
+    "title": "Your money, clearly.",
+    "subtitle": "See what changed, what needs attention, and what to do next.",
+    "localFirst": "Private on this device",
+    "reviewActions": "Review actions"
+  },
+  "activity": {
+    "eyebrow": "Transaction ledger",
+    "title": "Activity",
+    "subtitle": "Search, review, and correct every movement in one place.",
+    "advancedSearch": "Advanced search",
+    "searchPlaceholder": "Search merchant, category, note…",
+    "search": "Search",
+    "filters": { "all": "All", "income": "Income", "expenses": "Expenses", "investments": "Investments" },
+    "summary": { "income": "Income in view", "expenses": "Expenses in view", "investments": "Investments in view" },
+    "error": "Your recent activity could not be loaded.",
+    "retry": "Try again",
+    "loading": "Loading recent activity…",
+    "emptyTitle": "No activity found",
+    "emptyDescription": "Try a different search or sync your accounts.",
+    "refresh": "Refresh activity",
+    "unknownDate": "Date unavailable"
+  },
   "routeError": {
     "titles": {
       "notFound": "Page not found",
@@ -409,6 +432,11 @@
         "growth": "Growth",
         "stability": "Stability",
         "reward": "Reward"
+      },
+      "insight": {
+        "label": "Needs attention:",
+        "exceeded": "{{count}} budget(s) are projected to finish over plan this month.",
+        "atRisk": "{{count}} budget(s) are trending above plan this month."
       },
       "budgets": {
         "heading": "Budgets ({{count}} total)",
@@ -3302,6 +3330,11 @@
   },
   "sidebar": {
     "menu": {
+      "home": "Home",
+      "review": "Review",
+      "activity": "Activity",
+      "plan": "Plan",
+      "wealth": "Wealth",
       "overview": "Overview",
       "analysis": "Analysis",
       "investments": "Investments",
@@ -3400,7 +3433,14 @@
       "restoreWindow": "Restore window",
       "closeWindow": "Close window",
       "sendFeedback": "Send Feedback",
-      "moreActions": "More actions"
+      "moreActions": "More actions",
+      "financialTools": "Financial tools"
+    },
+    "financialTools": {
+      "assistant": "Ask the assistant",
+      "assistantHint": "Explore your local financial data",
+      "optimizer": "Find opportunities",
+      "optimizerHint": "Review evidence-backed actions"
     },
     "moreActions": {
       "security": "Security status",
@@ -3442,6 +3482,9 @@
       "options": {
         "dashboard": "Dashboard",
         "review": "Money Review",
+        "activity": "Activity",
+        "plan": "Plan",
+        "wealth": "Wealth",
         "analysis": "Analysis",
         "investments": "Investments",
         "settings": "Settings",
