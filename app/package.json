@@ -37,7 +37,7 @@
   "dependencies": {
     "@supabase/supabase-js": "^2.110.6",
     "@xmldom/xmldom": "^0.8.13",
-    "better-sqlite3": "^12.11.1",
+    "better-sqlite3": "^13.0.3",
     "cors": "^2.8.6",
     "date-fns": "^4.4.0",
     "dotenv": "^17.4.2",
