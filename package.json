@@ -12,7 +12,7 @@
     "test:security": "npm --prefix app run test",
     "test:security:coverage": "npm --prefix app run test:coverage",
     "test:security:watch": "npm --prefix app exec -- vitest watch",
-    "audit:security": "npm audit --audit-level=moderate && npm run test:security:coverage",
+    "audit:security": "npm audit --audit-level=moderate && npm --prefix app audit --audit-level=moderate && npm --prefix renderer audit --audit-level=moderate && npm run test:security:coverage",
     "icons:icns": "node scripts/generate-icns.js",
     "release:migrations:check": "node scripts/migrations/check_release_migrations.js",
     "release:migrations:check:allow": "node scripts/migrations/check_release_migrations.js --allow-changes",
