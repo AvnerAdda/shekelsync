@@ -53,6 +53,7 @@ const DashboardPeriodSelector: React.FC<DashboardPeriodSelectorProps> = ({ sx })
   return (
     <>
       <ToggleButtonGroup
+        data-dashboard-period-selector="true"
         value={periodPreset}
         exclusive
         onChange={(event, newPeriod) => {

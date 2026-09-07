@@ -19,7 +19,7 @@ import {
   Stack,
 } from '@mui/material';
 import MuiTooltip from '@mui/material/Tooltip';
-import { ResponsiveContainer, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ReferenceLine, ReferenceArea, ComposedChart, Area } from 'recharts';
+import { ResponsiveContainer, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ReferenceLine, ReferenceArea, ComposedChart, Area, Bar } from 'recharts';
 import { useTheme, alpha } from '@mui/material/styles';
 import { format, subDays, addDays } from 'date-fns';
 import AccountBalanceIcon from '@mui/icons-material/AccountBalance';
@@ -31,7 +31,6 @@ import TuneIcon from '@mui/icons-material/Tune';
 import InstitutionBadge from '@renderer/shared/components/InstitutionBadge';
 import CategoryIcon from '@renderer/features/breakdown/components/CategoryIcon';
 import IncomeExpenseCalendar from './IncomeExpenseCalendar';
-import DashboardPeriodSelector from './DashboardPeriodSelector';
 import { useDashboardFilters } from '../DashboardFiltersContext';
 import { useTranslation } from 'react-i18next';
 import TransactionDetailModal, { TransactionForModal } from '@renderer/shared/modals/TransactionDetailModal';
@@ -50,8 +49,6 @@ interface TransactionHistorySectionProps {
   formatXAxis: (value: string) => string;
   formatYAxisLog: (value: number) => string;
   getLogScaleData: (history: any[]) => any[];
-  CustomDot: React.FC<any>;
-  CustomTooltip: React.FC<any>;
   handleChartAreaClick: (payload: any) => void;
   detectAnomalies: (history: any[]) => any[];
   hoveredDate: string | null;
@@ -66,6 +63,8 @@ interface TransactionHistorySectionProps {
   forecastError?: string | null;
   refreshForecast?: () => void;
 }
+
+type IncomeExpenseChartType = 'bar' | 'line';
 
 function getNetFlowForHistory(item: any, useOperatingBasis: boolean): number {
   if (!useOperatingBasis) {
@@ -91,8 +90,6 @@ const TransactionHistorySection: React.FC<TransactionHistorySectionProps> = ({
   formatXAxis,
   formatYAxisLog,
   getLogScaleData,
-  CustomDot,
-  CustomTooltip,
   handleChartAreaClick,
   detectAnomalies,
   hoveredDate,
@@ -129,7 +126,8 @@ const TransactionHistorySection: React.FC<TransactionHistorySectionProps> = ({
   const [includeCardRepayments, setIncludeCardRepayments] = useState(false);
   const [includeCapitalReturns, setIncludeCapitalReturns] = useState(false);
   const [showAverageGuides, setShowAverageGuides] = useState(true);
-  const [showForecastLines, setShowForecastLines] = useState(true);
+  const [showForecast, setShowForecast] = useState(true);
+  const [incomeExpenseChartType, setIncomeExpenseChartType] = useState<IncomeExpenseChartType>('bar');
   
   // Transaction Detail Modal state
   const [detailModalOpen, setDetailModalOpen] = useState(false);
@@ -426,15 +424,13 @@ const TransactionHistorySection: React.FC<TransactionHistorySectionProps> = ({
 
     // Historical data up to today
     const actualHistoricalData = baseHistoricalData.filter((item: any) => item.date <= actualEndDate);
-    const lastActualItem = actualHistoricalData.length > 0 ? actualHistoricalData[actualHistoricalData.length - 1] : null;
-
-    // Create combined data - set income/expenses to undefined for gap period to hide dots
+    // Create combined data - set income/expenses to undefined for the no-data gap.
     const historicalData = actualHistoricalData.map((item: any) => {
       const isInGapPeriod = gapPeriodInfo.hasGap && gapPeriodInfo.gapStartDate && item.date > gapPeriodInfo.gapStartDate;
       
       return {
         ...item,
-        // Set to undefined for gap period so Area dots don't render
+        // Undefined values prevent historical bars from rendering in the gap.
         income: isInGapPeriod ? undefined : (item.income || 0),
         expenses: isInGapPeriod ? undefined : (item.expenses || 0),
         forecastIncome: undefined,
@@ -446,21 +442,6 @@ const TransactionHistorySection: React.FC<TransactionHistorySectionProps> = ({
         originalExpenses: item.expenses || 0,
       };
     });
-
-    // Bridge point for forecast - last item starts the forecast line
-    const lastIncome = lastActualItem?.income || 0;
-    const lastExpenses = lastActualItem?.expenses || 0;
-
-    // Update the last historical item to also have forecast values (to start the dashed line)
-    if (historicalData.length > 0) {
-      const lastIdx = historicalData.length - 1;
-      const lastItem = historicalData[lastIdx];
-      historicalData[lastIdx] = {
-        ...lastItem,
-        forecastIncome: lastIncome,
-        forecastExpenses: lastExpenses,
-      };
-    }
 
     // Forecast entries - future dates after today
     const forecastEntries = forecastData.dailyForecasts
@@ -501,9 +482,6 @@ const TransactionHistorySection: React.FC<TransactionHistorySectionProps> = ({
           const logItem = getLogScaleData([item])[0];
           return {
             ...logItem,
-            // Also transform forecast bridge values if present
-            forecastIncome: item.forecastIncome ? toLog(item.forecastIncome) : undefined,
-            forecastExpenses: item.forecastExpenses ? toLog(item.forecastExpenses) : undefined,
             originalIncome: item.originalIncome,
             originalExpenses: item.originalExpenses,
           };
@@ -828,31 +806,10 @@ const TransactionHistorySection: React.FC<TransactionHistorySectionProps> = ({
               <ToggleButton value="monthly">{t('periods.monthly')}</ToggleButton>
             </ToggleButtonGroup>
 
-            <DashboardPeriodSelector
-              sx={{
-                borderRadius: '9px',
-                '& .MuiToggleButton-root': {
-                  border: 'none',
-                  borderRadius: '7px !important',
-                  px: 1.25,
-                  py: 0.5,
-                  color: 'text.secondary',
-                  '&.Mui-selected': {
-                    bgcolor: 'background.paper',
-                    color: 'primary.main',
-                    boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
-                    fontWeight: 600,
-                  },
-                  '&:hover': {
-                    bgcolor: 'rgba(0,0,0,0.05)',
-                  }
-                }
-              }}
-            />
-
             <MuiTooltip title={t('settings.button', { defaultValue: 'Chart options' })}>
               <IconButton
                 size="small"
+                aria-label={t('settings.button', { defaultValue: 'Chart options' })}
                 onClick={(event) => setSettingsAnchorEl(event.currentTarget)}
                 sx={{
                   bgcolor: 'transparent',
@@ -890,6 +847,32 @@ const TransactionHistorySection: React.FC<TransactionHistorySectionProps> = ({
         <Typography variant="subtitle2" sx={{ px: 1, pt: 0.5, pb: 1 }}>
           {t('settings.title', { defaultValue: 'Chart options' })}
         </Typography>
+        <Box sx={{ px: 0.5, pb: 1 }}>
+          <Typography
+            variant="caption"
+            sx={{ display: 'block', color: 'text.secondary', mb: 0.75 }}
+          >
+            {t('settings.chartType', { defaultValue: 'Chart type' })}
+          </Typography>
+          <ToggleButtonGroup
+            value={incomeExpenseChartType}
+            exclusive
+            fullWidth
+            size="small"
+            aria-label={t('settings.chartType', { defaultValue: 'Chart type' })}
+            onChange={(_, nextType: IncomeExpenseChartType | null) => {
+              if (nextType) setIncomeExpenseChartType(nextType);
+            }}
+          >
+            <ToggleButton value="line">
+              {t('settings.line', { defaultValue: 'Line' })}
+            </ToggleButton>
+            <ToggleButton value="bar">
+              {t('settings.bar', { defaultValue: 'Bar' })}
+            </ToggleButton>
+          </ToggleButtonGroup>
+        </Box>
+        <Divider sx={{ mb: 0.5 }} />
         <FormGroup sx={{ px: 0.5 }}>
           <FormControlLabel
             control={
@@ -926,12 +909,12 @@ const TransactionHistorySection: React.FC<TransactionHistorySectionProps> = ({
             control={
               <Switch
                 size="small"
-                checked={showForecastLines}
-                onChange={(_, checked) => setShowForecastLines(checked)}
+                checked={showForecast}
+                onChange={(_, checked) => setShowForecast(checked)}
                 disabled={!hasForecastSeries}
               />
             }
-            label={t('settings.forecastLines', { defaultValue: 'Show forecast lines' })}
+            label={t('settings.showForecast', { defaultValue: 'Show forecast' })}
           />
         </FormGroup>
       </Popover>
@@ -947,7 +930,7 @@ const TransactionHistorySection: React.FC<TransactionHistorySectionProps> = ({
                 textAlign: 'center'
               }}>
               {selectedPeriodLabel} + {t('forecast.next30Days', { defaultValue: '30 day forecast' })}
-              {` — ${t('settings.forecastLines')}: ${showForecastLines ? t('settings.on', { defaultValue: 'On' }) : t('settings.off', { defaultValue: 'Off' })}`}
+              {` — ${t('settings.showForecast')}: ${showForecast ? t('settings.on', { defaultValue: 'On' }) : t('settings.off', { defaultValue: 'Off' })}`}
             </Typography>
           )}
           {aggregationPeriod !== 'daily' && hasForecastSeries && (
@@ -967,17 +950,9 @@ const TransactionHistorySection: React.FC<TransactionHistorySectionProps> = ({
               onClick={handleChartAreaClick}
               style={{ cursor: 'pointer' }}
               margin={{ top: 10, right: 10, left: 0, bottom: 0 }}
+              barGap={2}
+              barCategoryGap="20%"
             >
-          <defs>
-            <linearGradient id="incomeGradient" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="5%" stopColor={theme.palette.success.main} stopOpacity={0.3} />
-              <stop offset="95%" stopColor={theme.palette.success.main} stopOpacity={0} />
-            </linearGradient>
-            <linearGradient id="expenseGradient" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="5%" stopColor={theme.palette.error.main} stopOpacity={0.3} />
-              <stop offset="95%" stopColor={theme.palette.error.main} stopOpacity={0} />
-            </linearGradient>
-          </defs>
           <CartesianGrid strokeDasharray="3 3" stroke={theme.palette.divider} vertical={false} opacity={0.5} />
           <XAxis 
             dataKey="date" 
@@ -1005,9 +980,13 @@ const TransactionHistorySection: React.FC<TransactionHistorySectionProps> = ({
               const isForecast = data.isForecast;
               const isInGap = data.isInGap;
 
-              // Use original values if available (for log scale), otherwise use displayed values
-              const income = data.originalForecastIncome || data.originalIncome || data.forecastIncome || data.income || 0;
-              const expenses = data.originalForecastExpenses || data.originalExpenses || data.forecastExpenses || data.expenses || 0;
+              // Use the matching historical/forecast fields and preserve legitimate zero values.
+              const income = isForecast
+                ? (data.originalForecastIncome ?? data.forecastIncome ?? 0)
+                : (data.originalIncome ?? data.income ?? 0);
+              const expenses = isForecast
+                ? (data.originalForecastExpenses ?? data.forecastExpenses ?? 0)
+                : (data.originalExpenses ?? data.expenses ?? 0);
 
               return (
                 <Paper sx={(theme) => ({ 
@@ -1078,26 +1057,93 @@ const TransactionHistorySection: React.FC<TransactionHistorySectionProps> = ({
             );
           })()}
 
-          <Area
-            type="monotone"
-            dataKey="income"
-            stroke={theme.palette.success.main}
-            strokeWidth={3}
-            fill="url(#incomeGradient)"
-            dot={<CustomDot />}
-            activeDot={{ r: 6, strokeWidth: 0 }}
-            name={t('legend.income')}
-          />
-          <Area 
-            type="monotone" 
-            dataKey="expenses" 
-            stroke={theme.palette.error.main} 
-            strokeWidth={3} 
-            fill="url(#expenseGradient)"
-            dot={<CustomDot />} 
-            activeDot={{ r: 6, strokeWidth: 0 }}
-            name={t('legend.expenses')} 
-          />
+          {incomeExpenseChartType === 'bar' ? (
+            <>
+              <Bar
+                dataKey="income"
+                stackId="income"
+                fill={theme.palette.success.main}
+                radius={[4, 4, 0, 0]}
+                maxBarSize={24}
+                name={t('legend.income')}
+              />
+              <Bar
+                dataKey="expenses"
+                stackId="expenses"
+                fill={theme.palette.error.main}
+                radius={[4, 4, 0, 0]}
+                maxBarSize={24}
+                name={t('legend.expenses')}
+              />
+              {showForecast && hasForecastSeries && (
+                <Bar
+                  dataKey="forecastIncome"
+                  stackId="income"
+                  fill={alpha(theme.palette.success.main, 0.38)}
+                  stroke={theme.palette.success.main}
+                  strokeDasharray="4 2"
+                  radius={[4, 4, 0, 0]}
+                  maxBarSize={24}
+                  name={`${t('forecast.income')} (${t('forecast.expected')})`}
+                />
+              )}
+              {showForecast && hasForecastSeries && (
+                <Bar
+                  dataKey="forecastExpenses"
+                  stackId="expenses"
+                  fill={alpha(theme.palette.error.main, 0.38)}
+                  stroke={theme.palette.error.main}
+                  strokeDasharray="4 2"
+                  radius={[4, 4, 0, 0]}
+                  maxBarSize={24}
+                  name={`${t('forecast.expenses')} (${t('forecast.expected')})`}
+                />
+              )}
+            </>
+          ) : (
+            <>
+              <Line
+                type="monotone"
+                dataKey="income"
+                stroke={theme.palette.success.main}
+                strokeWidth={3}
+                dot={false}
+                activeDot={{ r: 6, strokeWidth: 0 }}
+                name={t('legend.income')}
+              />
+              <Line
+                type="monotone"
+                dataKey="expenses"
+                stroke={theme.palette.error.main}
+                strokeWidth={3}
+                dot={false}
+                activeDot={{ r: 6, strokeWidth: 0 }}
+                name={t('legend.expenses')}
+              />
+              {showForecast && hasForecastSeries && (
+                <Line
+                  type="monotone"
+                  dataKey="forecastIncome"
+                  stroke={theme.palette.success.light}
+                  strokeWidth={2}
+                  strokeDasharray="5 5"
+                  dot={false}
+                  name={`${t('forecast.income')} (${t('forecast.expected')})`}
+                />
+              )}
+              {showForecast && hasForecastSeries && (
+                <Line
+                  type="monotone"
+                  dataKey="forecastExpenses"
+                  stroke={theme.palette.error.light}
+                  strokeWidth={2}
+                  strokeDasharray="5 5"
+                  dot={false}
+                  name={`${t('forecast.expenses')} (${t('forecast.expected')})`}
+                />
+              )}
+            </>
+          )}
           {/* No data zone - grey shaded area for gap period where we don't have scraped data */}
           {gapPeriodInfo.hasGap && gapPeriodInfo.gapStartDate && (
             <ReferenceArea
@@ -1114,38 +1160,6 @@ const TransactionHistorySection: React.FC<TransactionHistorySectionProps> = ({
                 fill: theme.palette.grey[600],
                 fontSize: 12,
               }}
-            />
-          )}
-          {/* Forecast lines (dashed) - connect through nulls to draw continuous line from bridge point */}
-          {showForecastLines && hasForecastSeries && (
-            <Line 
-              type="monotone" 
-              dataKey="forecastIncome" 
-              stroke={theme.palette.success.light} 
-              strokeWidth={2} 
-              strokeDasharray="5 5"
-              dot={(props: any) => {
-                // Don't render dot if value is invalid or coordinates are NaN
-                if (props.value === null || props.value === undefined || !Number.isFinite(props.cx) || !Number.isFinite(props.cy)) return null;
-                return <circle cx={props.cx} cy={props.cy} r={3} fill={theme.palette.success.light} />;
-              }}
-              name={`${t('forecast.income')} (${t('forecast.expected')})`}
-              connectNulls={true}
-            />
-          )}
-          {showForecastLines && hasForecastSeries && (
-            <Line 
-              type="monotone" 
-              dataKey="forecastExpenses" 
-              stroke={theme.palette.error.light} 
-              strokeWidth={2} 
-              strokeDasharray="5 5"
-              dot={(props: any) => {
-                if (props.value === null || props.value === undefined) return null;
-                return <circle cx={props.cx} cy={props.cy} r={3} fill={theme.palette.error.light} />;
-              }}
-              name={`${t('forecast.expenses')} (${t('forecast.expected')})`}
-              connectNulls={true}
             />
           )}
         </ComposedChart>

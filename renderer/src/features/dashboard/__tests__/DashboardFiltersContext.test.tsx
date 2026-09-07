@@ -1,6 +1,7 @@
 import React from 'react';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { renderHook, act } from '@testing-library/react';
+import { endOfDay, startOfDay, subDays } from 'date-fns';
 import { DashboardFiltersProvider, useDashboardFilters } from '../DashboardFiltersContext';
 import { AggregationPeriod } from '@renderer/types/dashboard';
 
@@ -26,7 +27,7 @@ describe('DashboardFiltersContext', () => {
     expect(startDate.getMonth()).toBe(2); // March (0-indexed)
     expect(startDate.getDate()).toBe(1);
 
-    expect(endDate.getTime()).toBe(new Date('2024-03-15T12:00:00Z').getTime());
+    expect(endDate.getTime()).toBe(endOfDay(new Date('2024-03-15T12:00:00Z')).getTime());
     expect(aggregationPeriod).toBe<AggregationPeriod>('daily');
     expect(hoveredDate).toBeNull();
     expect(periodPreset).toBe('mtd');
@@ -40,8 +41,12 @@ describe('DashboardFiltersContext', () => {
     });
 
     expect(result.current.periodPreset).toBe('30d');
-    expect(result.current.startDate.getMonth()).toBe(1);
-    expect(result.current.startDate.getDate()).toBe(14);
+    expect(result.current.startDate.getTime()).toBe(
+      startOfDay(subDays(new Date('2024-03-15T12:00:00Z'), 29)).getTime(),
+    );
+    expect(result.current.endDate.getTime()).toBe(
+      endOfDay(new Date('2024-03-15T12:00:00Z')).getTime(),
+    );
 
     act(() => {
       result.current.setPeriodPreset('mtd');
@@ -68,6 +73,27 @@ describe('DashboardFiltersContext', () => {
     expect(result.current.periodPreset).toBe('custom');
     expect(result.current.aggregationPeriod).toBe<AggregationPeriod>('weekly');
     expect(result.current.hoveredDate).toBe('2024-02-14');
+  });
+
+  it('clears the selected transaction date when the dashboard range changes', () => {
+    const { result } = renderHook(() => useDashboardFilters(), { wrapper });
+
+    act(() => {
+      result.current.setHoveredDate('2024-03-10');
+      result.current.setPeriodPreset('30d');
+    });
+
+    expect(result.current.hoveredDate).toBeNull();
+
+    act(() => {
+      result.current.setHoveredDate('2024-03-10');
+      result.current.setDateRange(
+        new Date('2024-02-01T00:00:00Z'),
+        new Date('2024-02-29T23:59:59Z'),
+      );
+    });
+
+    expect(result.current.hoveredDate).toBeNull();
   });
 
   it('throws a helpful error when used outside the provider', () => {

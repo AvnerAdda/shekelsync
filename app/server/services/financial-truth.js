@@ -21,6 +21,17 @@ const FREQUENCY_DAYS = {
   quarterly: 91,
   yearly: 365,
 };
+const FREQUENCY_MIN_OCCURRENCES = {
+  daily: 10,
+  weekly: 4,
+  biweekly: 3,
+  monthly: 2,
+  bimonthly: 2,
+  quarterly: 2,
+  yearly: 2,
+  variable: 2,
+};
+const FINANCIAL_PATTERN_MATERIALIZER_VERSION = 'evidence-v2';
 const AFFECTED_DOMAINS = [
   'forecast',
   'subscriptions',
@@ -268,10 +279,14 @@ function scheduleDependentRecalculation(revision, attempt = 0) {
 
 function materializePatterns(db, { force = false } = {}) {
   const state = db.prepare('SELECT * FROM financial_truth_state WHERE id = 1').get();
-  if (!force && state?.materialized_transaction_signature) {
+  const materializerPrefix = `${FINANCIAL_PATTERN_MATERIALIZER_VERSION}:`;
+  if (
+    !force
+    && String(state?.materialized_transaction_signature || '').startsWith(materializerPrefix)
+  ) {
     return { changed: false, revision: Number(state.revision) || 0 };
   }
-  const signature = transactionSignature(db);
+  const signature = `${materializerPrefix}${transactionSignature(db)}`;
 
   const transactions = db.prepare(`
     SELECT t.identifier, t.vendor, t.date, t.name, t.merchant_name, t.price,
@@ -361,6 +376,8 @@ function materializePatterns(db, { force = false } = {}) {
         if (uniqueDates.length < 2) return;
         const { frequency, confidence } = inferFrequency(uniqueDates);
         if (frequency === 'variable' || confidence < 0.3) return;
+        const minimumOccurrences = FREQUENCY_MIN_OCCURRENCES[frequency] || 2;
+        if (uniqueDates.length < minimumOccurrences) return;
 
         const sample = cluster.rows[cluster.rows.length - 1];
         const meanAmount = cluster.rows.reduce((sum, row) => sum + row.amount, 0) / cluster.rows.length;
@@ -487,6 +504,7 @@ function resolvePattern(pattern, correctionRows) {
     nextExpectedDate: pattern.next_expected_date || null,
     occurrenceCount: Number(pattern.occurrence_count) || 0,
     isSubscription: Boolean(pattern.is_subscription),
+    source: pattern.source || 'detected',
     state: 'active',
     endedAt: null,
     billingDay: null,
@@ -529,6 +547,16 @@ function resolvePattern(pattern, correctionRows) {
   return resolved;
 }
 
+function hasMinimumRecurringEvidence(pattern) {
+  if (!pattern || pattern.frequency === 'variable') return false;
+  const hasUserOverride = Array.isArray(pattern.corrections)
+    && pattern.corrections.some((correction) => correction.action === 'override_pattern');
+  if (pattern.source !== 'detected' || pattern.confirmed || hasUserOverride) return true;
+
+  const minimumOccurrences = FREQUENCY_MIN_OCCURRENCES[pattern.frequency] || 2;
+  return Number(pattern.occurrenceCount || 0) >= minimumOccurrences;
+}
+
 function getProjectionSnapshotFromDb(db, { materialize = true } = {}) {
   if (materialize) materializePatterns(db);
   const truthRevision = readTruthRevision(db);
@@ -552,7 +580,7 @@ function getProjectionSnapshotFromDb(db, { materialize = true } = {}) {
   evidenceRows.forEach((row) => {
     const pattern = resolvedById.get(Number(row.pattern_id));
     if (!pattern) return;
-    const handledExplicitly = pattern.frequency !== 'variable';
+    const handledExplicitly = hasMinimumRecurringEvidence(pattern);
     if (handledExplicitly || pattern.state !== 'active') {
       excludedTransactionKeys.add(`${row.transaction_identifier}\u0000${row.transaction_vendor}`);
     }
@@ -587,6 +615,7 @@ function buildRecurringOccurrences(snapshot, startDate, endDate) {
   const occurrences = [];
   snapshot.patterns.forEach((pattern) => {
     if (!FREQUENCY_DAYS[pattern.frequency]) return;
+    if (!hasMinimumRecurringEvidence(pattern)) return;
     if (pattern.state === 'suppressed' || pattern.state === 'paused') return;
     let occurrence = pattern.nextExpectedDate
       ? parseDate(pattern.nextExpectedDate)
@@ -1207,6 +1236,7 @@ module.exports = {
     monthlyAmount,
     openDb,
     parseDate,
+    hasMinimumRecurringEvidence,
     resolvePattern,
     transactionSignature,
   },

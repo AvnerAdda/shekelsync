@@ -62,13 +62,25 @@ const waterfallPayload = {
 };
 
 test('dashboard shows loading state then formatted summary values', async ({ page }) => {
+  const dashboardRequests: URL[] = [];
+  const waterfallRequests: URL[] = [];
+  const breakdownRequests: URL[] = [];
   const overrides: Record<string, Handler> = {
-    'GET /api/analytics/dashboard': async ({ route }) => {
+    'GET /api/analytics/dashboard': async ({ route, url }) => {
+      dashboardRequests.push(url);
       await new Promise((resolve) => setTimeout(resolve, 300));
       await route.fulfill(jsonResponse(dashboardPayload));
     },
-    'GET /api/analytics/waterfall-flow': async ({ route }) => {
+    'GET /api/analytics/waterfall-flow': async ({ route, url }) => {
+      waterfallRequests.push(url);
       await route.fulfill(jsonResponse(waterfallPayload));
+    },
+    'GET /api/analytics/breakdown': async ({ route, url }) => {
+      breakdownRequests.push(url);
+      await route.fulfill(jsonResponse({
+        breakdowns: { byCategory: [], byVendor: [], byMonth: [] },
+        summary: { total: 0, count: 0, average: 0, min: 0, max: 0 },
+      }));
     },
   };
 
@@ -83,7 +95,10 @@ test('dashboard shows loading state then formatted summary values', async ({ pag
     // Loading indicators are optional; ignore when not rendered.
   }
 
-  await expect(page.getByText('Current Month', { exact: true }).first()).toBeVisible({ timeout: 15000 });
+  await expect(
+    page.locator('[data-dashboard-summary-card="finance"]').getByText('MTD', { exact: true }),
+  ).toBeVisible({ timeout: 15000 });
+  await expect(page.locator('[data-dashboard-period-selector="true"]')).toHaveCount(1);
   await expect(page.getByText('Income', { exact: true }).first()).toBeVisible();
   await expect(page.getByText('+₪12,000', { exact: true }).first()).toBeVisible();
   await expect(page.getByText('Expenses', { exact: true }).first()).toBeVisible();
@@ -91,4 +106,28 @@ test('dashboard shows loading state then formatted summary values', async ({ pag
   await expect(page.getByText('Investments', { exact: true }).first()).toBeVisible();
   await expect(page.getByText('-₪1,000', { exact: true }).first()).toBeVisible();
   await expect(page.getByText('₪4,200', { exact: true }).first()).toBeVisible();
+
+  dashboardRequests.length = 0;
+  waterfallRequests.length = 0;
+  breakdownRequests.length = 0;
+  await page.getByRole('button', { name: '30D' }).click();
+
+  await expect.poll(() => dashboardRequests.length).toBeGreaterThan(0);
+  await expect.poll(() => waterfallRequests.length).toBeGreaterThan(0);
+  await expect.poll(() => breakdownRequests.length).toBeGreaterThan(0);
+
+  const latestRange = (requests: URL[]) => {
+    const request = requests.at(-1);
+    return {
+      startDate: request?.searchParams.get('startDate'),
+      endDate: request?.searchParams.get('endDate'),
+    };
+  };
+  const dashboardRange = latestRange(dashboardRequests);
+
+  expect(latestRange(waterfallRequests)).toEqual(dashboardRange);
+  expect(latestRange(breakdownRequests)).toEqual(dashboardRange);
+  await expect(
+    page.locator('[data-dashboard-summary-card="finance"]').getByText('30D', { exact: true }),
+  ).toBeVisible();
 });

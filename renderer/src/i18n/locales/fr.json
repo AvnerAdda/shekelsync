@@ -1047,10 +1047,13 @@
     "settings": {
       "button": "Options du graphique",
       "title": "Options du graphique",
+      "chartType": "Type de graphique",
+      "line": "Courbe",
+      "bar": "Barres",
       "cardRepayments": "Inclure les remboursements de carte",
       "capitalReturns": "Inclure les retours de capital",
       "avgGuides": "Afficher les guides de moyenne",
-      "forecastLines": "Afficher les lignes de prévision",
+      "showForecast": "Afficher les prévisions",
       "on": "Activé",
       "off": "Désactivé"
     },

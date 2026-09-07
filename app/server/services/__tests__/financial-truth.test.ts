@@ -129,6 +129,48 @@ describe('Financial truth resolution', () => {
     expect(service.buildRecurringOccurrences({ patterns: [{ ...basePattern, state: 'ended', endedAt: '2026-09-01' }] }, '2026-08-01', '2026-10-01')).toHaveLength(1);
   });
 
+  it('does not turn two consecutive transactions into an automatic daily forecast', () => {
+    const weakDetectedDaily = {
+      id: 3,
+      displayName: 'Deposit Interest',
+      direction: 'income',
+      categoryDefinitionId: null,
+      frequency: 'daily',
+      amount: 58.535,
+      amountTolerance: 8.78,
+      confidence: 0.5,
+      occurrenceCount: 2,
+      source: 'detected',
+      lastSeenDate: '2026-03-04',
+      nextExpectedDate: '2026-03-05',
+      state: 'active',
+      endedAt: null,
+      skippedOccurrences: [],
+      corrections: [],
+    };
+
+    expect(service._internal.hasMinimumRecurringEvidence(weakDetectedDaily)).toBe(false);
+    expect(service.buildRecurringOccurrences(
+      { patterns: [weakDetectedDaily] },
+      '2026-03-05',
+      '2026-03-10',
+    )).toEqual([]);
+
+    const sufficientlyObserved = { ...weakDetectedDaily, occurrenceCount: 10 };
+    expect(service._internal.hasMinimumRecurringEvidence(sufficientlyObserved)).toBe(true);
+    expect(service.buildRecurringOccurrences(
+      { patterns: [sufficientlyObserved] },
+      '2026-03-05',
+      '2026-03-10',
+    )).toHaveLength(6);
+
+    const userConfirmed = {
+      ...weakDetectedDaily,
+      corrections: [{ action: 'override_pattern' }],
+    };
+    expect(service._internal.hasMinimumRecurringEvidence(userConfirmed)).toBe(true);
+  });
+
   it('validates category expectations and occurrence targets', () => {
     expect(() => service.validateDraft({ action: 'skip_occurrence', target: { kind: 'occurrence', patternId: 2 } })).toThrow('An occurrence is required');
     expect(service.validateDraft({
@@ -361,6 +403,8 @@ describe('Financial truth resolution', () => {
         ['salary-2', 'bank-a', '2026-02-10', 'Employer', 10000, 'Employer', null, 'income'],
         ['food-1', 'card-b', '2026-01-15', 'Groceries', -400, 'Groceries', categoryId, 'expense'],
         ['food-2', 'card-b', '2026-02-15', 'Groceries', -500, 'Groceries', categoryId, 'expense'],
+        ['interest-1', 'bank-a', '2026-03-03', 'Deposit Interest', 58.14, 'Deposit Interest', null, 'income'],
+        ['interest-2', 'bank-a', '2026-03-04', 'Deposit Interest', 58.93, 'Deposit Interest', null, 'income'],
       ].forEach((row) => insertTransaction.run(...row));
 
       expect(service.materializePatterns(db, { force: true })).toMatchObject({ changed: true });
@@ -368,6 +412,8 @@ describe('Financial truth resolution', () => {
       const snapshot = service.getProjectionSnapshotFromDb(db, { materialize: false });
       const gym = snapshot.patterns.find((pattern: any) => pattern.normalizedName === 'gym_plus');
       expect(gym).toMatchObject({ direction: 'expense', frequency: 'monthly', isSubscription: true });
+      expect(snapshot.patterns.find((pattern: any) => pattern.normalizedName === 'deposit_interest'))
+        .toBeUndefined();
       expect(snapshot.excludedTransactionKeys.has('gym-1\u0000bank-a')).toBe(true);
 
       expect(() => service.previewCorrection({

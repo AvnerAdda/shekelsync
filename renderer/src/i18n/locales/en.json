@@ -1052,10 +1052,13 @@
     "settings": {
       "button": "Chart options",
       "title": "Chart options",
+      "chartType": "Chart type",
+      "line": "Line",
+      "bar": "Bar",
       "cardRepayments": "Include card repayments",
       "capitalReturns": "Include capital returns",
       "avgGuides": "Show average guides",
-      "forecastLines": "Show forecast lines",
+      "showForecast": "Show forecast",
       "on": "On",
       "off": "Off"
     },
