@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
-import { Box, Paper, Typography, CircularProgress, useTheme, Alert, Button } from '@mui/material';
+import { Box, Typography, CircularProgress, Alert, Button } from '@mui/material';
 import AccountBalanceIcon from '@mui/icons-material/AccountBalance';
 import InfoIcon from '@mui/icons-material/InfoOutlined';
 import { format, subMonths, startOfMonth, endOfMonth } from 'date-fns';
@@ -34,6 +34,7 @@ type YAxisScale = 'linear' | 'log';
 
 const DashboardHomeContent: React.FC = () => {
   const { t, i18n } = useTranslation('translation', { keyPrefix: 'dashboardHome' });
+  const { t: tPeriod } = useTranslation('translation', { keyPrefix: 'dashboardPeriod' });
   // Helper function to parse date strings from SQLite without timezone conversion
   const parseLocalDate = (dateStr: string): Date => {
     if (!dateStr || typeof dateStr !== 'string') {
@@ -81,7 +82,6 @@ const DashboardHomeContent: React.FC = () => {
   const [fallbackEnabled, setFallbackEnabled] = useState(false);
   const [showFallbackData, setShowFallbackData] = useState(false);
   const fallbackResetInitializedRef = useRef(false);
-  const theme = useTheme();
   const { formatCurrency } = useFinancePrivacy();
   const { status: onboardingStatus } = useOnboarding();
 
@@ -189,52 +189,6 @@ const DashboardHomeContent: React.FC = () => {
         setHoveredDate(clickedDate);
       }
     }
-  };
-
-  // Custom dot component that handles clicks
-  const CustomDot = (props: any) => {
-    const { cx, cy, payload, value } = props;
-
-    // Don't render dot if:
-    // - value is null/undefined
-    // - coordinates are invalid (NaN or not finite)
-    // - date is in gap period or forecast period (no actual data)
-    if (
-      value === null || 
-      value === undefined || 
-      !Number.isFinite(cx) || 
-      !Number.isFinite(cy) ||
-      payload?.isForecast ||
-      payload?.isInGap
-    ) {
-      return null;
-    }
-
-    return (
-      <circle
-        cx={cx}
-        cy={cy}
-        r={4}
-        fill={props.stroke}
-        style={{ cursor: 'pointer' }}
-        onClick={() => {
-          if (payload && payload.date) {
-            const today = new Date();
-            today.setHours(0, 0, 0, 0);
-            const clickedDateObj = parseLocalDate(payload.date);
-            clickedDateObj.setHours(0, 0, 0, 0);
-            const isForecastDate = clickedDateObj > today;
-
-            if (isForecastDate) {
-              setHoveredDate(payload.date);
-            } else {
-              fetchTransactionsByDate(payload.date);
-              setHoveredDate(payload.date);
-            }
-          }
-        }}
-      />
-    );
   };
 
   // Check if selected date range is current month
@@ -554,6 +508,13 @@ const DashboardHomeContent: React.FC = () => {
 
   const canOfferFallback = fallbackEnabled && !primaryHasHistory && fallbackHasHistory && hasTransactions;
   const shouldUseFallback = showFallbackData && canOfferFallback;
+  const summaryPeriodLabel = shouldUseFallback
+    ? fallbackRangeLabel
+    : periodPreset === 'mtd'
+      ? tPeriod('mtd')
+      : periodPreset === '30d'
+        ? tPeriod('last30')
+        : selectedRangeLabel;
 
   // Determine effective data to display (use fallback when current period is empty)
   const effectiveData = shouldUseFallback ? fallbackDashboardData : data;
@@ -665,91 +626,6 @@ const DashboardHomeContent: React.FC = () => {
     }));
   };
 
-  // Custom tooltip for transaction history chart
-  const CustomTooltip = ({ active, payload }: any) => {
-    if (active && payload && payload.length) {
-      const dateStr = payload[0].payload.date;
-      // Use original values if available (for log scale), otherwise use direct values
-      const income = payload[0].payload.originalIncome ?? (payload.find((p: any) => p.dataKey === 'income')?.value || 0);
-      const expenses = payload[0].payload.originalExpenses ?? (payload.find((p: any) => p.dataKey === 'expenses')?.value || 0);
-      const netFlow = income - expenses;
-      const localDate = parseLocalDate(dateStr);
-
-      // Check if this is an anomaly
-      const anomalies = detectAnomalies(effectiveData?.history || []);
-      const isAnomaly = anomalies.some(a => a.date === dateStr);
-
-      // Calculate average for comparison
-      const avgExpenses = effectiveData?.history
-        ? effectiveData.history.reduce((sum, item) => sum + (item.expenses ?? 0), 0) / effectiveData.history.length
-        : 0;
-
-      const diffFromAvg = expenses - avgExpenses;
-      const percentDiff = avgExpenses > 0 ? (diffFromAvg / avgExpenses) * 100 : 0;
-
-      return (
-        <Paper sx={{ p: 2, border: `1px solid ${theme.palette.divider}`, minWidth: 200 }}>
-          <Typography
-            variant="body2"
-            sx={{
-              fontWeight: "bold",
-              mb: 1
-            }}>
-            {format(localDate, 'MMM dd, yyyy')}
-          </Typography>
-          <Typography variant="body2" sx={{
-            color: "success.main"
-          }}>
-            ↑ {t('tooltip.income')}: {formatCurrencyValue(income)}
-          </Typography>
-          <Typography variant="body2" sx={{
-            color: "error.main"
-          }}>
-            ↓ {t('tooltip.expenses')}: {formatCurrencyValue(expenses)}
-          </Typography>
-          <Typography
-            variant="body2"
-            color={netFlow > 0 ? 'success.main' : 'error.main'}
-            sx={{
-              fontWeight: "medium",
-              mt: 0.5,
-              pt: 0.5,
-              borderTop: `1px solid ${theme.palette.divider}`
-            }}>
-            {t('tooltip.net')}: {netFlow > 0 ? '+' : ''}{formatCurrencyValue(netFlow)}
-          </Typography>
-          {Math.abs(percentDiff) > 20 && (
-            <Typography variant="caption" color={percentDiff > 0 ? 'warning.main' : 'info.main'} sx={{ display: 'block', mt: 0.5 }}>
-              {percentDiff > 0 ? '↑' : '↓'} {Math.abs(percentDiff).toFixed(0)}% {t('tooltip.vsAverage')}
-            </Typography>
-          )}
-          {isAnomaly && (
-            <Typography
-              variant="caption"
-              sx={{
-                color: "warning.main",
-                display: 'block',
-                mt: 0.5
-              }}>
-              ⚠ {t('tooltip.unusualSpending')}
-            </Typography>
-          )}
-          <Typography
-            variant="caption"
-            sx={{
-              color: "text.secondary",
-              mt: 1,
-              display: 'block',
-              fontStyle: 'italic'
-            }}>
-            {t('tooltip.clickForDetails')}
-          </Typography>
-        </Paper>
-      );
-    }
-    return null;
-  };
-
   return (
     <Box data-dashboard-ready="true">
       <DashboardWelcome />
@@ -805,6 +681,7 @@ const DashboardHomeContent: React.FC = () => {
         pairingGapExpensesBase={Number(data?.summary?.totalExpenses || 0)}
         forecastData={forecastData}
         healthSnapshot={healthSnapshot}
+        periodLabel={summaryPeriodLabel}
       />
 
       <MoneyReviewDashboardSection />
@@ -819,8 +696,6 @@ const DashboardHomeContent: React.FC = () => {
         formatXAxis={formatXAxis}
         formatYAxisLog={formatYAxisLog}
         getLogScaleData={getLogScaleData}
-        CustomDot={CustomDot}
-        CustomTooltip={CustomTooltip}
         handleChartAreaClick={handleChartAreaClick}
         detectAnomalies={detectAnomalies}
         hoveredDate={hoveredDate}

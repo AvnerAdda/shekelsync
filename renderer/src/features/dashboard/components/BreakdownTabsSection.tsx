@@ -19,7 +19,6 @@ import BreakdownPanel from '@renderer/features/breakdown/BreakdownPanel';
 import { PortfolioBreakdownItem } from '@renderer/types/investments';
 import { useDashboardFilters } from '../DashboardFiltersContext';
 import { useTranslation } from 'react-i18next';
-import DashboardPeriodSelector from './DashboardPeriodSelector';
 
 interface PortfolioPieChartProps {
   title: string;
@@ -387,30 +386,6 @@ const BreakdownTabsSection: React.FC<BreakdownTabsSectionProps> = ({
             <Tab label={t('tabs.investment')} value="investment" />
           </Tabs>
           
-          <DashboardPeriodSelector
-            sx={{
-              mr: 2,
-              bgcolor: alpha(theme.palette.background.paper, 0.4),
-              borderRadius: '12px',
-              p: 0.5,
-              '& .MuiToggleButton-root': {
-                border: 'none',
-                borderRadius: '8px !important',
-                px: 2,
-                py: 0.5,
-                color: 'text.secondary',
-                '&.Mui-selected': {
-                  bgcolor: 'background.paper',
-                  color: 'primary.main',
-                  boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
-                  fontWeight: 600,
-                },
-                '&:hover': {
-                  bgcolor: alpha(theme.palette.action.hover, 0.1),
-                }
-              }
-            }}
-          />
         </Box>
         <Box sx={{ p: 3 }}>
           {selectedBreakdownType === 'overall' && (

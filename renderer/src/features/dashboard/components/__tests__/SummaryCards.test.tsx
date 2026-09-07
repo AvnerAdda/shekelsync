@@ -138,6 +138,20 @@ describe('SummaryCards component', () => {
     spendingCategoriesMock.breakdown = null;
   });
 
+  it('labels period-based totals with the dashboard-wide period', () => {
+    render(
+      <SummaryCards
+        totalIncome={5000}
+        totalExpenses={2500}
+        portfolioValue={0}
+        periodLabel="30D"
+      />,
+    );
+
+    expect(screen.getByText('30D')).toBeInTheDocument();
+    expect(screen.queryByText('Current Month')).not.toBeInTheDocument();
+  });
+
   it('shows pending expenses grouped by processed date on hover', async () => {
     const user = userEvent.setup();
 

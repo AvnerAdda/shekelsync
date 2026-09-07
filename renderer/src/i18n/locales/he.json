@@ -1054,10 +1054,13 @@
     "settings": {
       "button": "אפשרויות גרף",
       "title": "אפשרויות גרף",
+      "chartType": "סוג גרף",
+      "line": "קו",
+      "bar": "עמודות",
       "cardRepayments": "כלול פירעונות כרטיס",
       "capitalReturns": "כלול החזרי קרן",
       "avgGuides": "הצג קווי ממוצע",
-      "forecastLines": "הצג קווי תחזית",
+      "showForecast": "הצג תחזית",
       "on": "פעיל",
       "off": "כבוי"
     },
