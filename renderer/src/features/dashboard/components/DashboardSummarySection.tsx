@@ -32,6 +32,7 @@ interface DashboardSummarySectionProps {
   pairingGapExpensesBase?: number | null;
   forecastData?: DashboardForecastData | null;
   healthSnapshot?: DashboardHealthSnapshot | null;
+  periodLabel?: string;
 }
 
 const DashboardSummarySection: React.FC<DashboardSummarySectionProps> = ({
@@ -51,6 +52,7 @@ const DashboardSummarySection: React.FC<DashboardSummarySectionProps> = ({
   pairingGapExpensesBase = null,
   forecastData = null,
   healthSnapshot = null,
+  periodLabel,
 }) => {
   const { t } = useTranslation('translation', { keyPrefix: 'dashboard.summarySection' });
   const theme = useTheme();
@@ -105,6 +107,7 @@ const DashboardSummarySection: React.FC<DashboardSummarySectionProps> = ({
           categoryCount={getDashboardCategoryCount(breakdownData)}
           forecastData={forecastData}
           healthSnapshot={healthSnapshot}
+          periodLabel={periodLabel}
         />
       </Box>
 

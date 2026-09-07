@@ -68,6 +68,7 @@ interface SummaryCardsProps {
   categoryCount?: number; // For diversity calculation
   forecastData?: DashboardForecastData | null;
   healthSnapshot?: DashboardHealthSnapshot | null;
+  periodLabel?: string;
 }
 
 const SummaryCards: React.FC<SummaryCardsProps> = ({
@@ -86,6 +87,7 @@ const SummaryCards: React.FC<SummaryCardsProps> = ({
   categoryCount = 0,
   forecastData = null,
   healthSnapshot = null,
+  periodLabel,
 }) => {
   const theme = useTheme();
   const { t } = useTranslation('translation', { keyPrefix: 'dashboard' });
@@ -333,7 +335,7 @@ const SummaryCards: React.FC<SummaryCardsProps> = ({
   const cards = [
     {
       id: 'finance',
-      title: t('summary.cards.finance.title'),
+      title: periodLabel ?? t('summary.cards.finance.title'),
       icon: <AccountBalanceIcon />,
       mainValue: formatCurrencyValue(netSavings),
       subtitle: currentBankBalance !== undefined
