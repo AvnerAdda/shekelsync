@@ -1,4 +1,6 @@
-const { normalizeName } = require('../financial-truth.js');
+// Preserve merchant names in every script; ASCII-only normalization loses whole income sources.
+const normalizeName = value => String(value || '').normalize('NFKC').toLowerCase()
+  .replace(/[^\p{L}\p{M}\p{N}]+/gu, ' ').replace(/\s+/g, ' ').trim();
 const median = values => {
   const sorted = [...values].sort((a, b) => a - b);
   return sorted.length ? (sorted[Math.floor((sorted.length - 1) / 2)] + sorted[Math.floor(sorted.length / 2)]) / 2 : 0;
@@ -41,11 +43,12 @@ function buildIncomeSchedule(transactions, dates, now, engine, truthSnapshot = {
     for (const row of rows) byDate.set(dateOnly(row.date), (byDate.get(dateOnly(row.date)) || 0) + Number(row.price));
     const historyDates = [...byDate.keys()];
     if (historyDates.length < 3) continue;
-    const intervals = historyDates.slice(1).map((date, i) => distance(date, historyDates[i]));
+    const cadenceDates = historyDates.slice(-Math.max(4, observations + 1));
+    const intervals = cadenceDates.slice(1).map((date, i) => distance(date, cadenceDates[i]));
     const gap = median(intervals);
     const period = [7, 14, 30.4375, 61, 91.3125, 182.625, 365.25].reduce((a, b) => Math.abs(a - gap) < Math.abs(b - gap) ? a : b);
     const relativeDeviation = median(intervals.map(v => Math.abs(v - period) / period));
-    const occupancy = historyDates.length / (1 + distance(historyDates.at(-1), historyDates[0]) / period);
+    const occupancy = cadenceDates.length / (1 + distance(cadenceDates.at(-1), cadenceDates[0]) / period);
     if (relativeDeviation > 0.35 || occupancy < 0.6 || occupancy > 1.5) continue;
     const categoryKey = keyFor(rows[0]);
     if (!result.has(categoryKey)) result.set(categoryKey, { key: categoryKey, categoryDefinitionId: rows[0].category_definition_id ?? null,

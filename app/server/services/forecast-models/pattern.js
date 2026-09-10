@@ -1,5 +1,5 @@
 const MODEL_ID = 'pattern-v2';
-const { prepareProjectionPolicy } = require('./projection-policy.js');
+const { loadProjectionCategories, prepareProjectionPolicy } = require('./projection-policy.js');
 const { buildIncomeSchedule, applyIncomeSchedule } = require('./income-schedule.js');
 
 function withCumulative(scenario) {
@@ -55,10 +55,7 @@ function generateForecast({
     logPatternSummary,
   } = engine;
 
-  let categoryDefinitions = [];
-  try {
-    categoryDefinitions = db.prepare('SELECT id, name, name_en, parent_id, category_type, is_counted_as_income FROM category_definitions').all();
-  } catch { /* Older test fixtures can infer metadata from their transaction rows. */ }
+  const categoryDefinitions = loadProjectionCategories(db);
   const policy = prepareProjectionPolicy(historicalTransactions, truthSnapshot, engine, categoryDefinitions);
   const originalTruthSnapshot = truthSnapshot;
   truthSnapshot = policy.truthSnapshot;
