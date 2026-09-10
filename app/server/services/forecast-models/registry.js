@@ -1,10 +1,10 @@
-const patternV1 = require('./pattern.js');
+const pattern = require('./pattern.js');
+const DEFAULT_ACTIVE_MODEL = pattern.id;
 
 const MODELS = Object.freeze({
-  'pattern-v2': patternV1,
+  [DEFAULT_ACTIVE_MODEL]: pattern,
 });
 
-const DEFAULT_ACTIVE_MODEL = 'pattern-v2';
 function normalizeModelId(value) {
   const modelId = String(value || '').trim();
   if (!modelId || !MODELS[modelId]) return null;

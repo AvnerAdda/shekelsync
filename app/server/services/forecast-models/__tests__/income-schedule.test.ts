@@ -28,6 +28,12 @@ describe('income schedules across payment patterns', () => {
     const rows = [...monthly, tx('2026-04-07', 1400), tx('2026-05-07', 1400)];
     expect(total(build(rows, '2026-06-01'))).toBe(1400);
   });
+  it('adapts to a pay-frequency change instead of extrapolating the old schedule', () => {
+    const rows = ['2026-01-07','2026-01-14','2026-01-21','2026-01-28','2026-02-04','2026-02-11','2026-02-18','2026-02-25']
+      .map(d=>tx(d,250));
+    rows.push(tx('2026-03-07'),tx('2026-04-07'),tx('2026-05-07'));
+    expect(total(build(rows,'2026-06-01'))).toBe(1000);
+  });
   it('does not invent a recurring stream from one or two deposits', () => {
     expect(build(monthly.slice(0, 1)).size).toBe(0);
     expect(build(monthly.slice(0, 2)).size).toBe(0);

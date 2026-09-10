@@ -9,6 +9,7 @@ const Database = require('better-sqlite3');
 const { Worker } = require('worker_threads');
 const financialTruthService = require('./financial-truth.js');
 const forecastModelRegistry = require('./forecast-models/registry.js');
+const { loadProjectionCategories, prepareProjectionPolicy } = require('./forecast-models/projection-policy.js');
 let databaseCtor = Database;
 
 function parsePositiveInt(value, fallback) {
@@ -2270,7 +2271,8 @@ function getForecastAccuracy(options = {}) {
     const rows = loadForecastAccuracyRows(db, days, modelId);
     return buildForecastAccuracyPayload(rows, days, modelId);
   } catch (error) {
-    if (String(error?.message || '').includes('no such table')) {
+    if (String(error?.message || '').includes('no such table')
+      || /no such column:.*model_id/.test(String(error?.message || ''))) {
       return buildForecastAccuracyPayload([], days, modelId);
     }
     throw error;
@@ -2391,7 +2393,8 @@ async function generateDailyForecastLocal(options = {}) {
         forecastDays: CONFIG.forecastDays,
         forecastMonths: CONFIG.forecastMonths,
       });
-      const emptyResult = buildEmptyForecastResult(startDate, endDate, truthSnapshot, CONFIG.monteCarloRuns);
+      const emptyTruth = prepareProjectionPolicy([], truthSnapshot, buildForecastEngine(), loadProjectionCategories(db)).truthSnapshot;
+      const emptyResult = buildEmptyForecastResult(startDate, endDate, emptyTruth, CONFIG.monteCarloRuns);
       if (!skipCache) forecastResultCache.set(cacheKey, { value: emptyResult, expiresAt: Date.now() + cacheDurationMs });
       return emptyResult;
     }

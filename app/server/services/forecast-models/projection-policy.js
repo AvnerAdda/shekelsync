@@ -4,6 +4,12 @@ function descriptorFor(row) {
     transactionName: row.name, isCountedAsIncome: row.is_counted_as_income };
 }
 
+function loadProjectionCategories(db) {
+  try {
+    return db.prepare('SELECT id, name, name_en, parent_id, category_type, is_counted_as_income FROM category_definitions').all();
+  } catch { return []; }
+}
+
 function prepareProjectionPolicy(transactions, truthSnapshot, engine, categoryDefinitions = []) {
   const categories = new Map(categoryDefinitions.map(c => [Number(c.id), { category: c.name, categoryType: c.category_type,
     categoryNameEn: c.name_en, isCountedAsIncome: c.is_counted_as_income,
@@ -32,4 +38,4 @@ function prepareProjectionPolicy(transactions, truthSnapshot, engine, categoryDe
       || (Number(t.price) > 0 && !engine.isNonOperatingIncomePattern(descriptorFor(t)))),
   };
 }
-module.exports = { descriptorFor, prepareProjectionPolicy };
+module.exports = { descriptorFor, loadProjectionCategories, prepareProjectionPolicy };
