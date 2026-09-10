@@ -80,7 +80,7 @@ function getDemoBaseDate() {
   return `${todayUtcDateString()}T12:00:00Z`;
 }
 
-function shouldRefreshDemoData(dbPath) {
+function shouldRefreshDemoData(dbPath, sqliteDb = null) {
   const refreshSetting = process.env.DEMO_REFRESH_ON_LAUNCH;
   const forceRefresh = refreshSetting === 'true';
   const disableRefresh = refreshSetting === 'false';
@@ -91,14 +91,10 @@ function shouldRefreshDemoData(dbPath) {
 
   if (!fs.existsSync(dbPath)) return true;
 
-  let demoDb = null;
   try {
-    if (!SqliteDatabase) {
-      const betterSqlite = requireFromApp('better-sqlite3');
-      SqliteDatabase = typeof betterSqlite.default === 'function' ? betterSqlite.default : betterSqlite;
-    }
-    demoDb = new SqliteDatabase(dbPath, { fileMustExist: true });
-    const row = demoDb.prepare('SELECT MAX(date) as max_date FROM transactions').get();
+    const row = sqliteDb
+      ?.prepare('SELECT MAX(date) as max_date FROM transactions')
+      .get();
     if (!row || !row.max_date) return true;
     const latestDay = String(row.max_date).slice(0, 10);
     const todayDay = todayUtcDateString();
@@ -106,12 +102,6 @@ function shouldRefreshDemoData(dbPath) {
   } catch (error) {
     console.warn('[Demo Seed] Failed to read latest transaction date, refreshing demo data.', error?.message || error);
     return true;
-  } finally {
-    try {
-      demoDb?.close();
-    } catch (e) {
-      // Ignore close failures
-    }
   }
 }
 
@@ -152,8 +142,7 @@ function resolveSqliteDatabaseCtor(databaseCtor) {
   return SqliteDatabase;
 }
 
-function inspectMinimumSchema(dbPath, databaseCtor) {
-  let db = null;
+function inspectMinimumSchema(sqliteDb) {
   const requiredTables = [
     'transactions',
     'vendor_credentials',
@@ -161,11 +150,8 @@ function inspectMinimumSchema(dbPath, databaseCtor) {
     'institution_nodes',
   ];
   try {
-    const DatabaseCtor = resolveSqliteDatabaseCtor(databaseCtor);
-    db = new DatabaseCtor(dbPath, { fileMustExist: true, readonly: true });
-
     const placeholders = requiredTables.map(() => '?').join(', ');
-    const presentRows = db
+    const presentRows = sqliteDb
       .prepare(`
         SELECT name
         FROM sqlite_master
@@ -189,12 +175,6 @@ function inspectMinimumSchema(dbPath, databaseCtor) {
       missingTables: requiredTables,
       reason: `schema probe failed: ${error?.message || String(error)}`,
     };
-  } finally {
-    try {
-      db?.close();
-    } catch (error) {
-      // Ignore close failures for probe handles.
-    }
   }
 }
 
@@ -233,7 +213,7 @@ function shouldAutoReinitializeSchema(dbPath) {
   return value === '1' || value === 'true' || value === 'yes';
 }
 
-function initializeSqliteIfMissing(dbPath, databaseCtor) {
+function initializeSqliteDatabaseFile(dbPath, databaseCtor, { force = false } = {}) {
   const initPath = resolveSqliteInitPath();
   if (!initPath) {
     throw new Error('SQLite init script not found for database bootstrap.');
@@ -244,46 +224,21 @@ function initializeSqliteIfMissing(dbPath, databaseCtor) {
     throw new Error('SQLite init script is missing initializeSqliteDatabase export.');
   }
 
-  const initialize = (force = false) =>
-    initModule.initializeSqliteDatabase({
-      output: dbPath,
-      force,
-      databaseCtor,
-      withDemo: isAnonymizedDbPath(dbPath),
-    });
+  initModule.initializeSqliteDatabase({
+    output: dbPath,
+    force,
+    databaseCtor,
+    withDemo: isAnonymizedDbPath(dbPath),
+  });
+}
 
-  if (!fs.existsSync(dbPath)) {
-    initialize(false);
-    return;
-  }
-
-  const schemaStatus = inspectMinimumSchema(dbPath, databaseCtor);
-  if (schemaStatus.ok) {
-    return;
-  }
-
-  if (!shouldAutoReinitializeSchema(dbPath)) {
-    throw new Error(
-      `SQLite database at ${dbPath} failed schema validation (${schemaStatus.reason}). ` +
-      'Refusing to auto-reinitialize to avoid data loss. ' +
-      'Fix the DB path/schema or set SQLITE_AUTO_REINIT_ON_SCHEMA_MISMATCH=true to force reinitialization.',
-    );
-  }
-
-  let backupPath = null;
-  try {
-    backupPath = createPreReinitializeBackup(dbPath);
-  } catch (error) {
-    throw new Error(
-      `SQLite database is missing required schema tables and backup creation failed: ${error.message}`,
-    );
-  }
-
-  console.warn(
-    '[SQLite Init] Existing database failed schema validation. Reinitializing schema after backup.',
-    { dbPath, backupPath, reason: schemaStatus.reason },
-  );
-  initialize(true);
+function openSqliteConnection(dbPath, databaseCtor) {
+  const DatabaseCtor = resolveSqliteDatabaseCtor(databaseCtor);
+  const sqliteDb = new DatabaseCtor(dbPath, { fileMustExist: true });
+  sqliteDb.pragma('foreign_keys = ON');
+  sqliteDb.pragma('journal_mode = WAL');
+  sqliteDb.pragma('busy_timeout = 5000');
+  return sqliteDb;
 }
 
 function replacePlaceholders(sql) {
@@ -330,18 +285,55 @@ class DatabaseManager {
           SqliteDatabase = typeof betterSqlite.default === 'function' ? betterSqlite.default : betterSqlite;
         }
 
-        initializeSqliteIfMissing(dbPath, SqliteDatabase);
+        if (!fs.existsSync(dbPath)) {
+          initializeSqliteDatabaseFile(dbPath, SqliteDatabase);
+        }
 
-        if (shouldRefreshDemoData(dbPath)) {
+        this.sqliteDb = openSqliteConnection(dbPath, SqliteDatabase);
+        this.sqlitePath = dbPath;
+
+        const schemaStatus = inspectMinimumSchema(this.sqliteDb);
+        if (!schemaStatus.ok) {
+          if (!shouldAutoReinitializeSchema(dbPath)) {
+            this.sqliteDb.close();
+            this.sqliteDb = null;
+            this.sqlitePath = null;
+            throw new Error(
+              `SQLite database at ${dbPath} failed schema validation (${schemaStatus.reason}). ` +
+              'Refusing to auto-reinitialize to avoid data loss. ' +
+              'Fix the DB path/schema or set SQLITE_AUTO_REINIT_ON_SCHEMA_MISMATCH=true to force reinitialization.',
+            );
+          }
+
+          let backupPath = null;
+          try {
+            backupPath = createPreReinitializeBackup(dbPath);
+          } catch (error) {
+            this.sqliteDb.close();
+            this.sqliteDb = null;
+            this.sqlitePath = null;
+            throw new Error(
+              `SQLite database is missing required schema tables and backup creation failed: ${error.message}`,
+            );
+          }
+
+          console.warn(
+            '[SQLite Init] Existing database failed schema validation. Reinitializing schema after backup.',
+            { dbPath, backupPath, reason: schemaStatus.reason },
+          );
+          this.sqliteDb.close();
+          this.sqliteDb = null;
+          initializeSqliteDatabaseFile(dbPath, SqliteDatabase, { force: true });
+          this.sqliteDb = openSqliteConnection(dbPath, SqliteDatabase);
+        }
+
+        const { runSchemaMigrations } = requireFromApp('lib/schema-migrations.js');
+        runSchemaMigrations(this.sqliteDb, { dbPath });
+
+        if (shouldRefreshDemoData(dbPath, this.sqliteDb)) {
           console.log('[Demo Seed] Refreshing anonymized demo data for latest day...');
           refreshDemoData(dbPath);
         }
-
-        this.sqliteDb = new SqliteDatabase(dbPath, { fileMustExist: true });
-        this.sqlitePath = dbPath;
-        this.sqliteDb.pragma('foreign_keys = ON');
-        this.sqliteDb.pragma('journal_mode = WAL');
-        this.sqliteDb.pragma('busy_timeout = 5000');
 
         // Simple sanity check
         this.sqliteDb.prepare('SELECT 1').get();

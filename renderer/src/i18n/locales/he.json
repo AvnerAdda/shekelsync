@@ -88,6 +88,12 @@
       "established": "תחזית נמדדת · שגיאה של {{mape}}%",
       "details": "{{samples}} תחזיות שהתממשו · שגיאת הוצאה ממוצעת {{mae}} · כיסוי טווח אי־הוודאות {{coverage}}"
     },
+    "forecastComparison": {
+      "label": "השוואת מודלים · {{champion}} מול {{challenger}}",
+      "details": "MAE של המוביל {{championMae}} · MAE של המתחרה {{challengerMae}} · כיסוי {{championCoverage}} מול {{challengerCoverage}}",
+      "promote": "המתחרה מוכן לקידום",
+      "collecting": "השוואת המודלים אוספת נתונים"
+    },
     "timeScope": {
       "currentMonth": "{{month}}",
       "rollingDays": "{{count}} הימים האחרונים",

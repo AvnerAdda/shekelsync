@@ -82,6 +82,12 @@ function buildApp(
   generateForecast = createGenerateForecastMock(),
   sqliteDb = createSqliteDb(),
   evaluateForecast = vi.fn().mockResolvedValue({ available: false, sampleCount: 0 }),
+  compareForecast = vi.fn().mockResolvedValue({
+    evaluationWindowDays: 90,
+    champion: { modelId: 'pattern-v1', expenseMae: 20 },
+    challenger: { modelId: 'ensemble-v1', expenseMae: 18 },
+    recommendation: { recommendedModel: 'pattern-v1', readyToPromote: false },
+  }),
 ) {
   const app = express();
   app.use(express.json());
@@ -89,8 +95,9 @@ function buildApp(
     sqliteDb,
     generateForecast,
     evaluateForecast,
+    compareForecast,
   }));
-  return { app, generateForecast, evaluateForecast };
+  return { app, generateForecast, evaluateForecast, compareForecast };
 }
 
 describe('Shared /api/forecast routes', () => {
@@ -356,12 +363,32 @@ describe('Shared /api/forecast routes', () => {
       .expect(200);
 
     expect(response.body).toMatchObject({ available: true, sampleCount: 42, expenseMae: 18.5 });
-    expect(evaluateForecast).toHaveBeenCalledWith({ days: 120 });
+    expect(evaluateForecast).toHaveBeenCalledWith({ days: 120, modelId: undefined });
     expect(generateForecast).not.toHaveBeenCalled();
 
     const invalid = await request(app)
       .get('/api/forecast/accuracy?days=2')
       .expect(400);
     expect(invalid.body.error).toBe('days must be between 7 and 365');
+  });
+
+  it('filters accuracy by model and exposes champion/challenger comparison', async () => {
+    const { app, evaluateForecast, compareForecast } = buildApp();
+
+    await request(app)
+      .get('/api/forecast/accuracy?days=90&model=ensemble-v1')
+      .expect(200);
+    expect(evaluateForecast).toHaveBeenCalledWith({ days: 90, modelId: 'ensemble-v1' });
+
+    const compare = await request(app)
+      .get('/api/forecast/accuracy/compare?days=60&champion=pattern-v1&challenger=ensemble-v1')
+      .expect(200);
+
+    expect(compare.body.champion).toMatchObject({ modelId: 'pattern-v1' });
+    expect(compareForecast).toHaveBeenCalledWith({
+      days: 60,
+      championId: 'pattern-v1',
+      challengerId: 'ensemble-v1',
+    });
   });
 });

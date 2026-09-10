@@ -22,6 +22,22 @@ describe('Money Review service contracts', () => {
     accuracySpy.mockRestore();
   });
 
+  it('includes forecast model comparison when available and degrades safely when unavailable', () => {
+    const comparison = {
+      evaluationWindowDays: 90,
+      champion: { modelId: 'pattern-v1', expenseMae: 30 },
+      challenger: { modelId: 'ensemble-v1', expenseMae: 28 },
+      recommendation: { recommendedModel: 'pattern-v1', readyToPromote: false },
+    };
+    const compareSpy = vi.spyOn(forecastService, 'compareForecastAccuracy').mockReturnValue(comparison);
+    expect(moneyReview.utils.loadForecastComparison()).toBe(comparison);
+    expect(compareSpy).toHaveBeenCalledWith({ days: 90 });
+
+    compareSpy.mockImplementation(() => { throw new Error('database unavailable'); });
+    expect(moneyReview.utils.loadForecastComparison()).toBeNull();
+    compareSpy.mockRestore();
+  });
+
   it('adapts actionable notifications into durable smart actions', () => {
     const action = moneyReview.utils.notificationToSmartAction({
       id: 'budget_7',

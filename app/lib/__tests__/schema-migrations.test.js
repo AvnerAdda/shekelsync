@@ -63,6 +63,12 @@ describe('schema migrations (PRAGMA user_version)', () => {
     expect(result.stdout).toContain('schema-migrations:review-forecast-v8-from-legacy:ok');
   });
 
+  it('adds forecast snapshot model_id and preserves legacy rows', () => {
+    const result = runScenario('review-forecast-v9-model-id');
+    expect(result.status, result.stderr || result.stdout).toBe(0);
+    expect(result.stdout).toContain('schema-migrations:review-forecast-v9-model-id:ok');
+  });
+
   it('migrates legacy assets once, preserves ledger data, and mirrors later updates', () => {
     const result = runScenario('migrates-legacy-investment-assets');
     expect(result.status, result.stderr || result.stdout).toBe(0);
