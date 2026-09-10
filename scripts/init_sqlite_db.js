@@ -1252,6 +1252,7 @@ const TABLE_DEFINITIONS = [
       generated_date TEXT NOT NULL,
       target_date TEXT NOT NULL,
       truth_revision INTEGER NOT NULL DEFAULT 0,
+      model_id TEXT NOT NULL DEFAULT 'pattern-v1',
       horizon_days INTEGER NOT NULL,
       expected_income REAL NOT NULL DEFAULT 0,
       expected_expenses REAL NOT NULL DEFAULT 0,
@@ -1261,7 +1262,7 @@ const TABLE_DEFINITIONS = [
       p90_cash_flow REAL,
       created_at TEXT NOT NULL DEFAULT (datetime('now')),
       updated_at TEXT NOT NULL DEFAULT (datetime('now')),
-      UNIQUE(generated_date, target_date, truth_revision)
+      UNIQUE(generated_date, target_date, truth_revision, model_id)
     );`,
   `CREATE TABLE IF NOT EXISTS financial_patterns (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -1545,7 +1546,8 @@ const INDEX_STATEMENTS = [
   'CREATE INDEX IF NOT EXISTS idx_subscription_alerts_severity ON subscription_alerts(severity);',
   'CREATE INDEX IF NOT EXISTS idx_subscription_alerts_created ON subscription_alerts(created_at DESC);',
   'CREATE UNIQUE INDEX IF NOT EXISTS idx_subscription_alerts_identity ON subscription_alerts(identity_key) WHERE identity_key IS NOT NULL;',
-  'CREATE INDEX IF NOT EXISTS idx_forecast_prediction_snapshots_target ON forecast_prediction_snapshots(target_date, horizon_days);'
+  'CREATE INDEX IF NOT EXISTS idx_forecast_prediction_snapshots_target ON forecast_prediction_snapshots(target_date, horizon_days);',
+  'CREATE INDEX IF NOT EXISTS idx_forecast_prediction_snapshots_model ON forecast_prediction_snapshots(model_id, target_date, horizon_days);'
 ];
 
 // FTS5 Full-Text Search Setup for SQLite

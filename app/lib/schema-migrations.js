@@ -836,6 +836,92 @@ const MIGRATIONS = [
       `);
     },
   },
+  {
+    version: 9,
+    name: 'forecast-snapshot-model-id',
+    mutatesSchema: true,
+    up: (db) => {
+      if (!tableExists(db, 'forecast_prediction_snapshots')) {
+        db.exec(`
+          CREATE TABLE IF NOT EXISTS forecast_prediction_snapshots (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            generated_date TEXT NOT NULL,
+            target_date TEXT NOT NULL,
+            truth_revision INTEGER NOT NULL DEFAULT 0,
+            model_id TEXT NOT NULL DEFAULT 'pattern-v1',
+            horizon_days INTEGER NOT NULL,
+            expected_income REAL NOT NULL DEFAULT 0,
+            expected_expenses REAL NOT NULL DEFAULT 0,
+            expected_cash_flow REAL NOT NULL DEFAULT 0,
+            p10_cash_flow REAL,
+            p50_cash_flow REAL,
+            p90_cash_flow REAL,
+            created_at TEXT NOT NULL DEFAULT (datetime('now')),
+            updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+            UNIQUE(generated_date, target_date, truth_revision, model_id)
+          );
+
+          CREATE INDEX IF NOT EXISTS idx_forecast_prediction_snapshots_target
+            ON forecast_prediction_snapshots(target_date, horizon_days);
+
+          CREATE INDEX IF NOT EXISTS idx_forecast_prediction_snapshots_model
+            ON forecast_prediction_snapshots(model_id, target_date, horizon_days);
+        `);
+        return;
+      }
+
+      const columns = new Set(
+        db.prepare("PRAGMA table_info('forecast_prediction_snapshots')").all().map((column) => column.name),
+      );
+      if (columns.has('model_id')) {
+        db.exec(`
+          CREATE INDEX IF NOT EXISTS idx_forecast_prediction_snapshots_model
+            ON forecast_prediction_snapshots(model_id, target_date, horizon_days);
+        `);
+        return;
+      }
+
+      db.exec(`
+        CREATE TABLE forecast_prediction_snapshots_v9 (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          generated_date TEXT NOT NULL,
+          target_date TEXT NOT NULL,
+          truth_revision INTEGER NOT NULL DEFAULT 0,
+          model_id TEXT NOT NULL DEFAULT 'pattern-v1',
+          horizon_days INTEGER NOT NULL,
+          expected_income REAL NOT NULL DEFAULT 0,
+          expected_expenses REAL NOT NULL DEFAULT 0,
+          expected_cash_flow REAL NOT NULL DEFAULT 0,
+          p10_cash_flow REAL,
+          p50_cash_flow REAL,
+          p90_cash_flow REAL,
+          created_at TEXT NOT NULL DEFAULT (datetime('now')),
+          updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+          UNIQUE(generated_date, target_date, truth_revision, model_id)
+        );
+
+        INSERT INTO forecast_prediction_snapshots_v9 (
+          generated_date, target_date, truth_revision, model_id, horizon_days,
+          expected_income, expected_expenses, expected_cash_flow,
+          p10_cash_flow, p50_cash_flow, p90_cash_flow, created_at, updated_at
+        )
+        SELECT
+          generated_date, target_date, truth_revision, 'pattern-v1', horizon_days,
+          expected_income, expected_expenses, expected_cash_flow,
+          p10_cash_flow, p50_cash_flow, p90_cash_flow, created_at, updated_at
+        FROM forecast_prediction_snapshots;
+
+        DROP TABLE forecast_prediction_snapshots;
+        ALTER TABLE forecast_prediction_snapshots_v9 RENAME TO forecast_prediction_snapshots;
+
+        CREATE INDEX IF NOT EXISTS idx_forecast_prediction_snapshots_target
+          ON forecast_prediction_snapshots(target_date, horizon_days);
+
+        CREATE INDEX IF NOT EXISTS idx_forecast_prediction_snapshots_model
+          ON forecast_prediction_snapshots(model_id, target_date, horizon_days);
+      `);
+    },
+  },
 ];
 
 const CURRENT_SCHEMA_VERSION = MIGRATIONS.length

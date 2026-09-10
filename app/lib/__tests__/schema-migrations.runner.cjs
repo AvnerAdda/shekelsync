@@ -599,6 +599,53 @@ const scenarios = {
       assert.ok(rematerialized.truthRevision > revisionBeforeImportChange);
       assert.deepEqual(rematerialized.patterns.map((pattern) => pattern.id).sort(), stablePatternIds);
     }),
+
+  'review-forecast-v9-model-id': () =>
+    withDatabase((db, dbPath) => {
+      db.exec(`
+        CREATE TABLE forecast_prediction_snapshots (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          generated_date TEXT NOT NULL,
+          target_date TEXT NOT NULL,
+          truth_revision INTEGER NOT NULL DEFAULT 0,
+          horizon_days INTEGER NOT NULL,
+          expected_income REAL NOT NULL DEFAULT 0,
+          expected_expenses REAL NOT NULL DEFAULT 0,
+          expected_cash_flow REAL NOT NULL DEFAULT 0,
+          p10_cash_flow REAL,
+          p50_cash_flow REAL,
+          p90_cash_flow REAL,
+          created_at TEXT NOT NULL DEFAULT (datetime('now')),
+          updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+          UNIQUE(generated_date, target_date, truth_revision)
+        );
+        INSERT INTO forecast_prediction_snapshots (
+          generated_date, target_date, truth_revision, horizon_days,
+          expected_income, expected_expenses, expected_cash_flow
+        ) VALUES ('2026-07-01', '2026-07-02', 0, 1, 100, 80, 20);
+        PRAGMA user_version = 8;
+      `);
+
+      runSchemaMigrations(db, { dbPath, logger: { log: () => {} } });
+
+      const columns = new Set(
+        db.prepare("PRAGMA table_info('forecast_prediction_snapshots')").all().map((column) => column.name),
+      );
+      assert.ok(columns.has('model_id'));
+      assert.ok(db.prepare("SELECT 1 FROM sqlite_master WHERE type = 'index' AND name = 'idx_forecast_prediction_snapshots_model'").get());
+
+      db.prepare(`
+        INSERT INTO forecast_prediction_snapshots (
+          generated_date, target_date, truth_revision, model_id, horizon_days,
+          expected_income, expected_expenses, expected_cash_flow
+        ) VALUES ('2026-07-01', '2026-07-02', 0, 'ensemble-v1', 1, 95, 78, 17)
+      `).run();
+
+      assert.equal(
+        db.prepare('SELECT COUNT(*) AS count FROM forecast_prediction_snapshots').get().count,
+        2,
+      );
+    }),
 };
 
 const scenario = process.argv[2];

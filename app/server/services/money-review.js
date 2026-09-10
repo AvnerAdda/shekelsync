@@ -60,6 +60,17 @@ function loadForecastAccuracy() {
   }
 }
 
+function loadForecastComparison() {
+  try {
+    return forecastService.compareForecastAccuracy({ days: 90 });
+  } catch (error) {
+    if (process.env.NODE_ENV !== 'test') {
+      console.warn('Money Review forecast model comparison unavailable:', error?.message || error);
+    }
+    return null;
+  }
+}
+
 function normalizeNotificationResponse(payload) {
   const items = payload?.data?.notifications ?? payload?.notifications ?? [];
   return Array.isArray(items) ? items : [];
@@ -343,6 +354,7 @@ async function getMoneyReview(options = {}) {
     if (process.env.NODE_ENV !== 'test') console.warn('Money Review presentation state unavailable:', error?.message || error);
   }
   const forecastAccuracy = loadForecastAccuracy();
+  const forecastComparison = loadForecastComparison();
   const subscriptionRequest = subscriptionsService.getSubscriptionAlerts({
     locale: options.locale || 'he',
   }).then((payload) => ({ available: true, payload })).catch((error) => {
@@ -402,6 +414,7 @@ async function getMoneyReview(options = {}) {
         truthRevision: subscriptionResult.payload?.truthRevision || 0,
         refreshState: 'ready',
         forecastAccuracy,
+        forecastComparison,
         summary: buildSummary(items),
         items,
       };
@@ -534,6 +547,7 @@ module.exports = {
   utils: {
     buildSummary,
     loadForecastAccuracy,
+    loadForecastComparison,
     normalizeNotificationResponse,
     normalizeReviewRow,
     notificationToSmartAction,

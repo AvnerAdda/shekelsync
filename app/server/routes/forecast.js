@@ -105,6 +105,7 @@ function createForecastRouter({
   sqliteDb = null,
   generateForecast = forecastService.generateDailyForecast,
   evaluateForecast = forecastService.getForecastAccuracy,
+  compareForecast = forecastService.compareForecastAccuracy,
 } = {}) {
   const router = express.Router();
   const getDbInstance = () => sqliteDb || getDatabase();
@@ -112,10 +113,28 @@ function createForecastRouter({
   router.get('/accuracy', async (req, res) => {
     try {
       const days = parseIntegerQueryParam(req.query.days, 'days', { min: 7, max: 365 }) || 90;
-      res.json(await evaluateForecast({ days }));
+      const model = readSingleQueryParam(req.query.model);
+      res.json(await evaluateForecast({ days, modelId: model }));
     } catch (error) {
       res.status(error?.status || 500).json({
         error: error?.message || 'Failed to evaluate forecast accuracy',
+      });
+    }
+  });
+
+  router.get('/accuracy/compare', async (req, res) => {
+    try {
+      const days = parseIntegerQueryParam(req.query.days, 'days', { min: 7, max: 365 }) || 90;
+      const championId = readSingleQueryParam(req.query.champion);
+      const challengerId = readSingleQueryParam(req.query.challenger);
+      res.json(await compareForecast({
+        days,
+        championId,
+        challengerId,
+      }));
+    } catch (error) {
+      res.status(error?.status || 500).json({
+        error: error?.message || 'Failed to compare forecast accuracy',
       });
     }
   });

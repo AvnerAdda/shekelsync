@@ -39,6 +39,7 @@ export interface MoneyReviewSummary {
 
 export interface ForecastAccuracySummary {
   available: boolean;
+  modelId?: string;
   evaluationWindowDays: number;
   readiness: 'collecting' | 'provisional' | 'established';
   observedDays: number;
@@ -50,6 +51,21 @@ export interface ForecastAccuracySummary {
   cashFlowMae: number | null;
   cashFlowBias: number | null;
   intervalCoverage: number | null;
+  byHorizon?: Record<string, ForecastAccuracySummary>;
+}
+
+export interface ForecastModelRecommendation {
+  activeModel: string;
+  recommendedModel: string;
+  reason: string;
+  readyToPromote: boolean;
+}
+
+export interface ForecastComparisonSummary {
+  evaluationWindowDays: number;
+  champion: ForecastAccuracySummary;
+  challenger: ForecastAccuracySummary;
+  recommendation: ForecastModelRecommendation;
 }
 
 export interface MoneyReviewResponse {
@@ -58,6 +74,7 @@ export interface MoneyReviewResponse {
   truthRevision?: number;
   refreshState?: 'pending' | 'ready';
   forecastAccuracy?: ForecastAccuracySummary | null;
+  forecastComparison?: ForecastComparisonSummary | null;
   summary: MoneyReviewSummary;
   items: MoneyReviewItem[];
 }

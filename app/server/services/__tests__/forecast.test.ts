@@ -1379,4 +1379,45 @@ describe('forecast service internals', () => {
       observedDays: 30,
     });
   });
+
+  it('recommends promoting the challenger only when it beats the champion with guardrails', () => {
+    const { recommendActiveModel } = forecastModule;
+    const champion = {
+      readiness: 'established',
+      expenseMae: 40,
+      cashFlowBias: 5,
+      intervalCoverage: 70,
+      byHorizon: { days_8_30: { expenseMae: 35 } },
+    };
+    const betterChallenger = {
+      readiness: 'established',
+      expenseMae: 30,
+      cashFlowBias: 4,
+      intervalCoverage: 82,
+      byHorizon: { days_8_30: { expenseMae: 28 } },
+    };
+    const worseChallenger = {
+      readiness: 'established',
+      expenseMae: 45,
+      cashFlowBias: 20,
+      intervalCoverage: 60,
+      byHorizon: { days_8_30: { expenseMae: 42 } },
+    };
+
+    expect(recommendActiveModel({ champion, challenger: betterChallenger })).toMatchObject({
+      recommendedModel: 'ensemble-v1',
+      readyToPromote: true,
+    });
+    expect(recommendActiveModel({ champion, challenger: worseChallenger })).toMatchObject({
+      recommendedModel: 'pattern-v1',
+      readyToPromote: false,
+    });
+    expect(recommendActiveModel({
+      champion: { ...champion, readiness: 'collecting' },
+      challenger: betterChallenger,
+    })).toMatchObject({
+      reason: 'collecting_data',
+      readyToPromote: false,
+    });
+  });
 });

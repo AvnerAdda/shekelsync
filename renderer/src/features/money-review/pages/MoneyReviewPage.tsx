@@ -123,6 +123,7 @@ const MoneyReviewPage: React.FC<MoneyReviewPageProps> = ({
     }).format(generatedAt);
   }, [i18n?.language, response.generatedAt]);
   const forecastAccuracy = response.forecastAccuracy;
+  const forecastComparison = response.forecastComparison;
   const forecastAccuracyLabel = forecastAccuracy
     ? t(`forecastAccuracy.${forecastAccuracy.readiness}`, {
       count: forecastAccuracy.observedDays,
@@ -136,6 +137,31 @@ const MoneyReviewPage: React.FC<MoneyReviewPageProps> = ({
       coverage: forecastAccuracy.intervalCoverage == null ? '—' : `${Math.round(forecastAccuracy.intervalCoverage)}%`,
     })
     : '';
+  const forecastComparisonLabel = forecastComparison
+    ? (forecastComparison.champion.readiness === 'established' && forecastComparison.challenger.readiness === 'established'
+      ? t('forecastComparison.label', {
+        champion: forecastComparison.champion.modelId || 'pattern-v1',
+        challenger: forecastComparison.challenger.modelId || 'ensemble-v1',
+      })
+      : t('forecastComparison.collecting'))
+    : null;
+  const forecastComparisonDetails = forecastComparison
+    ? t('forecastComparison.details', {
+      championMae: forecastComparison.champion.expenseMae == null
+        ? '—'
+        : formatCurrency(forecastComparison.champion.expenseMae),
+      challengerMae: forecastComparison.challenger.expenseMae == null
+        ? '—'
+        : formatCurrency(forecastComparison.challenger.expenseMae),
+      championCoverage: forecastComparison.champion.intervalCoverage == null
+        ? '—'
+        : `${Math.round(forecastComparison.champion.intervalCoverage)}%`,
+      challengerCoverage: forecastComparison.challenger.intervalCoverage == null
+        ? '—'
+        : `${Math.round(forecastComparison.challenger.intervalCoverage)}%`,
+    })
+    : '';
+  const forecastComparisonReady = forecastComparison?.recommendation?.readyToPromote === true;
 
   const handleFilterChange = (_event: React.SyntheticEvent, value: MoneyReviewFilter) => {
     setFilter(value);
@@ -232,6 +258,17 @@ const MoneyReviewPage: React.FC<MoneyReviewPageProps> = ({
                   color={forecastAccuracy.readiness === 'established'
                     ? (forecastAccuracy.expenseMape != null && forecastAccuracy.expenseMape > 35 ? 'warning' : 'success')
                     : forecastAccuracy.readiness === 'provisional' ? 'info' : 'default'}
+                  variant="outlined"
+                />
+              </Tooltip>
+            )}
+            {forecastComparison && forecastComparisonLabel && (
+              <Tooltip title={forecastComparisonReady ? t('forecastComparison.promote') : forecastComparisonDetails}>
+                <Chip
+                  size="small"
+                  icon={<QueryStatsIcon />}
+                  label={forecastComparisonLabel}
+                  color={forecastComparisonReady ? 'success' : 'default'}
                   variant="outlined"
                 />
               </Tooltip>
