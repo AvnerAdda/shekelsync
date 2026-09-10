@@ -3,6 +3,7 @@ const fs = require('fs');
 const { execFileSync } = require('child_process');
 const { app } = require('electron');
 const { resolveAppPath, requireFromApp } = require('./paths');
+const { closeSqliteProbe } = require('./sqlite-probe');
 
 // Add app directory to module search paths
 require('module').globalPaths.push(resolveAppPath('node_modules'));
@@ -327,7 +328,7 @@ class DatabaseManager {
           this.sqliteDb = openSqliteConnection(dbPath, SqliteDatabase);
         }
 
-        const { runSchemaMigrations } = requireFromApp('lib/schema-migrations.js');
+        const { runSchemaMigrations } = require(resolveAppPath('lib', 'schema-migrations.js'));
         runSchemaMigrations(this.sqliteDb, { dbPath });
 
         if (shouldRefreshDemoData(dbPath, this.sqliteDb)) {
@@ -337,6 +338,11 @@ class DatabaseManager {
 
         // Simple sanity check
         this.sqliteDb.prepare('SELECT 1').get();
+
+        // Tear down the encryption-key probe only after the writable
+        // connection is fully ready. Closing it earlier races with Electron
+        // startup and can abort the process on macOS.
+        setImmediate(() => closeSqliteProbe());
       } else {
         if (!Pool) {
           Pool = requireFromApp('pg').Pool;
@@ -459,6 +465,7 @@ class DatabaseManager {
 
   async close() {
     if (this.mode === 'sqlite') {
+      closeSqliteProbe();
       if (this.sqliteDb) {
         this.sqliteDb.close();
       }

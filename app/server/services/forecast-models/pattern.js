@@ -1,4 +1,6 @@
-const MODEL_ID = 'pattern-v1';
+const MODEL_ID = 'pattern-v2';
+const { prepareProjectionPolicy } = require('./projection-policy.js');
+const { buildIncomeSchedule, applyIncomeSchedule } = require('./income-schedule.js');
 
 function withCumulative(scenario) {
   let cum = 0;
@@ -31,6 +33,7 @@ function generateForecast({
   currentMonth,
   currentDay,
   allTransactions,
+  historicalTransactions = allTransactions,
   truthSnapshot,
   historicalTransactionSummary,
   config,
@@ -51,6 +54,15 @@ function generateForecast({
     isNonOperatingExpensePattern,
     logPatternSummary,
   } = engine;
+
+  let categoryDefinitions = [];
+  try {
+    categoryDefinitions = db.prepare('SELECT id, name, name_en, parent_id, category_type, is_counted_as_income FROM category_definitions').all();
+  } catch { /* Older test fixtures can infer metadata from their transaction rows. */ }
+  const policy = prepareProjectionPolicy(historicalTransactions, truthSnapshot, engine, categoryDefinitions);
+  const originalTruthSnapshot = truthSnapshot;
+  truthSnapshot = policy.truthSnapshot;
+  allTransactions = policy.transactions.filter(transaction => !originalTruthSnapshot.excludedTransactionKeys.has(`${transaction.identifier}\u0000${transaction.vendor}`));
 
   const patterns = analyzeCategoryPatterns(allTransactions);
   const patternEntries = buildPatternCaches(patterns);
@@ -80,6 +92,8 @@ function generateForecast({
     truthSnapshot.categoryExpectations,
   );
   injectResolvedRecurringPredictions(dailyForecasts, simulationEntriesByDay, truthSnapshot);
+  const incomeSchedule = buildIncomeSchedule(historicalTransactions, dailyForecasts.map(day => day.date), now, engine, originalTruthSnapshot);
+  applyIncomeSchedule(dailyForecasts, simulationEntriesByDay, incomeSchedule, engine);
   const monteCarloResults = runMonteCarloSimulation(
     dailyForecasts,
     simulationEntriesByDay,

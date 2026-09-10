@@ -636,6 +636,8 @@ function buildRecurringOccurrences(snapshot, startDate, endDate) {
           categoryDefinitionId: pattern.categoryDefinitionId,
           transactionName: pattern.displayName,
           categoryType: pattern.direction,
+          incomeType: pattern.incomeType || null,
+          expenseType: pattern.expenseType || null,
           probability: Math.max(0.45, pattern.confidence),
           expectedAmount: pattern.amount,
           probabilityWeightedAmount: pattern.amount,

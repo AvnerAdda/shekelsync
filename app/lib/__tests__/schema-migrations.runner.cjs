@@ -638,7 +638,7 @@ const scenarios = {
         INSERT INTO forecast_prediction_snapshots (
           generated_date, target_date, truth_revision, model_id, horizon_days,
           expected_income, expected_expenses, expected_cash_flow
-        ) VALUES ('2026-07-01', '2026-07-02', 0, 'ensemble-v1', 1, 95, 78, 17)
+        ) VALUES ('2026-07-01', '2026-07-02', 0, 'historical-model', 1, 95, 78, 17)
       `).run();
 
       assert.equal(
