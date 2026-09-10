@@ -1,3 +1,5 @@
+require('./stdio-errors').installStdioErrorHandlers();
+
 // Track if encryption key existed before our code ran (to detect external injection)
 const hadKeyAtStart = !!process.env.SHEKELSYNC_ENCRYPTION_KEY;
 
@@ -56,6 +58,7 @@ const {
 const { enforceSingleInstance } = require('./single-instance');
 const { isSafeExternalUrl } = require('./safe-external-url');
 const { createAppLifecycleController } = require('./app-lifecycle');
+const { createMainWindowStartup } = require('./main-window-startup');
 const isPackaged = app.isPackaged;
 const isDev = process.env.NODE_ENV === 'development' || !isPackaged;
 const isMac = process.platform === 'darwin';
@@ -1526,8 +1529,19 @@ function setupTray() {
   });
 }
 
-async function createWindow() {
-  const skipEmbeddedApi = process.env.SKIP_EMBEDDED_API === 'true';
+const createWindow = createMainWindowStartup({
+  app,
+  prepare: async () => {
+    await loadInitialSettings();
+    const skipEmbeddedApi = process.env.SKIP_EMBEDDED_API === 'true';
+    await ensureBackendInitialization({ skipEmbeddedApi });
+  },
+  createWindow: buildMainWindow,
+  getWindow: () => mainWindow,
+  canCreateWindow: () => !isQuitting,
+});
+
+async function buildMainWindow() {
   const devRendererUrl = process.env.RENDERER_DEV_URL || 'http://localhost:5173';
   const reduceVisualEffects = shouldReduceVisualEffects();
   const windowAppearance = getMainWindowAppearanceOptions({
@@ -1668,9 +1682,6 @@ async function createWindow() {
     }
   });
 
-  // Kick off heavy initialization in the background so the window can appear sooner
-  ensureBackendInitialization({ skipEmbeddedApi });
-
   // Start renderer server in development
   // Load the app
   if (isDev) {
@@ -1734,9 +1745,8 @@ const hasSingleInstanceLock = enforceSingleInstance({
 
 const primaryInstanceReady = hasSingleInstanceLock ? app.whenReady() : null;
 primaryInstanceReady?.then(async () => {
-  await loadInitialSettings();
-
-  await createWindow();
+  const window = await createWindow();
+  if (!window || isQuitting) return;
   setupTray();
   if (isMac) {
     setTimeout(() => {
@@ -1866,13 +1876,11 @@ const appLifecycle = createAppLifecycleController({
 app.on('window-all-closed', appLifecycle.handleWindowAllClosed);
 
 app.on('activate', () => {
-  if (isQuitting) {
+  if (!hasSingleInstanceLock || isQuitting) {
     return;
   }
   // Restore an existing hidden/minimized window before creating a new one.
-  if (!showMainWindow({ createIfMissing: false }) && BrowserWindow.getAllWindows().length === 0) {
-    createWindow();
-  }
+  showMainWindow();
 });
 
 app.on('before-quit', appLifecycle.handleBeforeQuit);

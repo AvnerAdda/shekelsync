@@ -88,12 +88,6 @@
       "established": "Forecast measured · {{mape}}% error",
       "details": "{{samples}} realized predictions · average expense error {{mae}} · uncertainty coverage {{coverage}}"
     },
-    "forecastComparison": {
-      "label": "Model A/B · {{champion}} vs {{challenger}}",
-      "details": "Champion MAE {{championMae}} · Challenger MAE {{challengerMae}} · Coverage {{championCoverage}} vs {{challengerCoverage}}",
-      "promote": "Challenger ready to promote",
-      "collecting": "Model comparison collecting data"
-    },
     "timeScope": {
       "currentMonth": "{{month}}",
       "rollingDays": "Last {{count}} days",

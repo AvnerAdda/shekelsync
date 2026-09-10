@@ -54,27 +54,12 @@ export interface ForecastAccuracySummary {
   byHorizon?: Record<string, ForecastAccuracySummary>;
 }
 
-export interface ForecastModelRecommendation {
-  activeModel: string;
-  recommendedModel: string;
-  reason: string;
-  readyToPromote: boolean;
-}
-
-export interface ForecastComparisonSummary {
-  evaluationWindowDays: number;
-  champion: ForecastAccuracySummary;
-  challenger: ForecastAccuracySummary;
-  recommendation: ForecastModelRecommendation;
-}
-
 export interface MoneyReviewResponse {
   success: boolean;
   generatedAt: string;
   truthRevision?: number;
   refreshState?: 'pending' | 'ready';
   forecastAccuracy?: ForecastAccuracySummary | null;
-  forecastComparison?: ForecastComparisonSummary | null;
   summary: MoneyReviewSummary;
   items: MoneyReviewItem[];
 }

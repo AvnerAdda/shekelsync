@@ -281,6 +281,8 @@ function isNonOperatingIncomePattern(pattern) {
 function isOperatingIncomePattern(pattern) {
   if (!pattern || pattern.categoryType !== 'income') return false;
   if (isNonOperatingIncomePattern(pattern)) return false;
+  // Respect custom/localized income categories without requiring an English payroll label.
+  if (pattern.isCountedAsIncome != null && Number(pattern.isCountedAsIncome) === 1) return true;
 
   const texts = getPatternCategoryTexts(pattern);
   return texts.some(text => (
@@ -1564,6 +1566,25 @@ function simulateScenario(simulationEntriesByDay, chosenMonthlyOccurrenceDateByM
   };
 
   const monthlyOccurrences = {};
+  const scheduledOccurrences = new Map();
+  // One draw per receipt, even when its timing probability spans several days.
+  const occurrenceEntries = new Map();
+  simulationEntriesByDay.forEach(day => day.entries.forEach(entry => {
+    if (!entry.occurrenceKey) return;
+    if (!occurrenceEntries.has(entry.occurrenceKey)) occurrenceEntries.set(entry.occurrenceKey, []);
+    occurrenceEntries.get(entry.occurrenceKey).push({ date: day.date, entry });
+  }));
+  occurrenceEntries.forEach((entries, key) => {
+    const draw = Math.random();
+    let cumulative = 0;
+    for (const { date, entry } of entries) {
+      cumulative += entry.probability;
+      if (draw < cumulative) {
+        scheduledOccurrences.set(key, { date, amount: sampleAmount(entry.avgAmount, entry.stdDev) });
+        break;
+      }
+    }
+  });
 
   simulationEntriesByDay.forEach(dayInfo => {
     const monthKey = dayInfo.monthKey;
@@ -1580,6 +1601,14 @@ function simulateScenario(simulationEntriesByDay, chosenMonthlyOccurrenceDateByM
     let dayInvestments = 0;
 
     dayInfo.entries.forEach(entry => {
+      if (entry.occurrenceKey) {
+        const occurrence = scheduledOccurrences.get(entry.occurrenceKey);
+        if (occurrence?.date === dayInfo.date) {
+          dayIncome += occurrence.amount;
+          dayOperatingIncome += occurrence.amount;
+        }
+        return;
+      }
       const effectiveProb = entry.probability;
       if (entry.patternType === 'monthly') {
         const monthlyKey = entry.monthlyKey;
@@ -1952,8 +1981,8 @@ function injectResolvedRecurringPredictions(dailyForecasts, simulationEntriesByD
       ...occurrence,
       patternKey: `financial_pattern:${occurrence.patternId}`,
       monthlyKey: `financial_pattern:${occurrence.patternId}`,
-      incomeType: isIncome ? 'operating' : null,
-      expenseType: isIncome ? null : 'operating',
+      incomeType: isIncome ? (occurrence.incomeType || 'operating') : null,
+      expenseType: isIncome ? null : (occurrence.expenseType || 'operating'),
       isUserResolvedPattern: true,
     };
     day.predictions.push(prediction);
@@ -2034,7 +2063,7 @@ function buildEmptyForecastResult(startDate, endDate, truthSnapshot, monteCarloR
     };
   };
   return {
-    modelId: 'pattern-v1',
+    modelId: forecastModelRegistry.DEFAULT_ACTIVE_MODEL,
     generated: new Date().toISOString(),
     truthRevision: truthSnapshot.truthRevision,
     analysisInfo: { totalTransactions: 0, projectedEvidenceTransactions: 0, totalCategories: 0, insufficientHistory: true },
@@ -2056,7 +2085,7 @@ function buildEmptyForecastResult(startDate, endDate, truthSnapshot, monteCarloR
   };
 }
 
-function recordForecastPredictionSnapshots(db, result, generatedDate = new Date(), modelId = 'pattern-v1') {
+function recordForecastPredictionSnapshots(db, result, generatedDate = new Date(), modelId = forecastModelRegistry.DEFAULT_ACTIVE_MODEL) {
   if (!db || !result?.dailyForecasts?.length) return;
   const generatedDateKey = formatDate(generatedDate);
   const resolvedModelId = forecastModelRegistry.normalizeModelId(modelId)
@@ -2250,105 +2279,6 @@ function getForecastAccuracy(options = {}) {
   }
 }
 
-function compareForecastAccuracy(options = {}) {
-  const days = Math.max(7, Math.min(365, Number.parseInt(options.days, 10) || 90));
-  const championId = forecastModelRegistry.normalizeModelId(options.championId) || 'pattern-v1';
-  const challengerId = forecastModelRegistry.normalizeModelId(options.challengerId) || 'ensemble-v1';
-  const db = openForecastDb();
-  try {
-    const champion = buildForecastAccuracyPayload(
-      loadForecastAccuracyRows(db, days, championId),
-      days,
-      championId,
-    );
-    const challenger = buildForecastAccuracyPayload(
-      loadForecastAccuracyRows(db, days, challengerId),
-      days,
-      challengerId,
-    );
-    return {
-      evaluationWindowDays: days,
-      champion,
-      challenger,
-      recommendation: recommendActiveModel({ champion, challenger, championId, challengerId }),
-    };
-  } catch (error) {
-    if (String(error?.message || '').includes('no such table')) {
-      const emptyChampion = buildForecastAccuracyPayload([], days, championId);
-      const emptyChallenger = buildForecastAccuracyPayload([], days, challengerId);
-      return {
-        evaluationWindowDays: days,
-        champion: emptyChampion,
-        challenger: emptyChallenger,
-        recommendation: recommendActiveModel({
-          champion: emptyChampion,
-          challenger: emptyChallenger,
-          championId,
-          challengerId,
-        }),
-      };
-    }
-    throw error;
-  } finally {
-    db.close();
-  }
-}
-
-function recommendActiveModel({
-  champion,
-  challenger,
-  championId = 'pattern-v1',
-  challengerId = 'ensemble-v1',
-} = {}) {
-  const readiness = champion?.readiness === 'established' && challenger?.readiness === 'established';
-  if (!readiness) {
-    return {
-      activeModel: championId,
-      recommendedModel: championId,
-      reason: 'collecting_data',
-      readyToPromote: false,
-    };
-  }
-
-  const challengerHorizonMae = Number(challenger?.byHorizon?.days_8_30?.expenseMae ?? challenger?.expenseMae);
-  const championHorizonMae = Number(champion?.byHorizon?.days_8_30?.expenseMae ?? champion?.expenseMae);
-  const challengerOverallMae = Number(challenger?.expenseMae);
-  const championOverallMae = Number(champion?.expenseMae);
-  const primaryMae = Number.isFinite(challengerHorizonMae) ? challengerHorizonMae : challengerOverallMae;
-  const baselinePrimaryMae = Number.isFinite(championHorizonMae) ? championHorizonMae : championOverallMae;
-
-  const challengerCoverage = Number(challenger?.intervalCoverage);
-  const championCoverage = Number(champion?.intervalCoverage);
-  const challengerBias = Math.abs(Number(challenger?.cashFlowBias) || 0);
-  const championBias = Math.abs(Number(champion?.cashFlowBias) || 0);
-  const biasGuardrail = challengerBias <= (championBias * 1.1 + 0.01);
-  const coverageImprovement = Number.isFinite(challengerCoverage) && Number.isFinite(championCoverage)
-    ? Math.abs(challengerCoverage - 80) <= Math.abs(championCoverage - 80)
-    : true;
-  const beatsPrimaryMae = Number.isFinite(primaryMae)
-    && Number.isFinite(baselinePrimaryMae)
-    && primaryMae < baselinePrimaryMae;
-  const beatsOverallMae = Number.isFinite(challengerOverallMae)
-    && Number.isFinite(championOverallMae)
-    && challengerOverallMae <= championOverallMae;
-
-  if (beatsPrimaryMae && beatsOverallMae && biasGuardrail && coverageImprovement) {
-    return {
-      activeModel: championId,
-      recommendedModel: challengerId,
-      reason: 'challenger_outperforms',
-      readyToPromote: true,
-    };
-  }
-
-  return {
-    activeModel: championId,
-    recommendedModel: championId,
-    reason: biasGuardrail ? 'champion_still_better' : 'challenger_bias_guardrail',
-    readyToPromote: false,
-  };
-}
-
 function buildForecastEngine() {
   return {
     analyzeCategoryPatterns,
@@ -2365,34 +2295,9 @@ function buildForecastEngine() {
     isNonOperatingIncomePattern,
     isNonOperatingExpensePattern,
     logPatternSummary,
+    refreshForecastDayPredictions,
     log,
   };
-}
-
-function scheduleShadowForecasts(options, sharedContext) {
-  const activeModelId = forecastModelRegistry.resolveActiveModelId(options);
-  const shadowModelIds = forecastModelRegistry.resolveShadowModelIds(options)
-    .filter((modelId) => modelId !== activeModelId);
-  if (!shadowModelIds.length || options.shadowRun === true || process.env.NODE_ENV === 'test') {
-    return;
-  }
-
-  setImmediate(() => {
-    shadowModelIds.forEach((modelId) => {
-      generateDailyForecastLocal({
-        ...options,
-        ...sharedContext,
-        modelId,
-        shadowRun: true,
-        recordSnapshot: true,
-        noCache: true,
-      }).catch((error) => {
-        if (process.env.NODE_ENV !== 'test') {
-          console.warn(`[Forecast] Shadow model ${modelId} failed:`, error?.message || error);
-        }
-      });
-    });
-  });
 }
 
 // ==================== MAIN EXPORT ====================
@@ -2497,6 +2402,7 @@ async function generateDailyForecastLocal(options = {}) {
       last: allTransactions[allTransactions.length - 1]?.date || null,
     };
 
+    const historicalTransactions = allTransactions;
     // Explicit recurring evidence is forecast once through the shared pattern
     // layer, never a second time through the residual category baseline.
     allTransactions = allTransactions.filter((transaction) => (
@@ -2514,6 +2420,7 @@ async function generateDailyForecastLocal(options = {}) {
       currentMonth,
       currentDay,
       allTransactions,
+      historicalTransactions,
       truthSnapshot,
       historicalTransactionSummary,
       config: {
@@ -2530,16 +2437,6 @@ async function generateDailyForecastLocal(options = {}) {
 
     if (!skipCache) {
       forecastResultCache.set(cacheKey, { value: results, expiresAt: Date.now() + cacheDurationMs });
-    }
-
-    if (options.shadowRun !== true) {
-      scheduleShadowForecasts(options, {
-        includeToday: CONFIG.includeToday,
-        forecastDays: CONFIG.forecastDays,
-        forecastMonths: CONFIG.forecastMonths,
-        monteCarloRuns: CONFIG.monteCarloRuns,
-        historyMonths,
-      });
     }
 
     return results;
@@ -2595,7 +2492,6 @@ async function generateDailyForecast(options = {}) {
     historyMonths: options.historyMonths ?? DEFAULT_HISTORY_MONTHS,
     noCache: options.noCache === true || options.noCache === 'true' || options.noCache === '1',
     modelId: activeModelId,
-    shadowRun: options.shadowRun === true,
   });
   const existing = forecastInFlight.get(normalizedKey);
   if (existing) return existing;
@@ -2956,8 +2852,6 @@ module.exports = {
   generateDailyForecast,
   getForecast,
   getForecastAccuracy,
-  compareForecastAccuracy,
-  recommendActiveModel,
   clearCache() {
     forecastResultCache.clear();
     forecastInFlight.clear();
