@@ -12,12 +12,27 @@ Release binaries are published at
 
 ## [Unreleased]
 
+## [0.2.1] - 2026-09-24
+
+### Security
+- Update development tooling dependencies to resolve reported Vitest, Joi,
+  and js-yaml security advisories.
+
 ### Fixed
+- Coordinate desktop startup and SQLite credential checks to prevent duplicate
+  windows and connection races during launch.
 - Recognize shekel currency symbols from card imports and distinguish foreign
   currency amounts, stale card syncs, and invalid amounts in planning messages.
 - Daily-only forecasts no longer fail when simulations are disabled. Available
   to spend recognizes the current model's paydays and falls back to a labelled
   estimate from recent imported spending without requiring manual settings.
+
+### Changed
+- Improve recurring income and investment forecasts, forecast day details, and
+  signed transaction chart breakdowns.
+- Upgrade local databases automatically to schema version 10, preserving
+  forecast history and adding planning tables. A pre-migration backup is taken;
+  failures roll back and block startup. No manual migration is required.
 
 ### Added
 - A spending-category time series with daily rolling income and expense windows,
@@ -212,7 +227,8 @@ Initial public release series. Highlights across these versions:
 - Numerous scraping-reliability, double-counting, and schema-safety fixes,
   including guarding against unsafe SQLite schema reinitialization.
 
-[Unreleased]: https://github.com/AvnerAdda/shekelsync/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/AvnerAdda/shekelsync/compare/v0.2.1...HEAD
+[0.2.1]: https://github.com/AvnerAdda/shekelsync/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/AvnerAdda/shekelsync/compare/v0.1.35...v0.2.0
 [0.1.35]: https://github.com/AvnerAdda/shekelsync/releases/tag/v0.1.35
 [0.1.34]: https://github.com/AvnerAdda/shekelsync/releases/tag/v0.1.34

@@ -1,6 +1,6 @@
 {
   "name": "shekelsync",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Personal finance tracker for Israeli banks and credit cards",
   "author": "ShekelSync",
   "license": "AGPL-3.0-or-later",
@@ -71,7 +71,7 @@
     "@types/react-dom": "^19.2.3",
     "@typescript-eslint/eslint-plugin": "^8.64.0",
     "@typescript-eslint/parser": "^8.64.0",
-    "@vitest/coverage-v8": "^4.0.18",
+    "@vitest/coverage-v8": "^4.1.11",
     "autoprefixer": "^10.5.3",
     "concurrently": "^10.0.3",
     "d3": "^7.9.0",
@@ -98,7 +98,7 @@
     "tailwindcss": "^4.3.2",
     "ts-node": "^10.9.2",
     "typescript": "^6.0.2",
-    "vitest": "^4.0.18",
+    "vitest": "^4.1.11",
     "wait-on": "^9.0.10"
   },
   "build": {
