@@ -17,9 +17,17 @@ interface Props {
   targets: Record<SpendingCategory, number>;
   selectedDate: string;
   onSelect: (date: string) => void;
+  splitBySpendingType?: boolean;
 }
 
 const timestamp = (date: string) => new Date(`${date}T12:00:00`).getTime();
+type TimelineSeries = SpendingAllocation | 'expenses' | 'surplus';
+const seriesAmount = (point: SpendingTimelinePoint, key: TimelineSeries) =>
+  key === 'expenses' || key === 'surplus' ? point[key] : point.allocation_amounts[key];
+const seriesPercentage = (point: SpendingTimelinePoint, key: TimelineSeries) =>
+  key === 'expenses' || key === 'surplus'
+    ? (point.has_income && point.income > 0 ? point[key] / point.income * 100 : null)
+    : point.percentages[key];
 
 function DateSelection({ onSelect }: { onSelect: (time: number) => void }) {
   const plot = usePlotArea();
@@ -36,7 +44,7 @@ function DateSelection({ onSelect }: { onSelect: (time: number) => void }) {
     }} /></ZIndexLayer>;
 }
 
-export default function SpendingTimeline({ points, targets, selectedDate, onSelect }: Props) {
+export default function SpendingTimeline({ points, targets, selectedDate, onSelect, splitBySpendingType = true }: Props) {
   const { t, i18n } = useTranslation('translation', { keyPrefix: 'analysisPage.spendingChart' });
   const { formatCurrency } = useFinancePrivacy();
   const theme = useTheme();
@@ -44,7 +52,8 @@ export default function SpendingTimeline({ points, targets, selectedDate, onSele
     let low = 0;
     let high = 100;
     for (const point of points) {
-      const values = Object.values(point.percentages).map((value) => value || 0);
+      const values = (splitBySpendingType ? Object.values(point.percentages)
+        : [seriesPercentage(point, 'expenses'), seriesPercentage(point, 'surplus')]).map((value) => value || 0);
       low = Math.min(low, values.reduce((sum, value) => sum + Math.min(0, value), 0));
       high = Math.max(high, values.reduce((sum, value) => sum + Math.max(0, value), 0));
     }
@@ -53,18 +62,26 @@ export default function SpendingTimeline({ points, targets, selectedDate, onSele
       total += targets[key] || 0;
       return { key, value: total };
     });
-    const chartData = points.map((point) => ({ ...point.percentages, time: timestamp(point.date), point }));
+    const chartData = points.map((point) => ({ ...point.percentages,
+      expenses: seriesPercentage(point, 'expenses'), surplus: seriesPercentage(point, 'surplus'),
+      time: timestamp(point.date), point }));
     const ticks = [...new Set(Array.from({ length: Math.min(6, points.length) }, (_, i) =>
       chartData[Math.round(i * (chartData.length - 1) / Math.max(1, Math.min(6, points.length) - 1))].time))];
     return { min: Math.floor(low / 25) * 25, max: Math.ceil(high / 25) * 25, boundaries, chartData, ticks };
-  }, [points, targets]);
+  }, [points, targets, splitBySpendingType]);
+  const series = splitBySpendingType
+    ? ALLOCATION_ORDER.map((key) => ({ key, label: t(`categories.${key}`), color: ALLOCATION_COLORS[key] }))
+    : [
+      { key: 'expenses' as const, label: t('timeline.expenses'), color: theme.palette.error.main },
+      { key: 'surplus' as const, label: t('timeline.growthUnspent'), color: theme.palette.success.main },
+    ];
   const dateLabel = (value: number) => new Intl.DateTimeFormat(i18n.language, { day: 'numeric', month: 'short' }).format(new Date(value));
   const selectedIndex = points.findIndex((point) => point.date === selectedDate);
 
   return (
     <Box>
       <Stack direction="row" sx={{ gap: 1, flexWrap: 'wrap', mb: 2 }}>
-        {boundaries.map(({ key, value }) => (
+        {splitBySpendingType ? boundaries.map(({ key, value }) => (
           <MuiTooltip key={key} title={t('timeline.boundary', { value })}>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75, bgcolor: alpha(ALLOCATION_COLORS[key], 0.08), borderRadius: 1.5, px: 1, py: 0.5 }}>
               <Box sx={{ width: 8, height: 8, bgcolor: ALLOCATION_COLORS[key], borderRadius: '50%' }} />
@@ -72,8 +89,13 @@ export default function SpendingTimeline({ points, targets, selectedDate, onSele
               <Typography variant="caption" color="text.secondary">{targets[key]}%</Typography>
             </Box>
           </MuiTooltip>
+        )) : series.map(({ key, label, color }) => (
+          <Box key={key} sx={{ display: 'flex', alignItems: 'center', gap: 0.75, px: 1, py: 0.5 }}>
+            <Box sx={{ width: 8, height: 8, bgcolor: color, borderRadius: '50%' }} />
+            <Typography variant="caption">{label}</Typography>
+          </Box>
         ))}
-        {points.some((point) => point.allocation_amounts.unallocated !== 0) && <Typography variant="caption" color="text.secondary">
+        {splitBySpendingType && points.some((point) => point.allocation_amounts.unallocated !== 0) && <Typography variant="caption" color="text.secondary">
           <Box component="span" sx={{ display: 'inline-block', width: 12, height: 8, bgcolor: ALLOCATION_COLORS.unallocated, mr: 0.5 }} />
           {t('categories.unallocated')}
         </Typography>}
@@ -100,20 +122,20 @@ export default function SpendingTimeline({ points, targets, selectedDate, onSele
                   <Typography variant="body2" sx={{ fontWeight: 650, mb: 0.5 }}>{dateLabel(timestamp(point.window_start))} – {dateLabel(timestamp(point.date))}</Typography>
                   <Typography variant="caption" component="p" sx={{ mb: 1.25 }} color="text.secondary">{t('timeline.income')}: {formatCurrency(point.income, { showSign: true, maximumFractionDigits: 2 })}</Typography>
                   {!point.has_income && <Typography variant="caption">{t('timeline.noIncomeRow')}</Typography>}
-                  {ALLOCATION_ORDER.map((key) => <Box key={key} sx={{ display: 'grid', gridTemplateColumns: '8px 1fr auto auto', gap: 1, alignItems: 'center', py: 0.35 }}>
-                    <Box sx={{ width: 7, height: 7, borderRadius: '50%', bgcolor: ALLOCATION_COLORS[key] }} />
-                    <Typography variant="caption">{t(`categories.${key}`)}</Typography>
-                    <Typography variant="caption" sx={{ fontVariantNumeric: 'tabular-nums' }}>{formatCurrency(point.allocation_amounts[key], { maximumFractionDigits: 2 })}</Typography>
-                    <Typography variant="caption" color="text.secondary" sx={{ minWidth: 42, textAlign: 'end' }}>{point.percentages[key]?.toFixed(1) ?? '—'}%</Typography>
+                  {series.map(({ key, label: seriesLabel, color }) => <Box key={key} sx={{ display: 'grid', gridTemplateColumns: '8px 1fr auto auto', gap: 1, alignItems: 'center', py: 0.35 }}>
+                    <Box sx={{ width: 7, height: 7, borderRadius: '50%', bgcolor: color }} />
+                    <Typography variant="caption">{seriesLabel}</Typography>
+                    <Typography variant="caption" sx={{ fontVariantNumeric: 'tabular-nums' }}>{formatCurrency(seriesAmount(point, key), { maximumFractionDigits: 2 })}</Typography>
+                    <Typography variant="caption" color="text.secondary" sx={{ minWidth: 42, textAlign: 'end' }}>{seriesPercentage(point, key)?.toFixed(1) ?? '—'}%</Typography>
                   </Box>)}
-                  <Typography variant="caption" component="p" color="text.secondary" sx={{ borderTop: '1px solid', borderColor: 'divider', pt: 1, mt: 1 }}>{t('timeline.growthUnspent')}: {formatCurrency(point.surplus, { maximumFractionDigits: 2 })}</Typography>
+                  {splitBySpendingType && <Typography variant="caption" component="p" color="text.secondary" sx={{ borderTop: '1px solid', borderColor: 'divider', pt: 1, mt: 1 }}>{t('timeline.growthUnspent')}: {formatCurrency(point.surplus, { maximumFractionDigits: 2 })}</Typography>}
                   {point.deficit > 0 && <Typography variant="caption" component="p" color="error.main">{t('timeline.deficit')}: {formatCurrency(-point.deficit, { maximumFractionDigits: 2 })}</Typography>}
                 </Paper>;
               }} />
-            {ALLOCATION_ORDER.map((key) => <Area key={key} type="linear" dataKey={key} name={t(`categories.${key}`)}
-              stackId="allocation" stroke={ALLOCATION_COLORS[key]} strokeWidth={1.25} fill={ALLOCATION_COLORS[key]} fillOpacity={0.56}
+            {series.map(({ key, label, color }) => <Area key={key} type="linear" dataKey={key} name={label}
+              stackId="allocation" stroke={color} strokeWidth={1.25} fill={color} fillOpacity={0.56}
               dot={false} activeDot={{ r: 3 }} connectNulls={false} isAnimationActive={false} />)}
-            {boundaries.map(({ key, value }) => <ReferenceLine key={key} y={value} ifOverflow="extendDomain"
+            {splitBySpendingType && boundaries.map(({ key, value }) => <ReferenceLine key={key} y={value} ifOverflow="extendDomain"
               shape={({ x1, y1, x2, y2 }) => <line x1={x1} y1={y1} x2={x2} y2={y2}
                 stroke={ALLOCATION_COLORS[key]} strokeWidth={2} strokeDasharray="6 4"
                 data-testid={`target-line-${key}`} data-percentage={value} />} />)}

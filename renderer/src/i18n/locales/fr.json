@@ -1067,6 +1067,7 @@
       "history": "Revenus et dépenses quotidiens",
       "calendar": "Calendrier",
       "netPosition": "Position nette",
+      "allocation": "Répartition glissante",
       "scenarios": "Scénarios de fin de mois"
     },
     "calendar": {
@@ -1983,6 +1984,9 @@
         "latest": "Dernier jour",
         "chartInteraction": "Survolez pour les détails. Cliquez pour sélectionner un jour.",
         "chartTitle": "Évolution de la répartition glissante",
+        "rolling30": "Fenêtre glissante de 30 jours",
+        "splitBySpendingType": "Répartir par type de dépense",
+        "empty": "Aucune donnée de répartition pour cette période.",
         "chartHelp": "Le temps va de gauche à droite ; les aires colorées représentent les pourcentages cumulés du revenu. Les lignes horizontales pointillées marquent vos objectifs cumulés ; le trait plein marque 100 %.",
         "chartLabel": "Série temporelle de répartition : temps en abscisse, pourcentage en ordonnée",
         "boundary": "limite {{value}} %",

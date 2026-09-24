@@ -1,5 +1,5 @@
 import { test, expect, type Page } from '@playwright/test';
-import { setupRendererTest } from './helpers/renderer-app';
+import { goHome, setupRendererTest } from './helpers/renderer-app';
 import en from '../src/i18n/locales/en.json' with { type: 'json' };
 import he from '../src/i18n/locales/he.json' with { type: 'json' };
 import type { SpendingCategory, SpendingTimelineResponse } from '../src/types/spending-categories';
@@ -9,16 +9,25 @@ function dateAfter(days: number) {
   const date = new Date(); date.setDate(date.getDate() + days);
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
 }
+function shiftDate(value: string, days: number) {
+  const date = new Date(`${value}T12:00:00`);
+  date.setDate(date.getDate() + days);
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+}
 async function fixture(page: Page) {
-  const state = { targets: { essential: 50, growth: 20, stability: 15, reward: 15 } as Record<SpendingCategory, number>, rollingRequests: [] as number[], details: [] as URL[] };
+  const state = { targets: { essential: 50, growth: 20, stability: 15, reward: 15 } as Record<SpendingCategory, number>, rollingRequests: [] as number[], timelineRequests: [] as URL[], details: [] as URL[] };
   const json = (data: unknown) => ({ status: 200, contentType: 'application/json', body: JSON.stringify(data) });
   await setupRendererTest(page, {
     'GET /api/spending-categories/timeline': async ({ route, url }) => {
       const rolling = Number(url.searchParams.get('rollingDays')) || 30;
-      const history = Number(url.searchParams.get('historyDays')) || 90;
+      const start = url.searchParams.get('startDate');
+      const end = url.searchParams.get('endDate') || dateAfter(0);
+      const history = start ? Math.round((new Date(`${end}T12:00:00`).getTime() - new Date(`${start}T12:00:00`).getTime()) / 86400000) + 1
+        : Number(url.searchParams.get('historyDays')) || 90;
       state.rollingRequests.push(rolling);
+      state.timelineRequests.push(url);
       const data: SpendingTimelineResponse = {
-        period: { start: dateAfter(1 - history), end: dateAfter(0), history_start: dateAfter(2 - history - rolling), rolling_days: rolling },
+        period: { start: shiftDate(end, 1 - history), end, history_start: shiftDate(end, 2 - history - rolling), rolling_days: rolling },
         targets: { ...state.targets }, categories_by_allocation: { essential: [], growth: [], stability: [], reward: [], unallocated: [] },
         points: Array.from({ length: history }, (_, i) => {
           const offset = i + 1 - history;
@@ -27,7 +36,7 @@ async function fixture(page: Page) {
           const expenses = Object.values(expenseAmounts).reduce((sum, value) => sum + value, 0);
           const surplus = Math.max(0, 10000 - expenses);
           const allocationAmounts = { ...expenseAmounts, growth: expenseAmounts.growth + surplus };
-          return { date: dateAfter(offset), window_start: dateAfter(offset + 1 - rolling), income: 10000,
+          return { date: shiftDate(end, offset), window_start: shiftDate(end, offset + 1 - rolling), income: 10000,
             expenses, net: 10000 - expenses, surplus, deficit: Math.max(0, expenses - 10000), has_income: true,
             expense_amounts: expenseAmounts, allocation_amounts: allocationAmounts,
             percentages: Object.fromEntries(Object.entries(allocationAmounts).map(([key, value]) => [key, value / 100])) as typeof allocationAmounts,
@@ -47,6 +56,45 @@ async function fixture(page: Page) {
   });
   return state;
 }
+
+test('home rolling allocation follows dashboard dates and switches between spending types and totals', async ({ page }) => {
+  const state = await fixture(page);
+  await goHome(page);
+  await page.getByRole('button', { name: en.transactionHistory.tabs.allocation, exact: true }).click();
+  const chart = page.getByTestId('spending-timeline');
+  await expect(chart).toBeVisible();
+  await expect(chart.locator('.recharts-area')).toHaveCount(5);
+  expect(state.timelineRequests.at(-1)?.searchParams.get('startDate')).toBe(`${dateAfter(0).slice(0, 7)}-01`);
+  expect(state.timelineRequests.at(-1)?.searchParams.get('endDate')).toBe(dateAfter(0));
+  expect(state.rollingRequests.every((days) => days === 30)).toBe(true);
+  await expect(page.getByText(labels.timeline.rolling30, { exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: '60 days', exact: true })).toHaveCount(0);
+  const split = page.getByRole('switch', { name: labels.timeline.splitBySpendingType });
+  await split.uncheck();
+  await expect(chart.locator('.recharts-area')).toHaveCount(2);
+  await expect(page.getByTestId('target-line-essential')).toHaveCount(0);
+  await expect(chart.getByText('125%', { exact: true })).toBeVisible();
+
+  await page.getByRole('button', { name: '30D', exact: true }).click();
+  await expect.poll(() => state.timelineRequests.at(-1)?.searchParams.get('startDate')).toBe(dateAfter(-29));
+  await expect(page.getByLabel(labels.timeline.inspectDate)).toHaveAttribute('min', dateAfter(-29));
+  await expect(page.getByLabel(labels.timeline.inspectDate)).toHaveAttribute('max', dateAfter(0));
+  await expect(split).not.toBeChecked();
+  await split.check();
+  await expect(chart.locator('.recharts-area')).toHaveCount(5);
+  await expect(page.getByTestId('target-line-essential')).toHaveAttribute('data-percentage', '50');
+  await chart.scrollIntoViewIfNeeded();
+  await page.screenshot({ path: '/tmp/shekelsync-home-rolling-allocation.png', fullPage: true, animations: 'disabled' });
+
+  await page.setViewportSize({ width: 760, height: 900 });
+  await page.getByRole('button', { name: 'Collapse sidebar', exact: true }).click();
+  await split.uncheck();
+  await chart.scrollIntoViewIfNeeded();
+  const bounds = await chart.boundingBox();
+  expect(bounds!.x).toBeGreaterThanOrEqual(0);
+  expect(bounds!.x + bounds!.width).toBeLessThanOrEqual(760);
+  await page.screenshot({ path: '/tmp/shekelsync-home-rolling-allocation-compact.png', fullPage: true, animations: 'disabled' });
+});
 
 test('stacked time series preserves overspending and selects the exact window for details', async ({ page }) => {
   const state = await fixture(page);
