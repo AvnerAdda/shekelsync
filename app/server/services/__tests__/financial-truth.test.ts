@@ -103,6 +103,39 @@ describe('Financial truth resolution', () => {
       .not.toContain('subscriptions');
   });
 
+  it.each([
+    { vendors: ['discount', ' discount '], expected: 'discount' },
+    { vendors: ['discount', 'isracard'], expected: null },
+    { vendors: ['discount', null], expected: null },
+    { vendors: [undefined, 'discount'], expected: null },
+    { vendors: ['discount', '   '], expected: null },
+    { vendors: [], expected: null },
+  ])('only assigns a recurring vendor when all source evidence agrees: $vendors', ({ vendors, expected }) => {
+    const db = {
+      prepare: vi.fn((sql: string) => {
+        if (sql.includes('FROM financial_truth_state')) return { get: () => ({ revision: 1 }) };
+        if (sql.includes('FROM financial_patterns ORDER BY')) return {
+          all: () => [{ id: 1, display_name: 'Employer', detected_frequency: 'monthly', source: 'manual' }],
+        };
+        if (sql.includes('FROM financial_corrections')) return { all: () => [] };
+        if (sql.includes('FROM financial_pattern_transactions')) return {
+          all: () => vendors.map((vendor, index) => ({
+            pattern_id: 1,
+            transaction_identifier: `salary-${index}`,
+            transaction_vendor: vendor,
+          })),
+        };
+        throw new Error(`Unexpected query: ${sql}`);
+      }),
+    };
+
+    const snapshot = service.getProjectionSnapshotFromDb(db, { materialize: false });
+
+    expect(snapshot.patterns[0].vendor).toBe(expected);
+    expect(snapshot.excludedTransactionKeys.size).toBe(vendors.length);
+    expect(db.prepare).toHaveBeenCalledTimes(4);
+  });
+
   it('emits stable occurrences and respects suppression/end state', () => {
     const basePattern = {
       id: 2,
@@ -411,7 +444,9 @@ describe('Financial truth resolution', () => {
       expect(service.materializePatterns(db)).toMatchObject({ changed: false });
       const snapshot = service.getProjectionSnapshotFromDb(db, { materialize: false });
       const gym = snapshot.patterns.find((pattern: any) => pattern.normalizedName === 'gym_plus');
-      expect(gym).toMatchObject({ direction: 'expense', frequency: 'monthly', isSubscription: true });
+      expect(gym).toMatchObject({ direction: 'expense', frequency: 'monthly', isSubscription: true, vendor: null });
+      expect(snapshot.patterns.find((pattern: any) => pattern.normalizedName === 'employer'))
+        .toMatchObject({ vendor: 'bank-a' });
       expect(snapshot.patterns.find((pattern: any) => pattern.normalizedName === 'deposit_interest'))
         .toBeUndefined();
       expect(snapshot.excludedTransactionKeys.has('gym-1\u0000bank-a')).toBe(true);

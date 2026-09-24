@@ -21,6 +21,11 @@ function runScenario(scenario) {
 }
 
 describe('schema migrations (PRAGMA user_version)', () => {
+  it('upgrades either branch of v9 without losing goals or forecast history', () => {
+    const result = runScenario('planning-v10-from-either-v9');
+    expect(result.status, result.stderr || result.stdout).toBe(0);
+    expect(result.stdout).toContain('schema-migrations:planning-v10-from-either-v9:ok');
+  });
   it('applies pending migrations in order and stamps user_version', () => {
     const result = runScenario('applies-in-order');
     expect(result.status, result.stderr || result.stdout).toBe(0);

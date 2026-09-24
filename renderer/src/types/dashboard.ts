@@ -1,5 +1,19 @@
 export type AggregationPeriod = 'daily' | 'weekly' | 'monthly';
 
+export interface DashboardChartBreakdown {
+  categoryId: number | null;
+  categoryName: string | null;
+  vendor: string | null;
+  income: number;
+  expenses: number;
+  /** Net investment outflow; negative values represent net withdrawals. */
+  investments: number;
+  capitalReturns?: number;
+  cardRepayments?: number;
+  pairedCardExpenses?: number;
+  pairedCardRepayments?: number;
+}
+
 export interface DashboardHistoryEntry {
   date: string;
   income: number | null;
@@ -7,12 +21,16 @@ export interface DashboardHistoryEntry {
   nonOperatingIncome?: number;
   salaryIncome?: number;
   expenses: number | null;
+  /** Net investment outflow; negative values represent net withdrawals. */
+  investments?: number | null;
   operatingExpenses?: number;
   nonOperatingExpenses?: number;
   capitalReturns?: number;
   cardRepayments?: number;
   pairedCardExpenses?: number;
   pairedCardRepayments?: number;
+  /** Raw category/vendor totals, before chart inclusion options are applied. */
+  chartBreakdown?: DashboardChartBreakdown[];
   bankBalance?: number;
 }
 

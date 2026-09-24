@@ -49,6 +49,65 @@ function buildCategoryBreakdown(rows) {
   return result;
 }
 
+const HISTORY_METRICS = [
+  ['income', 'income'],
+  ['expenses', 'expenses'],
+  ['investments', 'investments'],
+  ['operating_expenses', 'operatingExpenses'],
+  ['non_operating_expenses', 'nonOperatingExpenses'],
+  ['capital_returns', 'capitalReturns'],
+  ['salary_income', 'salaryIncome'],
+  ['operating_income', 'operatingIncome'],
+  ['non_operating_income', 'nonOperatingIncome'],
+  ['card_repayments', 'cardRepayments'],
+  ['paired_card_expenses', 'pairedCardExpenses'],
+  ['paired_card_repayments', 'pairedCardRepayments'],
+];
+
+const CHART_BREAKDOWN_METRICS = new Set([
+  'income', 'expenses', 'investments', 'capitalReturns',
+  'cardRepayments', 'pairedCardExpenses', 'pairedCardRepayments',
+]);
+
+function buildHistory(rows) {
+  const dates = new Map();
+  for (const row of rows) {
+    const dateKey = row.date instanceof Date ? row.date.toISOString() : row.date;
+    if (!dates.has(dateKey)) {
+      dates.set(dateKey, {
+        date: row.date,
+        ...Object.fromEntries(HISTORY_METRICS.map(([, field]) => [field, 0])),
+        chartBreakdown: new Map(),
+      });
+    }
+    const date = dates.get(dateKey);
+    const categoryId = row.category_id ?? null;
+    const categoryName = row.category_name ?? null;
+    const vendor = row.vendor ?? null;
+    // A category/vendor can occur in both regular activity and excluded bank
+    // repayments. Merge their raw metrics so chart options apply consistently.
+    const key = JSON.stringify([categoryId, vendor]);
+    if (!date.chartBreakdown.has(key)) {
+      date.chartBreakdown.set(key, {
+        categoryId,
+        categoryName,
+        vendor,
+        ...Object.fromEntries(Array.from(CHART_BREAKDOWN_METRICS, (field) => [field, 0])),
+      });
+    }
+    const segment = date.chartBreakdown.get(key);
+    for (const [column, field] of HISTORY_METRICS) {
+      const value = Number.parseFloat(row[column] || 0);
+      date[field] += value;
+      if (CHART_BREAKDOWN_METRICS.has(field)) segment[field] += value;
+    }
+  }
+  return Array.from(dates.values(), (date) => ({
+    ...date,
+    chartBreakdown: Array.from(date.chartBreakdown.values()),
+  }));
+}
+
 const SALARY_MATCH_SQL = `
   (
     LOWER(COALESCE(cd.name, '')) LIKE '%salary%'
@@ -253,6 +312,9 @@ async function getDashboardAnalytics(query = {}) {
     `WITH base_history AS (
       SELECT
         ${dateSelect},
+        cd.id as category_id,
+        cd.name as category_name,
+        t.vendor,
         SUM(CASE
           WHEN ${COUNTED_INCOME_SQL} THEN t.price
           ELSE 0
@@ -261,6 +323,11 @@ async function getDashboardAnalytics(query = {}) {
           WHEN ${EXPENSE_SQL} THEN ABS(t.price)
           ELSE 0
         END) as expenses,
+        SUM(CASE
+          WHEN ${INVESTMENT_OUTFLOW_SQL} THEN ABS(t.price)
+          WHEN ${INVESTMENT_INFLOW_SQL} THEN -t.price
+          ELSE 0
+        END) as investments,
         SUM(CASE
           WHEN ${EXPENSE_SQL}
             AND NOT ${nonOperatingExpenseCondition}
@@ -324,11 +391,14 @@ async function getDashboardAnalytics(query = {}) {
       WHERE t.date >= $1 AND t.date <= $2
         AND tpe.transaction_identifier IS NULL
         AND ${dialect.excludePikadon('t')}
-      GROUP BY ${dateGroupBy}
+      GROUP BY ${dateGroupBy}, cd.id, cd.name, t.vendor
     ),
     paired_repayment_history AS (
       SELECT
         ${dateSelect},
+        cd.id as category_id,
+        cd.name as category_name,
+        t.vendor,
         SUM(CASE
           WHEN (${creditCardRepaymentCondition})
             AND t.price < 0
@@ -344,32 +414,27 @@ async function getDashboardAnalytics(query = {}) {
       WHERE t.date >= $1 AND t.date <= $2
         AND tpe.transaction_identifier IS NOT NULL
         AND ${dialect.excludePikadon('t')}
-      GROUP BY ${dateGroupBy}
-    ),
-    history_dates AS (
-      SELECT date FROM base_history
-      UNION
-      SELECT date FROM paired_repayment_history
+      GROUP BY ${dateGroupBy}, cd.id, cd.name, t.vendor
     )
     SELECT
-      hd.date as date,
-      COALESCE(bh.income, 0) as income,
-      COALESCE(bh.expenses, 0) as expenses,
-      COALESCE(bh.operating_expenses, 0) as operating_expenses,
-      COALESCE(bh.non_operating_expenses, 0) as non_operating_expenses,
-      COALESCE(bh.capital_returns, 0) as capital_returns,
-      COALESCE(bh.salary_income, 0) as salary_income,
-      COALESCE(bh.operating_income, 0) as operating_income,
-      COALESCE(bh.non_operating_income, 0) as non_operating_income,
-      COALESCE(bh.card_repayments, 0) as card_repayments,
-      COALESCE(bh.paired_card_expenses, 0) as paired_card_expenses,
-      COALESCE(prh.paired_card_repayments, 0) as paired_card_repayments
-    FROM history_dates hd
-    LEFT JOIN base_history bh ON hd.date = bh.date
-    LEFT JOIN paired_repayment_history prh ON hd.date = prh.date
-    ORDER BY hd.date ASC`,
+      date, category_id, category_name, vendor,
+      income, expenses, investments, operating_expenses, non_operating_expenses,
+      capital_returns, salary_income, operating_income, non_operating_income,
+      card_repayments, paired_card_expenses, 0 as paired_card_repayments
+    FROM base_history
+    UNION ALL
+    SELECT
+      date, category_id, category_name, vendor,
+      0 as income, 0 as expenses, 0 as investments,
+      0 as operating_expenses, 0 as non_operating_expenses,
+      0 as capital_returns, 0 as salary_income,
+      0 as operating_income, 0 as non_operating_income,
+      0 as card_repayments, 0 as paired_card_expenses, paired_card_repayments
+    FROM paired_repayment_history
+    ORDER BY date ASC`,
     [start, end, BANK_CATEGORY_NAME],
   );
+  const history = buildHistory(historyResult.rows);
 
   const monthExpr = dialect.toChar('t.date', 'YYYY-MM');
   let categoryDataResult = { rows: [] };
@@ -770,19 +835,8 @@ async function getDashboardAnalytics(query = {}) {
       pendingCCDebt,
       availableBalance,
     },
-    history: historyResult.rows.map((row) => ({
-      date: row.date,
-      income: Number.parseFloat(row.income || 0),
-      expenses: Number.parseFloat(row.expenses || 0),
-      operatingExpenses: Number.parseFloat(row.operating_expenses || 0),
-      nonOperatingExpenses: Number.parseFloat(row.non_operating_expenses || 0),
-      capitalReturns: Number.parseFloat(row.capital_returns || 0),
-      cardRepayments: Number.parseFloat(row.card_repayments || 0),
-      pairedCardExpenses: Number.parseFloat(row.paired_card_expenses || 0),
-      pairedCardRepayments: Number.parseFloat(row.paired_card_repayments || 0),
-      salaryIncome: Number.parseFloat(row.salary_income || 0),
-      operatingIncome: Number.parseFloat(row.operating_income || 0),
-      nonOperatingIncome: Number.parseFloat(row.non_operating_income || 0),
+    history: history.map((row) => ({
+      ...row,
       // NEW: Add bank balance to history
       ...(includeSummary ? { bankBalance: balanceHistoryMap.get(row.date) || 0 } : {}),
     })),
@@ -839,7 +893,7 @@ async function getDashboardAnalytics(query = {}) {
       end: end.toISOString(),
     },
     rowCounts: {
-      history: historyResult.rows.length,
+      history: history.length,
       categories: includeBreakdowns ? categoryDataResult.rows.length : 0,
       vendors: includeBreakdowns ? vendorResult.rows.length : 0,
       months: includeBreakdowns ? monthResult.rows.length : 0,

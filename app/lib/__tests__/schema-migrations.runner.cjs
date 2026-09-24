@@ -600,6 +600,37 @@ const scenarios = {
       assert.deepEqual(rematerialized.patterns.map((pattern) => pattern.id).sort(), stablePatternIds);
     }),
 
+  'planning-v10-from-either-v9': () =>
+    withDatabase((db, dbPath) => {
+      const forecast = MIGRATIONS.find((migration) => migration.version === 9);
+      const planning = MIGRATIONS.find((migration) => migration.version === 10);
+      // A forecast-branch v9 database has no planning tables yet.
+      forecast.up(db);
+      db.pragma('user_version = 9');
+      runSchemaMigrations(db, { dbPath, logger: { log: () => {} } });
+      db.prepare("INSERT INTO savings_goals (name, target_amount, saved_amount) VALUES ('Keep my goal', 1500, 250)").run();
+      db.prepare("UPDATE planning_settings SET cash_buffer = 75 WHERE id = 1").run();
+      // Local planning v9 had goals, but the old forecast snapshot schema.
+      db.exec(`DROP TABLE forecast_prediction_snapshots;
+        CREATE TABLE forecast_prediction_snapshots (
+          id INTEGER PRIMARY KEY, generated_date TEXT, target_date TEXT,
+          truth_revision INTEGER, horizon_days INTEGER, expected_income REAL,
+          expected_expenses REAL, expected_cash_flow REAL, p10_cash_flow REAL,
+          p50_cash_flow REAL, p90_cash_flow REAL, created_at TEXT, updated_at TEXT,
+          UNIQUE(generated_date, target_date, truth_revision)
+        );
+        INSERT INTO forecast_prediction_snapshots VALUES
+          (1, '2026-07-01', '2026-07-02', 0, 1, 100, 80, 20, 10, 20, 30, '2026-07-01', '2026-07-01');
+        PRAGMA user_version = 9;
+      `);
+      runSchemaMigrations(db, { dbPath, logger: { log: () => {} } });
+      planning.up(db); // Safe to run again against an initialized database.
+      assert.equal(getSchemaVersion(db), CURRENT_SCHEMA_VERSION);
+      assert.deepEqual(db.prepare('SELECT name, saved_amount FROM savings_goals').all(), [{ name: 'Keep my goal', saved_amount: 250 }]);
+      assert.equal(db.prepare('SELECT cash_buffer FROM planning_settings').get().cash_buffer, 75);
+      assert.deepEqual(db.prepare('SELECT model_id, expected_cash_flow FROM forecast_prediction_snapshots').all(), [{ model_id: 'pattern-v1', expected_cash_flow: 20 }]);
+    }),
+
   'review-forecast-v9-model-id': () =>
     withDatabase((db, dbPath) => {
       db.exec(`

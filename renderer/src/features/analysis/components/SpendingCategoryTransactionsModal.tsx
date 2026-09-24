@@ -44,6 +44,7 @@ interface Props {
   periodStart: string;
   periodEnd: string;
   onDataChanged: () => void;
+  incomeBasis?: boolean;
 }
 
 interface HierarchyCategory {
@@ -77,6 +78,7 @@ const SpendingCategoryTransactionsModal: React.FC<Props> = ({
   periodStart,
   periodEnd,
   onDataChanged,
+  incomeBasis = false,
 }) => {
   const { t, i18n } = useTranslation('translation', { keyPrefix: 'analysisPage.spendingChart' });
   const { formatCurrency } = useFinancePrivacy();
@@ -111,7 +113,7 @@ const SpendingCategoryTransactionsModal: React.FC<Props> = ({
         endDate: periodEnd,
         limit: '500',
       });
-      const response = await apiClient.get(`/api/spending-categories/transactions?${params.toString()}`);
+      const response = await apiClient.get(`/api/spending-categories/${incomeBasis ? 'timeline/' : ''}transactions?${params.toString()}`, { cacheMode: 'no-store' });
       if (!response.ok) {
         throw new Error(t('transactionModal.loadError'));
       }
@@ -135,7 +137,7 @@ const SpendingCategoryTransactionsModal: React.FC<Props> = ({
       void fetchTransactions();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, spendingCategory, periodStart, periodEnd]);
+  }, [open, spendingCategory, periodStart, periodEnd, incomeBasis]);
 
   const categoryGroups = useMemo<CategoryGroup[]>(() => {
     const groupMap = new Map<number | 'uncategorized', CategoryGroup>();
@@ -160,11 +162,11 @@ const SpendingCategoryTransactionsModal: React.FC<Props> = ({
         groupMap.set(key, group);
       }
       group.transactions.push(txn);
-      group.totalAmount += Math.abs(txn.price);
+      group.totalAmount += incomeBasis ? -txn.price : Math.abs(txn.price);
     }
 
     return Array.from(groupMap.values()).sort((a, b) => b.totalAmount - a.totalAmount);
-  }, [transactions, locale, t]);
+  }, [transactions, locale, t, incomeBasis]);
 
   const formatTransactionDate = (dateValue: string): string => {
     const parsed = new Date(dateValue);
@@ -339,7 +341,7 @@ const SpendingCategoryTransactionsModal: React.FC<Props> = ({
                 }}>
                   {t('transactionModal.total', {
                     amount: formatCurrency(meta.totalAmount, {
-                      absolute: true,
+                      absolute: !incomeBasis,
                       maximumFractionDigits: 0,
                     }),
                   })}
@@ -376,7 +378,7 @@ const SpendingCategoryTransactionsModal: React.FC<Props> = ({
                         <Typography variant="caption" sx={{
                           color: "text.secondary"
                         }}>
-                          {formatCurrency(group.totalAmount, { absolute: true, maximumFractionDigits: 0 })}
+                          {formatCurrency(group.totalAmount, { absolute: !incomeBasis, maximumFractionDigits: 0 })}
                         </Typography>
                       </Box>
                       {group.categoryDefinitionId != null && (
@@ -426,7 +428,7 @@ const SpendingCategoryTransactionsModal: React.FC<Props> = ({
                               <Typography variant="body2" sx={{
                                 fontWeight: 700
                               }}>
-                                {formatCurrency(Math.abs(transaction.price), { absolute: true, maximumFractionDigits: 0 })}
+                                {formatCurrency(incomeBasis ? transaction.price : Math.abs(transaction.price), { absolute: !incomeBasis, maximumFractionDigits: 0 })}
                               </Typography>
                               <IconButton
                                 size="small"

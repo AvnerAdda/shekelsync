@@ -16,11 +16,10 @@ import {
   FormControlLabel,
   Switch,
   Divider,
-  Stack,
 } from '@mui/material';
 import MuiTooltip from '@mui/material/Tooltip';
 import { ResponsiveContainer, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ReferenceLine, ReferenceArea, ComposedChart, Area, Bar } from 'recharts';
-import { useTheme, alpha } from '@mui/material/styles';
+import { useTheme, alpha, lighten, darken } from '@mui/material/styles';
 import { format, subDays, addDays } from 'date-fns';
 import AccountBalanceIcon from '@mui/icons-material/AccountBalance';
 import CalendarMonthIcon from '@mui/icons-material/CalendarMonth';
@@ -31,6 +30,7 @@ import TuneIcon from '@mui/icons-material/Tune';
 import InstitutionBadge from '@renderer/shared/components/InstitutionBadge';
 import CategoryIcon from '@renderer/features/breakdown/components/CategoryIcon';
 import IncomeExpenseCalendar from './IncomeExpenseCalendar';
+import ForecastDayDetails from './ForecastDayDetails';
 import { useDashboardFilters } from '../DashboardFiltersContext';
 import { useTranslation } from 'react-i18next';
 import TransactionDetailModal, { TransactionForModal } from '@renderer/shared/modals/TransactionDetailModal';
@@ -39,6 +39,8 @@ import { getIncomeExpenseYAxisConfig } from './transaction-history-axis';
 import { grossNumber, hasPairedCardData, preferOperatingNumber } from '../utils/cashflow';
 import FinancialCorrectionDialog from '@renderer/features/financial-truth/FinancialCorrectionDialog';
 import type { CorrectionTarget } from '@renderer/features/financial-truth/types';
+import { buildSplitBarData, type BarSplitBy, type BarFlow, type SplitBarSeries, type SplitBarDetail } from './transaction-history-splits';
+import { getTransactionPeriod, type TransactionPeriod } from '../utils/transaction-period';
 
 interface TransactionHistorySectionProps {
   data: any;
@@ -53,9 +55,10 @@ interface TransactionHistorySectionProps {
   detectAnomalies: (history: any[]) => any[];
   hoveredDate: string | null;
   setHoveredDate: (value: string | null) => void;
-  fetchTransactionsByDate: (date: string) => void;
+  fetchTransactionsByDate: (date: string, endDate?: string) => void;
   dateTransactions: any[];
   loadingTransactions: boolean;
+  transactionPeriod?: TransactionPeriod | null;
   parseLocalDate: (value: string) => Date;
   formatCurrency: (value: number, options?: any) => string;
   forecastData?: DashboardForecastData | null;
@@ -65,6 +68,12 @@ interface TransactionHistorySectionProps {
 }
 
 type IncomeExpenseChartType = 'bar' | 'line';
+
+function getForecastInvestments(item: any): number | undefined {
+  return typeof item?.investments === 'number' && Number.isFinite(item.investments)
+    ? item.investments
+    : undefined;
+}
 
 function getNetFlowForHistory(item: any, useOperatingBasis: boolean): number {
   if (!useOperatingBasis) {
@@ -97,6 +106,7 @@ const TransactionHistorySection: React.FC<TransactionHistorySectionProps> = ({
   fetchTransactionsByDate,
   dateTransactions,
   loadingTransactions,
+  transactionPeriod = null,
   parseLocalDate,
   formatCurrency,
   forecastData = null,
@@ -113,7 +123,6 @@ const TransactionHistorySection: React.FC<TransactionHistorySectionProps> = ({
     periodPreset,
   } = useDashboardFilters();
   const { t, i18n } = useTranslation('translation', { keyPrefix: 'transactionHistory' });
-  const { t: tRoot } = useTranslation('translation');
   const TAB_HISTORY = 0;
   const TAB_CALENDAR = 1;
   const TAB_NET_POSITION = 2;
@@ -128,6 +137,7 @@ const TransactionHistorySection: React.FC<TransactionHistorySectionProps> = ({
   const [showAverageGuides, setShowAverageGuides] = useState(true);
   const [showForecast, setShowForecast] = useState(true);
   const [incomeExpenseChartType, setIncomeExpenseChartType] = useState<IncomeExpenseChartType>('bar');
+  const [barSplitBy, setBarSplitBy] = useState<BarSplitBy>('none');
   
   // Transaction Detail Modal state
   const [detailModalOpen, setDetailModalOpen] = useState(false);
@@ -174,6 +184,7 @@ const TransactionHistorySection: React.FC<TransactionHistorySectionProps> = ({
         ...item,
         income: getDisplayIncome(item),
         expenses: getDisplayExpenses(item),
+        investments: item.investments ?? 0,
       })),
     [data.history, getDisplayExpenses, getDisplayIncome],
   );
@@ -200,7 +211,7 @@ const TransactionHistorySection: React.FC<TransactionHistorySectionProps> = ({
 
     const today = format(new Date(), 'yyyy-MM-dd');
     return forecastData.dailyForecasts.some((item: any) => {
-      const hasNumericValue = [item?.income, item?.expenses, item?.cashFlow]
+      const hasNumericValue = [item?.income, item?.expenses, item?.investments, item?.cashFlow]
         .some((value) => value !== null
           && value !== undefined
           && value !== ''
@@ -209,7 +220,18 @@ const TransactionHistorySection: React.FC<TransactionHistorySectionProps> = ({
       return typeof item?.date === 'string' && item.date > today && hasNumericValue;
     });
   }, [aggregationPeriod, forecastData, rangeEndsToday]);
-  const incomeExpenseYAxisConfig = getIncomeExpenseYAxisConfig(yAxisScale);
+  const investmentForecastDays = React.useMemo(() => {
+    if (!rangeEndsToday || aggregationPeriod !== 'daily') return [];
+    const today = new Date();
+    const todayStr = format(today, 'yyyy-MM-dd');
+    const forecastEndDate = format(addDays(today, 30), 'yyyy-MM-dd');
+    return (forecastData?.dailyForecasts || []).filter((item: any) =>
+      item.date > todayStr && item.date <= forecastEndDate && getForecastInvestments(item) !== undefined,
+    );
+  }, [aggregationPeriod, forecastData, rangeEndsToday]);
+  const hasInvestmentForecastSeries = investmentForecastDays.length > 0;
+  const hasInvestmentWithdrawals = chartHistory.some((item: any) => item.investments < 0)
+    || (showForecast && investmentForecastDays.some((item: any) => item.investments < 0));
 
   const anomalies = detectAnomalies(chartHistory);
   const chartTotalIncome = chartHistory.reduce((sum: number, item: any) => sum + (item.income || 0), 0);
@@ -340,11 +362,8 @@ const TransactionHistorySection: React.FC<TransactionHistorySectionProps> = ({
   const getNetPositionData = useCallback(() => {
     if (!data.history || data.history.length === 0) return [];
 
-    const periodStartDate = format(startDate, 'yyyy-MM-dd');
-    const periodEndDate = format(endDate, 'yyyy-MM-dd');
-
     const filteredHistory = (data.history || []).filter((item: any) =>
-      item.date >= periodStartDate && item.date <= periodEndDate
+      getTransactionPeriod(item.date, aggregationPeriod, startDate, endDate) !== null
     );
 
     let cumulative = 0;
@@ -360,7 +379,7 @@ const TransactionHistorySection: React.FC<TransactionHistorySectionProps> = ({
         isForecast: false,
       };
     });
-  }, [data.history, endDate, startDate, useOperatingBasis]);
+  }, [aggregationPeriod, data.history, endDate, startDate, useOperatingBasis]);
 
   // Detect gap period (no data zone) - from last scraped data to today
   const gapPeriodInfo = React.useMemo(() => {
@@ -371,11 +390,11 @@ const TransactionHistorySection: React.FC<TransactionHistorySectionProps> = ({
       item.date >= periodStartDate && item.date <= periodEndDate
     );
     
-    // Find the last date with ACTUAL data (income or expenses > 0)
+    // Investment-only days also contain actual transaction activity.
     let lastRealDataDate: string | null = null;
     for (let i = baseHistoricalData.length - 1; i >= 0; i--) {
       const item = baseHistoricalData[i];
-      if (item.income !== null && item.expenses !== null && (item.income > 0 || item.expenses > 0)) {
+      if (item.income > 0 || item.expenses > 0 || Math.abs(item.investments || 0) > 0) {
         lastRealDataDate = item.date;
         break;
       }
@@ -396,13 +415,11 @@ const TransactionHistorySection: React.FC<TransactionHistorySectionProps> = ({
   const getDailyIncomeExpenseData = useCallback(() => {
     const today = new Date();
     const todayStr = format(today, 'yyyy-MM-dd');
-    const periodStartDate = format(startDate, 'yyyy-MM-dd');
-    const periodEndDate = format(endDate, 'yyyy-MM-dd');
     const forecastEndDate = format(addDays(today, 30), 'yyyy-MM-dd');
     
     // Filter base historical data to the selected period
     const baseHistoricalData = chartHistory.filter((item: any) => 
-      item.date >= periodStartDate && item.date <= periodEndDate
+      getTransactionPeriod(item.date, aggregationPeriod, startDate, endDate) !== null
     );
 
     // Only add forecast data in daily aggregation mode
@@ -412,6 +429,7 @@ const TransactionHistorySection: React.FC<TransactionHistorySectionProps> = ({
         ...item,
         income: item.income || 0,
         expenses: item.expenses || 0,
+        investments: item.investments || 0,
         isForecast: false,
         isInGap: false,
       }));
@@ -424,7 +442,7 @@ const TransactionHistorySection: React.FC<TransactionHistorySectionProps> = ({
 
     // Historical data up to today
     const actualHistoricalData = baseHistoricalData.filter((item: any) => item.date <= actualEndDate);
-    // Create combined data - set income/expenses to undefined for the no-data gap.
+    // Leave historical series undefined for the no-data gap.
     const historicalData = actualHistoricalData.map((item: any) => {
       const isInGapPeriod = gapPeriodInfo.hasGap && gapPeriodInfo.gapStartDate && item.date > gapPeriodInfo.gapStartDate;
       
@@ -433,13 +451,16 @@ const TransactionHistorySection: React.FC<TransactionHistorySectionProps> = ({
         // Undefined values prevent historical bars from rendering in the gap.
         income: isInGapPeriod ? undefined : (item.income || 0),
         expenses: isInGapPeriod ? undefined : (item.expenses || 0),
+        investments: isInGapPeriod ? undefined : (item.investments || 0),
         forecastIncome: undefined,
         forecastExpenses: undefined,
+        forecastInvestments: undefined,
         isForecast: false,
         isInGap: isInGapPeriod,
         // Store original values for log scale and tooltips
         originalIncome: item.income || 0,
         originalExpenses: item.expenses || 0,
+        originalInvestments: item.investments || 0,
       };
     });
 
@@ -450,23 +471,25 @@ const TransactionHistorySection: React.FC<TransactionHistorySectionProps> = ({
         date: d.date,
         income: undefined,
         expenses: undefined,
+        investments: undefined,
         forecastIncome: d.income || 0,
         forecastExpenses: d.expenses || 0,
+        forecastInvestments: getForecastInvestments(d),
+        chartBreakdown: d.chartBreakdown,
         isForecast: true,
         isInGap: false,
         // Store original values for tooltips
         originalForecastIncome: d.income || 0,
         originalForecastExpenses: d.expenses || 0,
+        originalForecastInvestments: getForecastInvestments(d),
       }));
 
     const combinedData = [...historicalData, ...forecastEntries];
 
-    // For log scale, transform all data to log10, treating zeros and very small values as 0
+    // Sub-shekel amounts stay at zero on the log axis; tooltips retain exact values.
     if (yAxisScale === 'log') {
       return combinedData.map(item => {
-        // Helper to safely transform to log scale
-        // Treat values < 0.01 as zero to avoid floating point precision issues
-        const toLog = (val: number | undefined) => (val && val >= 0.01) ? Math.log10(val) : 0;
+        const toLog = (val: number | undefined) => Math.log10(Math.max(1, val || 0));
 
         if (item.isForecast) {
           // Forecast items - transform forecast values
@@ -474,6 +497,9 @@ const TransactionHistorySection: React.FC<TransactionHistorySectionProps> = ({
             ...item,
             forecastIncome: toLog(item.forecastIncome),
             forecastExpenses: toLog(item.forecastExpenses),
+            forecastInvestments: item.forecastInvestments === undefined
+              ? undefined
+              : Math.sign(item.forecastInvestments) * toLog(Math.abs(item.forecastInvestments)),
             originalForecastIncome: item.originalForecastIncome,
             originalForecastExpenses: item.originalForecastExpenses,
           };
@@ -484,6 +510,7 @@ const TransactionHistorySection: React.FC<TransactionHistorySectionProps> = ({
             ...logItem,
             originalIncome: item.originalIncome,
             originalExpenses: item.originalExpenses,
+            originalInvestments: item.originalInvestments,
           };
         }
       });
@@ -501,6 +528,40 @@ const TransactionHistorySection: React.FC<TransactionHistorySectionProps> = ({
     startDate,
     yAxisScale,
   ]);
+
+  const splitBars = incomeExpenseChartType === 'bar' && barSplitBy !== 'none';
+  const dailyChartData = React.useMemo(() => getDailyIncomeExpenseData(), [getDailyIncomeExpenseData]);
+  const splitChart = React.useMemo(() => splitBars ? buildSplitBarData(dailyChartData, barSplitBy as 'subcategory' | 'vendor', {
+    includeCapitalReturns,
+    includeCardRepayments,
+    showForecast,
+    scale: yAxisScale,
+    uncategorizedLabel: t('settings.uncategorized', { defaultValue: 'Uncategorized' }),
+    unknownVendorLabel: t('settings.unknownVendor', { defaultValue: 'Unknown vendor' }),
+  }) : null, [barSplitBy, dailyChartData, includeCapitalReturns, includeCardRepayments, showForecast, splitBars, t, yAxisScale]);
+  const incomeExpenseYAxisConfig = getIncomeExpenseYAxisConfig(yAxisScale, hasInvestmentWithdrawals
+    || Boolean(splitChart?.data.some(row => row.splitDetails.some(detail => detail.amount < 0))));
+  const flowColor = (flow: BarFlow) => flow === 'income' ? theme.palette.success.main
+    : flow === 'expenses' ? theme.palette.error.main : theme.palette.info.main;
+  const segmentColor = (series: SplitBarSeries) => {
+    const base = flowColor(series.flow);
+    const shade = series.colorIndex % 8;
+    return shade % 2 ? lighten(base, 0.15 + Math.floor(shade / 2) * 0.13)
+      : darken(base, Math.floor(shade / 2) * 0.14);
+  };
+  const renderSplitDetails = (row: any, flow: BarFlow) => splitBars && (
+    <Box sx={{ pl: 1, mb: 0.5 }}>
+      {(row.splitDetails || []).filter((detail: SplitBarDetail) => detail.flow === flow).map((detail: SplitBarDetail) => (
+        <Box key={detail.dataKey} sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
+          <Box sx={{ width: 8, height: 8, flexShrink: 0, borderRadius: '2px', bgcolor: segmentColor(detail) }} />
+          <Typography variant="caption" sx={{ flex: 1 }}>{detail.label}</Typography>
+          <Typography variant="caption" sx={{ fontWeight: 500, pl: 1 }}>
+            {detail.amount < 0 ? '-' : ''}{formatCurrencyValue(Math.abs(detail.amount))}
+          </Typography>
+        </Box>
+      ))}
+    </Box>
+  );
 
   // Get combined net position data (historical + forecast with P10/P50/P90 scenarios)
   // Current ranges include the next 30 forecast days; past custom ranges stay historical.
@@ -872,6 +933,25 @@ const TransactionHistorySection: React.FC<TransactionHistorySectionProps> = ({
             </ToggleButton>
           </ToggleButtonGroup>
         </Box>
+        {incomeExpenseChartType === 'bar' && (
+          <Box sx={{ px: 0.5, pb: 1 }}>
+            <Typography variant="caption" sx={{ display: 'block', color: 'text.secondary', mb: 0.75 }}>
+              {t('settings.splitBy', { defaultValue: 'Split by' })}
+            </Typography>
+            <ToggleButtonGroup
+              value={barSplitBy}
+              exclusive
+              fullWidth
+              size="small"
+              aria-label={t('settings.splitBy', { defaultValue: 'Split by' })}
+              onChange={(_, nextSplit: BarSplitBy | null) => { if (nextSplit) setBarSplitBy(nextSplit); }}
+            >
+              <ToggleButton value="none">{t('settings.noSplit', { defaultValue: 'None' })}</ToggleButton>
+              <ToggleButton value="subcategory">{t('settings.subcategories', { defaultValue: 'Subcategories' })}</ToggleButton>
+              <ToggleButton value="vendor">{t('settings.vendor', { defaultValue: 'Vendor' })}</ToggleButton>
+            </ToggleButtonGroup>
+          </Box>
+        )}
         <Divider sx={{ mb: 0.5 }} />
         <FormGroup sx={{ px: 0.5 }}>
           <FormControlLabel
@@ -946,12 +1026,13 @@ const TransactionHistorySection: React.FC<TransactionHistorySectionProps> = ({
           )}
           <ResponsiveContainer width="100%" height={350} minHeight={350}>
             <ComposedChart
-              data={getDailyIncomeExpenseData()}
+              data={splitChart?.data || dailyChartData}
+              stackOffset={splitBars ? 'sign' : 'none'}
               onClick={handleChartAreaClick}
               style={{ cursor: 'pointer' }}
               margin={{ top: 10, right: 10, left: 0, bottom: 0 }}
-              barGap={2}
-              barCategoryGap="20%"
+              barGap={1}
+              barCategoryGap="5%"
             >
           <CartesianGrid strokeDasharray="3 3" stroke={theme.palette.divider} vertical={false} opacity={0.5} />
           <XAxis 
@@ -962,10 +1043,11 @@ const TransactionHistorySection: React.FC<TransactionHistorySectionProps> = ({
             tickLine={false}
             dy={10}
           />
-          {/* Net Position has a separate axis; this income/expense axis must stay at zero. */}
+          {/* Net investment withdrawals extend the cash-flow axis below zero. */}
           <YAxis
             tick={{ fill: theme.palette.text.secondary, fontSize: 12 }}
-            tickFormatter={yAxisScale === 'log' ? formatYAxisLog : formatCurrencyValue}
+            tickFormatter={yAxisScale === 'log' ? formatYAxisLog : (value: number) =>
+              `${value < 0 ? '-' : ''}${formatCurrencyValue(Math.abs(value))}`}
             domain={incomeExpenseYAxisConfig.domain}
             allowDataOverflow={incomeExpenseYAxisConfig.allowDataOverflow}
             scale="linear"
@@ -979,14 +1061,21 @@ const TransactionHistorySection: React.FC<TransactionHistorySectionProps> = ({
               const data = payload[0].payload;
               const isForecast = data.isForecast;
               const isInGap = data.isInGap;
+              if (isForecast && !showForecast) return null;
 
               // Use the matching historical/forecast fields and preserve legitimate zero values.
+              const formatAmount = isForecast
+                ? (value: number) => formatCurrency(value, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+                : formatCurrencyValue;
               const income = isForecast
                 ? (data.originalForecastIncome ?? data.forecastIncome ?? 0)
                 : (data.originalIncome ?? data.income ?? 0);
               const expenses = isForecast
                 ? (data.originalForecastExpenses ?? data.forecastExpenses ?? 0)
                 : (data.originalExpenses ?? data.expenses ?? 0);
+              const investments = isForecast
+                ? (data.originalForecastInvestments ?? data.forecastInvestments)
+                : (data.originalInvestments ?? data.investments ?? 0);
 
               return (
                 <Paper sx={(theme) => ({ 
@@ -995,7 +1084,10 @@ const TransactionHistorySection: React.FC<TransactionHistorySectionProps> = ({
                   backdropFilter: 'blur(8px)',
                   border: `1px solid ${theme.palette.divider}`,
                   borderRadius: '12px',
-                  boxShadow: '0 4px 20px rgba(0,0,0,0.15)'
+                  boxShadow: '0 4px 20px rgba(0,0,0,0.15)',
+                  maxHeight: 400,
+                  overflowY: 'auto',
+                  pointerEvents: 'auto',
                 })}>
                   <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
                     <Typography variant="body2" sx={{
@@ -1007,16 +1099,39 @@ const TransactionHistorySection: React.FC<TransactionHistorySectionProps> = ({
                     {isForecast && <Chip label="Forecast" size="small" color="warning" />}
                   </Box>
                   <Typography variant="body2" color={isInGap ? 'text.secondary' : 'success.main'}>
-                    Income: {formatCurrencyValue(income)}{isInGap ? ` (${t('legend.noData')})` : ''}
+                    {t('legend.income')}: {formatAmount(income)}{isInGap ? ` (${t('legend.noData')})` : ''}
                   </Typography>
+                  {renderSplitDetails(data, 'income')}
                   <Typography variant="body2" color={isInGap ? 'text.secondary' : 'error.main'}>
-                    Expenses: {formatCurrencyValue(expenses)}{isInGap ? ` (${t('legend.noData')})` : ''}
+                    {t('legend.expenses')}: {formatAmount(expenses)}{isInGap ? ` (${t('legend.noData')})` : ''}
                   </Typography>
+                  {renderSplitDetails(data, 'expenses')}
+                  {investments !== undefined && (
+                    <Typography variant="body2" color={isInGap ? 'text.secondary' : 'info.main'}>
+                      {t('legend.investments')}: {investments < 0 ? '-' : ''}{formatAmount(Math.abs(investments))}{isInGap ? ` (${t('legend.noData')})` : ''}
+                    </Typography>
+                  )}
+                  {renderSplitDetails(data, 'investments')}
                 </Paper>
               );
             }}
           />
-          <Legend />
+          <Legend content={splitBars ? () => (
+            <Box sx={{ display: 'flex', justifyContent: 'center', flexWrap: 'wrap', gap: 2, pt: 1 }}>
+              {(['income', 'expenses', 'investments'] as BarFlow[]).map(flow => (
+                <Box key={flow} sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
+                  <Box sx={{ width: 12, height: 12, bgcolor: flowColor(flow) }} />
+                  <Typography variant="caption" color={flowColor(flow)}>{t(`legend.${flow}`)}</Typography>
+                </Box>
+              ))}
+              {showForecast && hasForecastSeries && (
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
+                  <Box sx={{ width: 12, height: 12, border: '1px dashed', borderColor: 'text.secondary', bgcolor: 'action.hover' }} />
+                  <Typography variant="caption" color="text.secondary">{t('forecast.expected')}</Typography>
+                </Box>
+              )}
+            </Box>
+          ) : undefined} />
 
           {showAverageGuides && chartHistory.length > 0 && (() => {
             const avgExpenses = chartTotalExpenses / chartHistory.length;
@@ -1057,23 +1172,46 @@ const TransactionHistorySection: React.FC<TransactionHistorySectionProps> = ({
             );
           })()}
 
-          {incomeExpenseChartType === 'bar' ? (
+          {splitChart ? (
+            splitChart.series.map(series => (
+              <Bar
+                key={series.dataKey}
+                dataKey={series.dataKey}
+                stackId={series.flow}
+                fill={series.isForecast ? alpha(segmentColor(series), 0.38) : segmentColor(series)}
+                stroke={series.isForecast ? segmentColor(series) : theme.palette.background.paper}
+                strokeWidth={series.isForecast ? 1 : 0.5}
+                strokeDasharray={series.isForecast ? '4 2' : undefined}
+                maxBarSize={36}
+                name={series.label}
+                isAnimationActive={false}
+              />
+            ))
+          ) : incomeExpenseChartType === 'bar' ? (
             <>
               <Bar
                 dataKey="income"
                 stackId="income"
                 fill={theme.palette.success.main}
-                radius={[4, 4, 0, 0]}
-                maxBarSize={24}
+                radius={[2, 2, 0, 0]}
+                maxBarSize={36}
                 name={t('legend.income')}
               />
               <Bar
                 dataKey="expenses"
                 stackId="expenses"
                 fill={theme.palette.error.main}
-                radius={[4, 4, 0, 0]}
-                maxBarSize={24}
+                radius={[2, 2, 0, 0]}
+                maxBarSize={36}
                 name={t('legend.expenses')}
+              />
+              <Bar
+                dataKey="investments"
+                stackId="investments"
+                fill={theme.palette.info.main}
+                radius={[2, 2, 0, 0]}
+                maxBarSize={36}
+                name={t('legend.investments')}
               />
               {showForecast && hasForecastSeries && (
                 <Bar
@@ -1082,8 +1220,8 @@ const TransactionHistorySection: React.FC<TransactionHistorySectionProps> = ({
                   fill={alpha(theme.palette.success.main, 0.38)}
                   stroke={theme.palette.success.main}
                   strokeDasharray="4 2"
-                  radius={[4, 4, 0, 0]}
-                  maxBarSize={24}
+                  radius={[2, 2, 0, 0]}
+                  maxBarSize={36}
                   name={`${t('forecast.income')} (${t('forecast.expected')})`}
                 />
               )}
@@ -1094,9 +1232,21 @@ const TransactionHistorySection: React.FC<TransactionHistorySectionProps> = ({
                   fill={alpha(theme.palette.error.main, 0.38)}
                   stroke={theme.palette.error.main}
                   strokeDasharray="4 2"
-                  radius={[4, 4, 0, 0]}
-                  maxBarSize={24}
+                  radius={[2, 2, 0, 0]}
+                  maxBarSize={36}
                   name={`${t('forecast.expenses')} (${t('forecast.expected')})`}
+                />
+              )}
+              {showForecast && hasInvestmentForecastSeries && (
+                <Bar
+                  dataKey="forecastInvestments"
+                  stackId="investments"
+                  fill={alpha(theme.palette.info.main, 0.38)}
+                  stroke={theme.palette.info.main}
+                  strokeDasharray="4 2"
+                  radius={[2, 2, 0, 0]}
+                  maxBarSize={36}
+                  name={`${t('forecast.investments')} (${t('forecast.expected')})`}
                 />
               )}
             </>
@@ -1120,6 +1270,15 @@ const TransactionHistorySection: React.FC<TransactionHistorySectionProps> = ({
                 activeDot={{ r: 6, strokeWidth: 0 }}
                 name={t('legend.expenses')}
               />
+              <Line
+                type="monotone"
+                dataKey="investments"
+                stroke={theme.palette.info.main}
+                strokeWidth={3}
+                dot={false}
+                activeDot={{ r: 6, strokeWidth: 0 }}
+                name={t('legend.investments')}
+              />
               {showForecast && hasForecastSeries && (
                 <Line
                   type="monotone"
@@ -1140,6 +1299,17 @@ const TransactionHistorySection: React.FC<TransactionHistorySectionProps> = ({
                   strokeDasharray="5 5"
                   dot={false}
                   name={`${t('forecast.expenses')} (${t('forecast.expected')})`}
+                />
+              )}
+              {showForecast && hasInvestmentForecastSeries && (
+                <Line
+                  type="monotone"
+                  dataKey="forecastInvestments"
+                  stroke={theme.palette.info.light}
+                  strokeWidth={2}
+                  strokeDasharray="5 5"
+                  dot={false}
+                  name={`${t('forecast.investments')} (${t('forecast.expected')})`}
                 />
               )}
             </>
@@ -1461,7 +1631,7 @@ const TransactionHistorySection: React.FC<TransactionHistorySectionProps> = ({
                   color="warning"
                   variant="outlined"
                   sx={{ cursor: 'pointer' }}
-                  onClick={() => fetchTransactionsByDate(anomaly.date)}
+                  onClick={() => handleChartAreaClick({ activeLabel: anomaly.date })}
                 />
               ))}
             </Box>
@@ -1661,7 +1831,7 @@ const TransactionHistorySection: React.FC<TransactionHistorySectionProps> = ({
         today.setHours(0, 0, 0, 0);
         const hoveredDateObj = parseLocalDate(hoveredDate);
         hoveredDateObj.setHours(0, 0, 0, 0);
-        const isForecastDate = hoveredDateObj > today;
+        const isForecastDate = !transactionPeriod && hoveredDateObj > today;
 
         // Find forecast data for this date if it's a future date
         let forecastDayData = null;
@@ -1671,7 +1841,7 @@ const TransactionHistorySection: React.FC<TransactionHistorySectionProps> = ({
 
         // Determine what to show
         const showingForecast = isForecastDate && forecastDayData;
-        const predictions = (forecastDayData?.topPredictions || []).filter((prediction: any) => (
+        const predictions = (forecastDayData?.predictions ?? forecastDayData?.topPredictions ?? []).filter((prediction: any) => (
           (!prediction.occurrenceId || !hiddenPredictionIds.has(prediction.occurrenceId))
           && (!prediction.patternId || !hiddenPatternIds.has(prediction.patternId))
         ));
@@ -1692,7 +1862,11 @@ const TransactionHistorySection: React.FC<TransactionHistorySectionProps> = ({
                         date: format(parseLocalDate(hoveredDate), 'MMM dd, yyyy'),
                         count: predictions.length,
                       }) || `Predicted transactions on ${format(parseLocalDate(hoveredDate), 'MMM dd, yyyy')} (${predictions.length})`
-                    : t('transactionsOn', {
+                    : transactionPeriod ? t('transactionsInPeriod', {
+                        start: format(parseLocalDate(transactionPeriod.startDate), 'MMM dd, yyyy'),
+                        end: format(parseLocalDate(transactionPeriod.endDate), 'MMM dd, yyyy'),
+                        count: dateTransactions.length,
+                      }) : t('transactionsOn', {
                         date: format(parseLocalDate(hoveredDate), 'MMM dd, yyyy'),
                         count: dateTransactions.length,
                       })
@@ -1707,85 +1881,12 @@ const TransactionHistorySection: React.FC<TransactionHistorySectionProps> = ({
               </Button>
             </Box>
             {showingForecast ? (
-              // Show forecast predictions
-              (predictions.length > 0 ? (<Box sx={{ maxHeight: 400, overflowY: 'auto' }}>
-                {predictions.map((prediction: any, idx: number) => (
-                  <Box
-                    key={`${prediction.category}-${idx}`}
-                    sx={{
-                      display: 'flex',
-                      justifyContent: 'space-between',
-                      alignItems: 'center',
-                      py: 1.5,
-                      px: 1,
-                      borderBottom: idx < predictions.length - 1 ? `1px solid ${theme.palette.divider}` : 'none',
-                      bgcolor: 'action.hover',
-                      borderRadius: 1,
-                      mb: 0.5,
-                      opacity: 0.9,
-                    }}
-                  >
-                    <Box sx={{ flex: 1 }}>
-                      <Typography
-                        variant="body2"
-                        sx={{
-                          fontWeight: "medium",
-                          mb: 0.5
-                        }}>
-                        {prediction.category}
-                      </Typography>
-                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
-                        <Typography variant="caption" sx={{ color: 'warning.main', fontWeight: 500 }}>
-                          {(prediction.probability * 100).toFixed(0)}% probability
-                        </Typography>
-                      </Box>
-                    </Box>
-                    <Stack direction="row" spacing={1} sx={{ alignItems: 'center', ml: 2 }}>
-                      <Typography
-                        variant="body2"
-                        sx={{
-                          fontWeight: "bold",
-                          color: "text.secondary",
-                        }}>
-                        ~{formatCurrency(Math.abs(prediction.amount), { maximumFractionDigits: 0 })}
-                      </Typography>
-                      {(prediction.patternId || prediction.categoryDefinitionId) && (
-                        <Button
-                          size="small"
-                          variant="text"
-                          onClick={() => setCorrectionTarget({
-                            kind: prediction.patternId ? 'occurrence' : 'category',
-                            patternId: prediction.patternId || undefined,
-                            occurrenceId: prediction.occurrenceId || undefined,
-                            categoryDefinitionId: prediction.categoryDefinitionId || undefined,
-                            title: prediction.category,
-                            amount: Math.abs(Number(prediction.amount) || 0),
-                            nextExpectedDate: hoveredDate,
-                            capabilities: prediction.correctionCapabilities,
-                          })}
-                        >
-                          {tRoot('financialTruth.notAccurate', { defaultValue: 'Not accurate' })}
-                        </Button>
-                      )}
-                    </Stack>
-                  </Box>
-                ))}
-                <Typography
-                  variant="caption"
-                  sx={{
-                    color: "text.secondary",
-                    display: 'block',
-                    mt: 2,
-                    textAlign: 'center',
-                    fontStyle: 'italic'
-                  }}>
-                  {t('forecast.basedOnPatterns') || 'Based on historical spending patterns'}
-                </Typography>
-              </Box>) : (<Typography variant="body2" sx={{
-              color: "text.secondary"
-            }}>
-                {t('forecast.noPredictions') || 'No predictions for this date'}
-              </Typography>))
+              <ForecastDayDetails
+                day={forecastDayData!}
+                predictions={predictions}
+                formatCurrency={formatCurrency}
+                onCorrect={setCorrectionTarget}
+              />
             ) : (
               // Show actual transactions (existing logic)
               (loadingTransactions ? (<Box sx={{ width: '100%', px: 2 }}>
@@ -1837,7 +1938,7 @@ const TransactionHistorySection: React.FC<TransactionHistorySectionProps> = ({
                           <Typography variant="caption" sx={{
                             color: "text.secondary"
                           }}>
-                            {format(new Date(txn.date), 'HH:mm')}
+                            {format(parseLocalDate(txn.date), transactionPeriod ? 'MMM dd, yyyy · HH:mm' : 'HH:mm')}
                           </Typography>
                           {(txn.parent_name || txn.category_name) && (
                             <>
@@ -1913,7 +2014,7 @@ const TransactionHistorySection: React.FC<TransactionHistorySectionProps> = ({
                 <Typography variant="body2" sx={{
                   color: "text.secondary"
                 }}>
-                  {t('noTransactionsForDate')}
+                  {t(transactionPeriod ? 'noTransactionsForPeriod' : 'noTransactionsForDate')}
                 </Typography>
               ))
             )}
@@ -1926,7 +2027,9 @@ const TransactionHistorySection: React.FC<TransactionHistorySectionProps> = ({
         transaction={selectedTransaction}
         onSave={() => {
           // Optionally refresh the date transactions here
-          if (hoveredDate) {
+          if (transactionPeriod) {
+            fetchTransactionsByDate(transactionPeriod.startDate, transactionPeriod.endDate);
+          } else if (hoveredDate) {
             fetchTransactionsByDate(hoveredDate);
           }
         }}

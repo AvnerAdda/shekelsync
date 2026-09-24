@@ -9,21 +9,45 @@ const PAIRING_EXCLUSION = `
     AND t.vendor = tpe.transaction_vendor
 `;
 
-async function listTransactionsByDate(params = {}) {
-  const { date } = params;
+function invalidRequest(message) {
+  const error = new Error(message);
+  error.status = 400;
+  return error;
+}
 
-  if (!date) {
-    const error = new Error('Date parameter is required');
-    error.status = 400;
-    throw error;
+function normalizeDate(value, field) {
+  if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}(?:T.+)?$/.test(value)) {
+    throw invalidRequest(`${field} must be a valid date`);
   }
+  const date = value.split('T')[0];
+  const parsed = new Date(`${date}T00:00:00.000Z`);
+  if (!Number.isFinite(parsed.getTime()) || parsed.toISOString().slice(0, 10) !== date
+    || (value.includes('T') && !Number.isFinite(Date.parse(value)))) {
+    throw invalidRequest(`${field} must be a valid date`);
+  }
+  return date;
+}
+
+async function listTransactionsByDate(params = {}) {
+  const hasRange = params.startDate != null || params.endDate != null;
+  if (hasRange && (params.startDate == null || params.endDate == null)) {
+    throw invalidRequest('Both startDate and endDate are required');
+  }
+  if (!hasRange && !params.date) {
+    throw invalidRequest('Date parameter or startDate and endDate are required');
+  }
+  const startDate = normalizeDate(hasRange ? params.startDate : params.date, hasRange ? 'startDate' : 'date');
+  const endDate = normalizeDate(hasRange ? params.endDate : params.date, hasRange ? 'endDate' : 'date');
+  if (startDate > endDate) throw invalidRequest('startDate must not be after endDate');
+  const nextDay = new Date(`${endDate}T00:00:00.000Z`);
+  nextDay.setUTCDate(nextDay.getUTCDate() + 1);
+  const exclusiveEndDate = nextDay.toISOString().slice(0, 10);
   const skipCache =
     process.env.NODE_ENV === 'test' ||
     params.noCache === true ||
     params.noCache === 'true' ||
     params.noCache === '1';
-  const normalizedDate = typeof date === 'string' ? date.split('T')[0] : String(date);
-  const cacheKey = `date:${normalizedDate}`;
+  const cacheKey = `range:${startDate}:${endDate}`;
   if (!skipCache) {
     const cached = transactionsByDateCache.get(cacheKey);
     if (cached) {
@@ -50,12 +74,12 @@ async function listTransactionsByDate(params = {}) {
       LEFT JOIN category_definitions cd_child ON t.category_definition_id = cd_child.id
       LEFT JOIN category_definitions cd_parent ON cd_child.parent_id = cd_parent.id
       ${PAIRING_EXCLUSION}
-      WHERE t.date >= DATE($1)
-        AND t.date < DATE($1, '+1 day')
+      WHERE t.date >= $1
+        AND t.date < $2
         AND tpe.transaction_identifier IS NULL
       ORDER BY t.price DESC
     `,
-    [normalizedDate],
+    [startDate, exclusiveEndDate],
   );
 
   const transactions = result.rows.map((row) => {

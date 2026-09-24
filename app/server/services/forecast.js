@@ -89,6 +89,8 @@ function getAllTransactions(db, sinceDate = null) {
       t.date,
       t.name,
       t.price,
+      t.account_number,
+      t.is_pikadon_related,
       t.category_type,
       t.category_definition_id,
       cd.name as category_name,
@@ -558,6 +560,12 @@ function analyzeCategoryPatterns(transactions) {
     const uniqueMonths = Object.keys(p.monthlyOccurrences).length;
     p.monthsOfHistory = uniqueMonths;
     p.uniqueTransactionNameCount = Object.keys(p.transactionNames || {}).length;
+    // Category models may aggregate merchants and banks. Only show source identity
+    // when every observation agrees, without changing the model's grouping key.
+    const sourceNames = new Set(p.transactions.map(txn => typeof txn.name === 'string' ? txn.name.trim() || null : null));
+    const sourceVendors = new Set(p.transactions.map(txn => typeof txn.vendor === 'string' ? txn.vendor.trim() || null : null));
+    p.sourceTransactionName = sourceNames.size === 1 ? [...sourceNames][0] : null;
+    p.vendor = sourceVendors.size === 1 ? [...sourceVendors][0] : null;
 
     const hasMinimumMonths = uniqueMonths >= 2;
     const minimumOccurrencesThreshold = p.categoryType === 'expense' ? 2 : 3;
@@ -1094,6 +1102,7 @@ function refreshForecastDayPredictions(day) {
   let expectedNonOperatingIncome = 0;
   let expectedOperatingExpenses = 0;
   let expectedNonOperatingExpenses = 0;
+  let expectedInvestments = 0;
   let hasIncomePrediction = false;
   day.predictions.forEach((prediction) => {
     const amount = Number(prediction.probabilityWeightedAmount) || 0;
@@ -1104,6 +1113,8 @@ function refreshForecastDayPredictions(day) {
     } else if (prediction?.categoryType === 'expense') {
       if (prediction.expenseType === 'non_operating') expectedNonOperatingExpenses += amount;
       else expectedOperatingExpenses += amount;
+    } else if (prediction?.categoryType === 'investment') {
+      expectedInvestments += amount;
     }
   });
   if (hasIncomePrediction) {
@@ -1112,6 +1123,7 @@ function refreshForecastDayPredictions(day) {
   }
   day.expectedOperatingExpenses = expectedOperatingExpenses;
   day.expectedNonOperatingExpenses = expectedNonOperatingExpenses;
+  day.expectedInvestments = expectedInvestments;
   day.expectedCashFlow = (Number(day.expectedIncome) || 0) - (Number(day.expectedExpenses) || 0);
   day.expectedOperatingCashFlow = (Number(day.expectedOperatingIncome) || 0) - (Number(day.expectedOperatingExpenses) || 0);
   day.expectedNonOperatingCashFlow = (Number(day.expectedNonOperatingIncome) || 0) - (Number(day.expectedNonOperatingExpenses) || 0);
@@ -1208,7 +1220,8 @@ function reconcileVariableExpenseForecasts(monthForecasts, monthSimulationEntrie
           patternKey: baseline.patternKey,
           category: baseline.category,
           categoryDefinitionId: baseline.categoryDefinitionId ?? null,
-          transactionName: baseline.category,
+          transactionName: pattern?.sourceTransactionName || pattern?.transactionName || null,
+          vendor: pattern?.vendor || null,
           monthlyKey: `${baseline.patternKey}:monthly-baseline`,
           categoryType: 'expense',
           expenseType,
@@ -1633,7 +1646,7 @@ function simulateScenario(simulationEntriesByDay, chosenMonthlyOccurrenceDateByM
             if (entry.expenseType === 'non_operating') dayNonOperatingExpenses += amount;
             else dayOperatingExpenses += amount;
           }
-          else if (entry.categoryType === 'investment') dayInvestments += amount;
+          else if (entry.categoryType === 'investment') dayInvestments += amount * (entry.investmentDirection ?? 1);
         }
       } else {
         if (willOccur(effectiveProb)) {
@@ -1647,7 +1660,7 @@ function simulateScenario(simulationEntriesByDay, chosenMonthlyOccurrenceDateByM
             if (entry.expenseType === 'non_operating') dayNonOperatingExpenses += amount;
             else dayOperatingExpenses += amount;
           }
-          else if (entry.categoryType === 'investment') dayInvestments += amount;
+          else if (entry.categoryType === 'investment') dayInvestments += amount * (entry.investmentDirection ?? 1);
         }
       }
     });
@@ -1726,7 +1739,7 @@ function forecastDay(date, patterns, adjustments, patternEntries, simulationEntr
       const expectedAmount = pattern.useDailyTotal ? pattern.avgDailyTotal : pattern.avgAmount;
       const stdDev = pattern.useDailyTotal ? pattern.stdDevDailyTotal : pattern.stdDev;
       const monthlyKey = pattern._cache?.monthlyKey || pattern.patternKey || pattern.transactionName || pattern.category;
-      const transactionName = pattern.transactionName || pattern.category;
+      const transactionName = pattern.sourceTransactionName || pattern.transactionName || null;
       const incomeType = pattern.categoryType === 'income'
         ? (pattern._cache?.incomeType ?? (isOperatingIncomePattern(pattern) ? 'operating' : 'non_operating'))
         : null;
@@ -1739,6 +1752,7 @@ function forecastDay(date, patterns, adjustments, patternEntries, simulationEntr
         category: pattern.category,
         categoryDefinitionId: pattern.categoryDefinitionId ?? null,
         transactionName,
+        vendor: pattern.vendor || null,
         monthlyKey,
         categoryType: pattern.categoryType,
         incomeType,
@@ -1973,21 +1987,40 @@ function injectResolvedRecurringPredictions(dailyForecasts, simulationEntriesByD
   );
   const daysByDate = new Map(dailyForecasts.map((day) => [day.date, day]));
   const simulationsByDate = new Map(simulationEntriesByDay.map((day) => [day.date, day]));
+  const patternsById = new Map((truthSnapshot.patterns || []).map(pattern => [Number(pattern.id), pattern]));
 
   occurrences.forEach((occurrence) => {
     const day = daysByDate.get(occurrence.date);
     if (!day) return;
-    const isIncome = occurrence.categoryType === 'income';
+    const pattern = patternsById.get(Number(occurrence.patternId));
+    const isInvestment = pattern?.projectionCategoryType === 'investment';
+    const investmentDirection = isInvestment ? (pattern.investmentDirection ?? 1) : null;
+    const isIncome = !isInvestment && occurrence.categoryType === 'income';
+    const signedInvestmentAmount = amount => Math.abs(Number(amount) || 0) * investmentDirection;
+    const investmentRange = isInvestment && occurrence.amountRange
+      ? [signedInvestmentAmount(occurrence.amountRange.low), signedInvestmentAmount(occurrence.amountRange.high)]
+      : null;
     const prediction = {
       ...occurrence,
+      ...(isInvestment ? {
+        categoryType: 'investment',
+        predictionKind: 'recurring_investment',
+        investmentDirection,
+        expectedAmount: signedInvestmentAmount(occurrence.expectedAmount),
+        probabilityWeightedAmount: signedInvestmentAmount(occurrence.probabilityWeightedAmount),
+        ...(investmentRange ? { amountRange: { low: Math.min(...investmentRange), high: Math.max(...investmentRange) } } : {}),
+      } : {}),
       patternKey: `financial_pattern:${occurrence.patternId}`,
       monthlyKey: `financial_pattern:${occurrence.patternId}`,
+      vendor: typeof pattern?.vendor === 'string' ? pattern.vendor.trim() || null : null,
       incomeType: isIncome ? (occurrence.incomeType || 'operating') : null,
-      expenseType: isIncome ? null : (occurrence.expenseType || 'operating'),
+      expenseType: isIncome || isInvestment ? null : (occurrence.expenseType || 'operating'),
       isUserResolvedPattern: true,
     };
     day.predictions.push(prediction);
-    if (isIncome) {
+    if (isInvestment) {
+      day.expectedInvestments = (Number(day.expectedInvestments) || 0) + prediction.probabilityWeightedAmount;
+    } else if (isIncome) {
       day.expectedIncome = (Number(day.expectedIncome) || 0) + occurrence.probabilityWeightedAmount;
       day.expectedOperatingIncome = (Number(day.expectedOperatingIncome) || 0) + occurrence.probabilityWeightedAmount;
     } else {
@@ -1999,12 +2032,13 @@ function injectResolvedRecurringPredictions(dailyForecasts, simulationEntriesByD
       simulation.entries.push({
         patternKey: prediction.patternKey,
         monthlyKey: prediction.monthlyKey,
-        categoryType: occurrence.categoryType,
+        categoryType: prediction.categoryType,
+        ...(isInvestment ? { investmentDirection } : {}),
         incomeType: prediction.incomeType,
         expenseType: prediction.expenseType,
         patternType: 'financial_pattern',
         probability: occurrence.probability,
-        avgAmount: occurrence.expectedAmount,
+        avgAmount: isInvestment ? Math.abs(Number(occurrence.expectedAmount) || 0) : occurrence.expectedAmount,
         stdDev: occurrence.amountRange
           ? Math.max(0, (occurrence.amountRange.high - occurrence.amountRange.low) / 4)
           : 0,
@@ -2054,6 +2088,7 @@ function buildEmptyForecastResult(startDate, endDate, truthSnapshot, monteCarloR
     day.cumulativeNonOperatingExpenses = 0;
   });
   const withCumulative = (scenario) => {
+    if (!scenario) return null;
     let sum = 0;
     return {
       ...scenario,

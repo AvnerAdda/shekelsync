@@ -1,8 +1,10 @@
 const MODEL_ID = 'pattern-v2';
 const { loadProjectionCategories, prepareProjectionPolicy } = require('./projection-policy.js');
 const { buildIncomeSchedule, applyIncomeSchedule } = require('./income-schedule.js');
+const { buildInvestmentSchedule, applyInvestmentSchedule } = require('./investment-schedule.js');
 
 function withCumulative(scenario) {
+  if (!scenario) return null; // Daily-only callers intentionally skip simulations.
   let cum = 0;
   let operatingCum = 0;
   let nonOperatingCum = 0;
@@ -61,7 +63,8 @@ function generateForecast({
   truthSnapshot = policy.truthSnapshot;
   allTransactions = policy.transactions.filter(transaction => !originalTruthSnapshot.excludedTransactionKeys.has(`${transaction.identifier}\u0000${transaction.vendor}`));
 
-  const patterns = analyzeCategoryPatterns(allTransactions);
+  // Investments require source-level timing; category averages mix standing orders and one-off transfers.
+  const patterns = analyzeCategoryPatterns(allTransactions.filter(transaction => transaction.category_type !== 'investment'));
   const patternEntries = buildPatternCaches(patterns);
   const variableExpenseBaselines = buildVariableExpenseMonthlyBaselines(allTransactions, patterns, now);
   const currentMonthTransactions = allTransactions.filter((txn) => txn.month === currentMonth);
@@ -91,6 +94,8 @@ function generateForecast({
   injectResolvedRecurringPredictions(dailyForecasts, simulationEntriesByDay, truthSnapshot);
   const incomeSchedule = buildIncomeSchedule(historicalTransactions, dailyForecasts.map(day => day.date), now, engine, originalTruthSnapshot);
   applyIncomeSchedule(dailyForecasts, simulationEntriesByDay, incomeSchedule, engine);
+  const investmentSchedule = buildInvestmentSchedule(historicalTransactions, dailyForecasts.map(day => day.date), now, originalTruthSnapshot);
+  applyInvestmentSchedule(dailyForecasts, simulationEntriesByDay, investmentSchedule, engine);
   const monteCarloResults = runMonteCarloSimulation(
     dailyForecasts,
     simulationEntriesByDay,

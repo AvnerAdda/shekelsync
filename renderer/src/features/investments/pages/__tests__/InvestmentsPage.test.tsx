@@ -1,13 +1,19 @@
 import React from 'react';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { PortfolioSummary } from '@renderer/types/investments';
+import type { InvestmentBalanceSheetResponse, InvestmentLiability, PortfolioSummary } from '@renderer/types/investments';
+import type { HistoryTimeRangeOption, PortfolioChartScopeOption } from '../../InvestmentsFiltersContext';
 import InvestmentsPage from '../InvestmentsPage';
 
 const mocks = vi.hoisted(() => ({
   get: vi.fn(),
   refreshBalanceSheet: vi.fn(async () => undefined),
   setIsRefreshing: vi.fn(),
+  balanceSheetData: null as InvestmentBalanceSheetResponse | null,
+  historyTimeRange: '1m' as HistoryTimeRangeOption,
+  chartScope: 'exclude_real_estate' as PortfolioChartScopeOption,
+  refreshTrigger: 0,
+  shouldBlockPageData: false,
 }));
 
 vi.mock('@/lib/api-client', () => ({
@@ -27,7 +33,7 @@ vi.mock('@renderer/features/layout/components/onboarding-gate', () => ({
   resolveOnboardingGate: () => ({
     isLocked: false,
     isResolved: true,
-    shouldBlockPageData: false,
+    shouldBlockPageData: mocks.shouldBlockPageData,
     showLoading: false,
   }),
 }));
@@ -35,11 +41,11 @@ vi.mock('@renderer/features/layout/components/onboarding-gate', () => ({
 vi.mock('../../InvestmentsFiltersContext', () => ({
   InvestmentsFiltersProvider: ({ children }: { children: React.ReactNode }) => children,
   useInvestmentsFilters: () => ({
-    historyTimeRange: '1m',
+    historyTimeRange: mocks.historyTimeRange,
     setHistoryTimeRange: vi.fn(),
-    chartScope: 'exclude_real_estate',
+    chartScope: mocks.chartScope,
     setChartScope: vi.fn(),
-    refreshTrigger: 0,
+    refreshTrigger: mocks.refreshTrigger,
     isRefreshing: false,
     setIsRefreshing: mocks.setIsRefreshing,
   }),
@@ -47,7 +53,7 @@ vi.mock('../../InvestmentsFiltersContext', () => ({
 
 vi.mock('../../hooks/useBalanceSheet', () => ({
   useInvestmentBalanceSheet: () => ({
-    data: null,
+    data: mocks.balanceSheetData,
     loading: false,
     error: null,
     refresh: mocks.refreshBalanceSheet,
@@ -62,6 +68,12 @@ vi.mock('../../components/PortfolioValuePanel', () => ({
 vi.mock('../../components/AllocationDonutChart', () => ({ default: () => <div /> }));
 vi.mock('../../components/PerformanceCardsSection', () => ({ default: () => <div /> }));
 vi.mock('../../components/BalanceSheetSection', () => ({ default: () => <div /> }));
+vi.mock('../../components/LiabilitiesManager', () => ({
+  default: ({ onChanged }: { onChanged: () => Promise<void> }) => <button onClick={() => void onChanged()}>Save a liability</button>,
+}));
+vi.mock('../../components/DebtRepaymentPlanner', () => ({
+  default: ({ liabilities }: { liabilities?: InvestmentLiability[] }) => <div data-testid="debt-planner">{liabilities?.map((debt) => debt.liability_name).join(', ')}</div>,
+}));
 vi.mock('../../components/PortfolioHistorySection', () => ({ default: () => <div /> }));
 vi.mock('../../components/PortfolioBreakdownSection', () => ({ default: () => <div /> }));
 vi.mock('../../components/PerformanceBreakdownPanel', () => ({ default: () => <div /> }));
@@ -167,6 +179,21 @@ function successfulResponseFor(url: string) {
   return { ok: true, data: {} };
 }
 
+function callsFor(path: string): string[] {
+  return mocks.get.mock.calls
+    .map(([url]) => url as string)
+    .filter((url) => url.split('?')[0] === path);
+}
+
+const PAGE_RESOURCES = [
+  '/api/investments/summary',
+  '/api/investments/history',
+  '/api/investments/performance',
+  '/api/investments/positions',
+  '/api/analytics/investments',
+  '/api/investments/coverage',
+];
+
 describe('InvestmentsPage loading resilience', () => {
   let consoleErrorSpy: ReturnType<typeof vi.spyOn>;
 
@@ -174,11 +201,119 @@ describe('InvestmentsPage loading resilience', () => {
     mocks.get.mockReset();
     mocks.refreshBalanceSheet.mockClear();
     mocks.setIsRefreshing.mockClear();
+    mocks.balanceSheetData = null;
+    mocks.historyTimeRange = '1m';
+    mocks.chartScope = 'exclude_real_estate';
+    mocks.refreshTrigger = 0;
+    mocks.shouldBlockPageData = false;
     consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
   });
 
   afterEach(() => {
     consoleErrorSpy.mockRestore();
+  });
+
+  it('waits for the portfolio before chart requests and loads each resource once', async () => {
+    const summary = Promise.withResolvers<ReturnType<typeof successfulResponseFor>>();
+    mocks.get.mockImplementation((url: string) => url.startsWith('/api/investments/summary')
+      ? summary.promise
+      : Promise.resolve(successfulResponseFor(url)));
+
+    render(<InvestmentsPage />);
+    await waitFor(() => expect(callsFor('/api/investments/coverage')).toHaveLength(1));
+    expect(callsFor('/api/investments/history')).toHaveLength(0);
+    expect(callsFor('/api/investments/performance')).toHaveLength(0);
+
+    await act(async () => summary.resolve(successfulResponseFor('/api/investments/summary')));
+
+    for (const path of PAGE_RESOURCES) expect(callsFor(path)).toHaveLength(1);
+    const performanceUrl = new URL(callsFor('/api/investments/performance')[0], 'http://localhost');
+    expect(performanceUrl.searchParams.getAll('accountIds')).toEqual(['1']);
+  });
+
+  it('only reloads date-dependent data when the chart range changes', async () => {
+    mocks.get.mockImplementation(async (url: string) => successfulResponseFor(url));
+    const { rerender } = render(<InvestmentsPage />);
+    await screen.findByTestId('portfolio-value');
+    mocks.get.mockClear();
+
+    mocks.historyTimeRange = '1y';
+    await act(async () => rerender(<InvestmentsPage />));
+
+    expect(mocks.get).toHaveBeenCalledTimes(3);
+    expect(callsFor('/api/analytics/investments')).toHaveLength(1);
+    expect(callsFor('/api/investments/history')).toHaveLength(1);
+    expect(callsFor('/api/investments/performance')).toHaveLength(1);
+    expect(new URL(callsFor('/api/investments/history')[0], 'http://localhost')
+      .searchParams.get('timeRange')).toBe('1y');
+  });
+
+  it('only reloads the portfolio charts when the chart scope changes', async () => {
+    mocks.get.mockImplementation(async (url: string) => successfulResponseFor(url));
+    const { rerender } = render(<InvestmentsPage />);
+    await screen.findByTestId('portfolio-value');
+    mocks.get.mockClear();
+
+    mocks.chartScope = 'liquid';
+    await act(async () => rerender(<InvestmentsPage />));
+
+    expect(mocks.get).toHaveBeenCalledTimes(2);
+    expect(callsFor('/api/investments/history')).toHaveLength(1);
+    expect(callsFor('/api/investments/performance')).toHaveLength(1);
+    expect(new URL(callsFor('/api/investments/performance')[0], 'http://localhost')
+      .searchParams.get('assetScope')).toBe('liquid');
+  });
+
+  it('refreshes every resource once and waits for the chart requests to finish', async () => {
+    mocks.get.mockImplementation(async (url: string) => successfulResponseFor(url));
+    render(<InvestmentsPage />);
+    await screen.findByTestId('portfolio-value');
+    mocks.get.mockClear();
+    const history = Promise.withResolvers<ReturnType<typeof successfulResponseFor>>();
+    const refreshedPortfolio = makePortfolio();
+    refreshedPortfolio.accounts[0].id = 2;
+    mocks.get.mockImplementation((url: string) => {
+      if (url.startsWith('/api/investments/history')) return history.promise;
+      if (url.startsWith('/api/investments/summary')) return Promise.resolve({ ok: true, data: refreshedPortfolio });
+      return Promise.resolve(successfulResponseFor(url));
+    });
+
+    await act(async () => {
+      window.dispatchEvent(new CustomEvent('dataRefresh'));
+    });
+
+    for (const path of PAGE_RESOURCES) expect(callsFor(path)).toHaveLength(1);
+    for (const path of ['/api/investments/history', '/api/investments/performance']) {
+      expect(new URL(callsFor(path)[0], 'http://localhost').searchParams.getAll('accountIds')).toEqual(['2']);
+    }
+    expect(mocks.refreshBalanceSheet).toHaveBeenCalledTimes(1);
+    expect(mocks.setIsRefreshing).toHaveBeenLastCalledWith(true);
+
+    await act(async () => history.resolve(successfulResponseFor('/api/investments/history')));
+    expect(mocks.setIsRefreshing).toHaveBeenLastCalledWith(false);
+    for (const path of PAGE_RESOURCES) expect(callsFor(path)).toHaveLength(1);
+  });
+
+  it('refreshes each page resource once when the shared refresh trigger changes', async () => {
+    mocks.get.mockImplementation(async (url: string) => successfulResponseFor(url));
+    const { rerender } = render(<InvestmentsPage />);
+    await screen.findByTestId('portfolio-value');
+    mocks.get.mockClear();
+
+    mocks.refreshTrigger += 1;
+    await act(async () => rerender(<InvestmentsPage />));
+
+    for (const path of PAGE_RESOURCES) expect(callsFor(path)).toHaveLength(1);
+  });
+
+  it('does not fetch page resources while onboarding blocks data access', async () => {
+    mocks.shouldBlockPageData = true;
+    mocks.get.mockImplementation(async (url: string) => successfulResponseFor(url));
+    render(<InvestmentsPage />);
+    await act(async () => {
+      window.dispatchEvent(new CustomEvent('dataRefresh'));
+    });
+    expect(mocks.get).not.toHaveBeenCalled();
   });
 
   it('shows a load error instead of portfolio setup and retries successfully', async () => {
@@ -223,6 +358,7 @@ describe('InvestmentsPage loading resilience', () => {
       )).toBeInTheDocument();
     });
     expect(screen.getByTestId('portfolio-value')).toHaveTextContent('1000');
+    for (const path of PAGE_RESOURCES) expect(callsFor(path)).toHaveLength(2);
   });
 
   it('fetches live coverage and maps its review actions to the account workflows', async () => {
@@ -256,5 +392,19 @@ describe('InvestmentsPage loading resilience', () => {
     }));
 
     window.removeEventListener('openAccountsModal', openAccounts);
+  });
+
+  it('offers debt planning even when a user has no investment accounts', async () => {
+    mocks.get.mockImplementation(async (url: string) => {
+      if (url.startsWith('/api/investments/summary')) {
+        const portfolio = makePortfolio();
+        return { ok: true, data: { ...portfolio, summary: { ...portfolio.summary, totalAccounts: 0 } } };
+      }
+      return successfulResponseFor(url);
+    });
+    render(<InvestmentsPage />);
+    expect(await screen.findByTestId('debt-planner')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Save a liability' }));
+    await waitFor(() => expect(mocks.refreshBalanceSheet).toHaveBeenCalled());
   });
 });
