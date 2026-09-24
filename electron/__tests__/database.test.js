@@ -10,7 +10,6 @@ const ModuleLoader = requireModule('module');
 const electronTestDir = path.dirname(fileURLToPath(import.meta.url));
 const databaseModulePath = path.join(electronTestDir, '..', 'database.js');
 const pathsModulePath = path.join(electronTestDir, '..', 'paths.js');
-
 const REQUIRED_TABLES = [
   'transactions',
   'vendor_credentials',
@@ -82,8 +81,19 @@ function createTempInitModule(tmpDir) {
   return initPath;
 }
 
+function createTempSchemaMigrationsModule(tmpDir) {
+  const migrationsPath = path.join(tmpDir, 'lib', 'schema-migrations.js');
+  fs.mkdirSync(path.dirname(migrationsPath), { recursive: true });
+  fs.writeFileSync(
+    migrationsPath,
+    'module.exports = { runSchemaMigrations: () => ({ fromVersion: 0, toVersion: 0, applied: [], backupPath: null }) };',
+  );
+  return migrationsPath;
+}
+
 async function loadDatabaseModule({ tmpDir, harness }) {
   const initPath = createTempInitModule(tmpDir);
+  const schemaMigrationsPath = createTempSchemaMigrationsModule(tmpDir);
   const originalLoad = ModuleLoader._load;
   const electronMock = {
     app: {
@@ -99,6 +109,9 @@ async function loadDatabaseModule({ tmpDir, harness }) {
     resolveAppPath: (...segments) => {
       if (segments.join('/') === 'scripts/init_sqlite_db.js') {
         return initPath;
+      }
+      if (segments.join('/') === 'lib/schema-migrations.js') {
+        return schemaMigrationsPath;
       }
       return path.join(tmpDir, ...segments);
     },

@@ -173,6 +173,11 @@ async function setupAPIServer(mainWindow, options = {}) {
     lazyRouter(() => require(resolveAppPath('server', 'routes', 'budgets.js')).createBudgetsRouter()),
   );
 
+  app.use(
+    '/api/planning',
+    lazyRouter(() => require(resolveAppPath('server', 'routes', 'planning.js')).createPlanningRouter()),
+  );
+
   // Categorization rules (migrated) – lazy load
   app.use(
     '/api',

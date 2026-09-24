@@ -15,4 +15,11 @@ describe('income and expense Y-axis configuration', () => {
       allowDataOverflow: false,
     });
   });
+
+  it.each(['linear', 'log'] as const)('allows net withdrawals below zero on the %s chart', (scale) => {
+    expect(getIncomeExpenseYAxisConfig(scale, true)).toEqual({
+      domain: ['dataMin', 'auto'],
+      allowDataOverflow: false,
+    });
+  });
 });

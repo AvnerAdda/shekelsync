@@ -817,6 +817,44 @@ describe('forecast service internals', () => {
     expect(dailyForecasts[1].expectedIncome).toBe(0);
   });
 
+  it('places the full monthly investment forecast only on its chosen occurrence', () => {
+    const { adjustMonthlyPatternForecasts } = forecastModule._internal;
+    const dailyForecasts = [0.7, 0.2].map((probability, index) => ({
+      date: `2026-07-${10 + index}`,
+      predictions: [{
+        transactionName: 'Broker Transfer',
+        category: 'Investments',
+        categoryType: 'investment',
+        probability,
+        expectedAmount: 1000,
+        probabilityWeightedAmount: probability * 1000,
+      }],
+      expectedIncome: 0,
+      expectedExpenses: 0,
+      expectedInvestments: probability * 1000,
+      expectedCashFlow: 0,
+      topPredictions: [],
+    }));
+    const patterns = {
+      investment: {
+        patternType: 'monthly',
+        transactionName: 'Broker Transfer',
+        category: 'Investments',
+        categoryType: 'investment',
+        avgAmount: 1000,
+      },
+    };
+
+    adjustMonthlyPatternForecasts(dailyForecasts, patterns, {});
+
+    expect(dailyForecasts.map(day => day.expectedInvestments)).toEqual([1000, 0]);
+    expect(dailyForecasts[0].topPredictions).toEqual([
+      expect.objectContaining({ probabilityWeightedAmount: 1000, isChosenOccurrence: true }),
+    ]);
+    expect(dailyForecasts[1].topPredictions).toEqual([]);
+    expect(dailyForecasts.every(day => day.expectedIncome === 0 && day.expectedExpenses === 0)).toBe(true);
+  });
+
   it('handles category-definition loading failures without throwing', () => {
     const { loadCategoryDefinitions } = forecastModule._internal;
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
@@ -1379,4 +1417,6 @@ describe('forecast service internals', () => {
       observedDays: 30,
     });
   });
+
+
 });

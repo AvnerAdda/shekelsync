@@ -576,14 +576,22 @@ function getProjectionSnapshotFromDb(db, { materialize = true } = {}) {
     JOIN financial_patterns pattern ON pattern.id = evidence.pattern_id
   `).all();
   const resolvedById = new Map(resolvedPatterns.map((pattern) => [pattern.id, pattern]));
+  const vendorsByPattern = new Map();
   const excludedTransactionKeys = new Set();
   evidenceRows.forEach((row) => {
     const pattern = resolvedById.get(Number(row.pattern_id));
     if (!pattern) return;
+    if (!vendorsByPattern.has(pattern.id)) vendorsByPattern.set(pattern.id, new Set());
+    const vendor = typeof row.transaction_vendor === 'string' ? row.transaction_vendor.trim() || null : null;
+    vendorsByPattern.get(pattern.id).add(vendor);
     const handledExplicitly = hasMinimumRecurringEvidence(pattern);
     if (handledExplicitly || pattern.state !== 'active') {
       excludedTransactionKeys.add(`${row.transaction_identifier}\u0000${row.transaction_vendor}`);
     }
+  });
+  resolvedPatterns.forEach((pattern) => {
+    const vendors = vendorsByPattern.get(pattern.id);
+    pattern.vendor = vendors?.size === 1 ? [...vendors][0] : null;
   });
   const categoryExpectations = corrections
     .filter((row) => row.action === 'set_category_expectation')
@@ -636,6 +644,8 @@ function buildRecurringOccurrences(snapshot, startDate, endDate) {
           categoryDefinitionId: pattern.categoryDefinitionId,
           transactionName: pattern.displayName,
           categoryType: pattern.direction,
+          incomeType: pattern.incomeType || null,
+          expenseType: pattern.expenseType || null,
           probability: Math.max(0.45, pattern.confidence),
           expectedAmount: pattern.amount,
           probabilityWeightedAmount: pattern.amount,

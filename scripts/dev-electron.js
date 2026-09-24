@@ -11,6 +11,27 @@ const serviceName = 'ShekelSync';
 const probeAccount = '__dev-keychain-probe__';
 const keyRegex = /^[a-f0-9]{64}$/i;
 
+function assertSqliteInstallation(appPath = path.join(repoRoot, 'app')) {
+  const lock = JSON.parse(fs.readFileSync(path.join(appPath, 'package-lock.json'), 'utf8'));
+  const expectedVersion = lock.packages['node_modules/better-sqlite3'].version;
+  let installedVersion = null;
+  try {
+    installedVersion = JSON.parse(fs.readFileSync(
+      path.join(appPath, 'node_modules', 'better-sqlite3', 'package.json'),
+      'utf8',
+    )).version;
+  } catch {
+    // Missing or unreadable package metadata needs the same reinstall.
+  }
+  if (installedVersion !== expectedVersion) {
+    throw new Error(
+      `better-sqlite3 installation is out of date (installed: ${installedVersion || 'missing'}, ` +
+      `locked: ${expectedVersion}). Run "npm --prefix app ci" before starting Electron. ` +
+      'An older native SQLite module can abort Electron during database cleanup.',
+    );
+  }
+}
+
 function parseEnvLine(line) {
   const separatorIndex = line.indexOf('=');
   if (separatorIndex <= 0) {
@@ -208,6 +229,7 @@ function runElectronDev(injectedKey, keytarUnavailable = false) {
 }
 
 async function main() {
+  assertSqliteInstallation();
   let injectedKey = null;
   let keytarUnavailable = false;
   const isLinux = process.platform === 'linux';
@@ -234,5 +256,6 @@ if (require.main === module) {
 }
 
 module.exports = {
+  assertSqliteInstallation,
   buildElectronDevEnvironment,
 };

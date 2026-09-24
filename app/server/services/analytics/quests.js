@@ -1414,9 +1414,16 @@ async function acceptQuest(questId) {
       throw new Error(`Quest cannot be accepted (current status: ${quest.user_status})`);
     }
 
-    // Check active quest limit
-    const activeCount = await getActiveQuestCount(client);
-    if (activeCount >= MAX_ACTIVE_QUESTS) {
+    // Proposals already occupy generation slots. Accepting one only changes
+    // its status, so only accepted quests count toward the acceptance limit.
+    const acceptedCountResult = await client.query(`
+      SELECT COUNT(*) as count
+      FROM smart_action_items
+      WHERE action_type LIKE 'quest_%'
+        AND user_status = 'accepted'
+    `);
+    const acceptedCount = parseInt(acceptedCountResult.rows[0]?.count || 0, 10);
+    if (acceptedCount >= MAX_ACTIVE_QUESTS) {
       throw new Error(`Maximum active quests reached (${MAX_ACTIVE_QUESTS})`);
     }
 

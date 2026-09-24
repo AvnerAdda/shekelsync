@@ -295,6 +295,7 @@ const GuideTips: React.FC = () => {
                       {config?.icon || <LightbulbIcon fontSize="small" />}
                     </ListItemIcon>
                     <ListItemText
+                      slotProps={{ secondary: { component: 'div' } }}
                       primary={
                         <Typography variant="body2" sx={{
                           fontWeight: 500

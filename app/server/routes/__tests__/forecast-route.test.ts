@@ -82,6 +82,7 @@ function buildApp(
   generateForecast = createGenerateForecastMock(),
   sqliteDb = createSqliteDb(),
   evaluateForecast = vi.fn().mockResolvedValue({ available: false, sampleCount: 0 }),
+
 ) {
   const app = express();
   app.use(express.json());
@@ -156,6 +157,274 @@ describe('Shared /api/forecast routes', () => {
     const options = generateForecast.mock.calls[0][0];
     expect(options.forecastMonths).toBe(6);
     expect(options.forecastDays).toBeUndefined();
+  });
+
+  it('includes investment forecasts and defaults missing investment amounts to zero', async () => {
+    const baseResult = buildForecastResult({ days: 2, totalIncome: 1000 });
+    const result = {
+      ...baseResult,
+      dailyForecasts: [
+        { ...baseResult.dailyForecasts[0], expectedInvestments: 750.25 },
+        { ...baseResult.dailyForecasts[0], date: '2026-07-11' },
+      ],
+    };
+    const { app } = buildApp(vi.fn().mockResolvedValue(result));
+
+    const response = await request(app)
+      .get('/api/forecast/daily?days=2')
+      .expect(200);
+
+    expect(response.body.dailyForecasts).toEqual([
+      expect.objectContaining({
+        date: '2026-07-10',
+        income: 1000,
+        expenses: 100,
+        investments: 750.25,
+      }),
+      expect.objectContaining({ date: '2026-07-11', investments: 0 }),
+    ]);
+  });
+
+  it('enriches predicted transactions with canonical categories and supplied bank metadata across all category types', async () => {
+    const categories = [
+      { id: 1, name: 'סופרמרקט', name_en: 'Groceries', category_type: 'expense', parent_id: 10, icon: 'cart', color: '#123456' },
+      { id: 2, name: 'משכורת', name_en: 'Salary', category_type: 'income', parent_id: 20, icon: 'salary', color: '#234567' },
+      { id: 3, name: 'ניירות ערך', name_en: 'Securities', category_type: 'investment', parent_id: 30, icon: 'chart', color: '#345678' },
+      { id: 10, name: 'מזון', category_type: 'expense', parent_id: null },
+      { id: 20, name: 'הכנסות', category_type: 'income', parent_id: null },
+      { id: 30, name: 'השקעות', category_type: 'investment', parent_id: null },
+    ];
+    const institution = { id: 7, display_name_he: 'בנק הפועלים', display_name_en: 'Bank Hapoalim' };
+    const baseResult = buildForecastResult({ days: 1, totalIncome: 1000 });
+    const result = {
+      ...baseResult,
+      dailyForecasts: [{
+        ...baseResult.dailyForecasts[0],
+        topPredictions: [
+          { category: 'Legacy grocery label', categoryDefinitionId: 1, categoryType: 'expense', transactionName: 'שופרסל שלי', vendor: 'hapoalim', institution, expectedAmount: 150, probability: 0.9 },
+          { category: 'Salary', categoryDefinitionId: 2, categoryType: 'income', transactionName: 'חברת דוגמה בע״מ', vendor: 'leumi', expectedAmount: 1000, probability: 1 },
+          { category: 'Securities', categoryDefinitionId: 3, categoryType: 'investment', transactionName: 'העברה לבית השקעות', vendor: 'hapoalim', expectedAmount: 500, probability: 0.8 },
+        ],
+      }],
+    };
+    const sqliteDb = {
+      prepare: vi.fn((sql: string) => ({
+        all: vi.fn(() => {
+          if (!sql.includes('FROM category_definitions')) return [];
+          return /WHERE\s+category_type\s*=\s*'expense'/i.test(sql)
+            ? categories.filter(category => category.category_type === 'expense')
+            : categories;
+        }),
+      })),
+    };
+    const { app } = buildApp(vi.fn().mockResolvedValue(result), sqliteDb);
+
+    const response = await request(app).get('/api/forecast/daily?days=1').expect(200);
+
+    expect(response.body.dailyForecasts[0].topPredictions).toEqual([
+      expect.objectContaining({
+        category: 'Legacy grocery label',
+        categoryDefinitionId: 1,
+        transactionName: 'שופרסל שלי',
+        categoryType: 'expense',
+        category_name: 'סופרמרקט',
+        parent_name: 'מזון',
+        category_icon: 'cart',
+        category_color: '#123456',
+        vendor: 'hapoalim',
+        institution,
+        amount: 150,
+      }),
+      expect.objectContaining({
+        transactionName: 'חברת דוגמה בע״מ',
+        categoryType: 'income',
+        category_name: 'משכורת',
+        parent_name: 'הכנסות',
+        category_icon: 'salary',
+        category_color: '#234567',
+        vendor: 'leumi',
+      }),
+      expect.objectContaining({
+        transactionName: 'העברה לבית השקעות',
+        categoryType: 'investment',
+        category_name: 'ניירות ערך',
+        parent_name: 'השקעות',
+        category_icon: 'chart',
+        category_color: '#345678',
+        vendor: 'hapoalim',
+      }),
+    ]);
+    expect(response.body.dailyForecasts[0].predictions).toEqual(response.body.dailyForecasts[0].topPredictions);
+    expect(response.body.dailyForecasts[0].predictions.map((prediction: Record<string, number>) => prediction.probabilityWeightedAmount))
+      .toEqual([135, 1000, 400]);
+  });
+
+  it('leaves missing metadata empty without guessing categories from transaction names or inventing vendors', async () => {
+    const baseResult = buildForecastResult({ days: 1, totalIncome: 1000 });
+    const result = {
+      ...baseResult,
+      dailyForecasts: [{
+        ...baseResult.dailyForecasts[0],
+        topPredictions: [
+          { category: 'Unknown category', transactionName: 'Salary', expectedAmount: 50 },
+          { category: 'Salary', categoryDefinitionId: 999, transactionName: 'Unknown employer', expectedAmount: 50 },
+          { category: 'Salary', expectedAmount: 50 },
+        ],
+      }],
+    };
+    const sqliteDb = {
+      prepare: vi.fn((sql: string) => ({
+        all: vi.fn(() => sql.includes('FROM category_definitions')
+          ? [{ id: 2, name: 'משכורת', name_en: 'Salary', category_type: 'income', parent_id: null, icon: 'salary', color: '#234567' }]
+          : []),
+      })),
+    };
+    const { app } = buildApp(vi.fn().mockResolvedValue(result), sqliteDb);
+
+    const response = await request(app).get('/api/forecast/daily?days=1').expect(200);
+    const predictions = response.body.dailyForecasts[0].topPredictions;
+
+    expect(predictions.slice(0, 2)).toEqual([
+      expect.objectContaining({ category: 'Unknown category', transactionName: 'Salary', categoryType: null, category_name: null, parent_name: null, category_icon: null, category_color: null, vendor: null }),
+      expect.objectContaining({ category: 'Salary', categoryDefinitionId: 999, category_name: null, parent_name: null, category_icon: null, category_color: null, vendor: null }),
+    ]);
+    expect(predictions[2]).toMatchObject({
+      category: 'Salary',
+      transactionName: null,
+      categoryType: 'income',
+      category_name: 'משכורת',
+      parent_name: null,
+      category_icon: 'salary',
+      category_color: '#234567',
+      vendor: null,
+    });
+    expect(predictions.every((prediction: Record<string, unknown>) => !('institution' in prediction))).toBe(true);
+  });
+
+  it('reconciles full prediction details and chart groups with daily totals beyond the top five predictions', async () => {
+    const categories = [
+      { id: 1, name: 'סופרמרקט', category_type: 'expense', parent_id: 10, icon: 'cart', color: '#123456' },
+      { id: 2, name: 'משכורת', category_type: 'income', parent_id: 20 },
+      { id: 3, name: 'ניירות ערך', category_type: 'investment', parent_id: 30 },
+      { id: 10, name: 'מזון', category_type: 'expense', parent_id: null },
+    ];
+    const predictions = [
+      { category: 'Merchant A', categoryDefinitionId: 1, categoryType: 'expense', vendor: 'visaCal', expectedAmount: 200, probability: 0.5, probabilityWeightedAmount: 80 },
+      { category: 'Merchant B', categoryDefinitionId: 1, categoryType: 'expense', vendor: 'visaCal', expectedAmount: 50, probability: 0.5 },
+      { category: 'Employer', categoryDefinitionId: 2, vendor: 'discount', expectedAmount: 1000, probability: 1 },
+      { category: 'Broker deposit', categoryDefinitionId: 3, categoryType: 'investment', vendor: 'discount', expectedAmount: 500, probability: 1, probabilityWeightedAmount: 500 },
+      { category: 'Suppressed payment', categoryDefinitionId: 1, categoryType: 'expense', vendor: 'visaCal', expectedAmount: 999, probability: 1, probabilityWeightedAmount: 0 },
+      { category: 'Broker withdrawal', categoryDefinitionId: 3, categoryType: 'investment', vendor: 'discount', expectedAmount: -120, probability: 0.5 },
+      { category: 'Merchant C', categoryDefinitionId: 1, transactionName: 'שופרסל שלי', categoryType: 'expense', expectedAmount: 20, probability: 0.25, patternId: 'pattern-c', occurrenceId: 'occurrence-c', correctionCapabilities: ['set_category_expectation'] },
+      { category: 'Uncategorized investment', categoryType: 'investment', probabilityWeightedAmount: -10 },
+    ];
+    const baseResult = buildForecastResult({ days: 1, totalIncome: 1000 });
+    const result = {
+      ...baseResult,
+      dailyForecasts: [{
+        ...baseResult.dailyForecasts[0],
+        expectedExpenses: 110,
+        expectedInvestments: 430,
+        predictions,
+        topPredictions: predictions.slice(0, 5),
+      }],
+    };
+    const sqliteDb = {
+      prepare: vi.fn((sql: string) => ({
+        all: vi.fn(() => sql.includes('FROM category_definitions') ? categories : []),
+      })),
+    };
+    const { app } = buildApp(vi.fn().mockResolvedValue(result), sqliteDb);
+
+    const response = await request(app).get('/api/forecast/daily?days=1').expect(200);
+    const day = response.body.dailyForecasts[0];
+
+    expect(day.chartBreakdown).toEqual([
+      { categoryId: 1, categoryName: 'סופרמרקט', vendor: 'visaCal', income: 0, expenses: 105, investments: 0 },
+      { categoryId: 2, categoryName: 'משכורת', vendor: 'discount', income: 1000, expenses: 0, investments: 0 },
+      { categoryId: 3, categoryName: 'ניירות ערך', vendor: 'discount', income: 0, expenses: 0, investments: 440 },
+      { categoryId: 1, categoryName: 'סופרמרקט', vendor: null, income: 0, expenses: 5, investments: 0 },
+      { categoryId: null, categoryName: null, vendor: null, income: 0, expenses: 0, investments: -10 },
+    ]);
+    for (const metric of ['income', 'expenses', 'investments']) {
+      expect(day.chartBreakdown.reduce((sum: number, group: Record<string, number>) => sum + group[metric], 0)).toBe(day[metric]);
+    }
+    expect(day.topPredictions).toHaveLength(5);
+    expect(day.predictions).toHaveLength(predictions.length);
+    expect(day.topPredictions).toEqual(day.predictions.slice(0, 5));
+    expect(day.predictions.map((prediction: Record<string, number>) => prediction.probabilityWeightedAmount))
+      .toEqual([80, 25, 1000, 500, 0, -60, 5, -10]);
+    for (const [categoryType, metric] of [['income', 'income'], ['expense', 'expenses'], ['investment', 'investments']]) {
+      const detailTotal = day.predictions
+        .filter((prediction: Record<string, unknown>) => prediction.categoryType === categoryType)
+        .reduce((sum: number, prediction: Record<string, number>) => sum + prediction.probabilityWeightedAmount, 0);
+      expect(detailTotal).toBe(day[metric]);
+    }
+    expect(day.predictions[6]).toMatchObject({
+      patternId: 'pattern-c',
+      occurrenceId: 'occurrence-c',
+      transactionName: 'שופרסל שלי',
+      categoryDefinitionId: 1,
+      category_name: 'סופרמרקט',
+      parent_name: 'מזון',
+      category_icon: 'cart',
+      category_color: '#123456',
+      amount: 20,
+      probability: 0.25,
+      probabilityWeightedAmount: 5,
+      correctionCapabilities: ['set_category_expectation'],
+    });
+  });
+
+  it('keeps an explicitly empty full prediction list instead of falling back to top predictions', async () => {
+    const baseResult = buildForecastResult({ days: 1, totalIncome: 0 });
+    const result = {
+      ...baseResult,
+      dailyForecasts: [{
+        ...baseResult.dailyForecasts[0],
+        predictions: [],
+        topPredictions: [{ category: 'Food', categoryType: 'expense', expectedAmount: 100, probability: 1 }],
+      }],
+    };
+    const { app } = buildApp(vi.fn().mockResolvedValue(result));
+
+    const response = await request(app).get('/api/forecast/daily?days=1').expect(200);
+
+    expect(response.body.dailyForecasts[0].predictions).toEqual([]);
+    expect(response.body.dailyForecasts[0].topPredictions).toHaveLength(1);
+  });
+
+  it('leaves unsupported chart allocations unassigned when predictions or amounts are incomplete', async () => {
+    const baseResult = buildForecastResult({ days: 2, totalIncome: 1000 });
+    const result = {
+      ...baseResult,
+      dailyForecasts: [
+        {
+          ...baseResult.dailyForecasts[0],
+          topPredictions: [{ category: 'Food', categoryType: 'expense', expectedAmount: 100, probability: 1 }],
+        },
+        {
+          ...baseResult.dailyForecasts[0],
+          date: '2026-07-11',
+          predictions: [
+            { category: 'Food', categoryType: 'expense', expectedAmount: 100 },
+            { category: 'Food', categoryType: 'expense', probability: 1 },
+            { category: 'Unknown type', probabilityWeightedAmount: 200 },
+            { category: 'Food', categoryType: 'expense', probabilityWeightedAmount: NaN },
+            { category: 'Food', categoryType: 'expense', expectedAmount: Infinity, probability: 1 },
+            { category: 'Uncategorized', categoryType: 'expense', vendor: ' ', expectedAmount: 20, probability: 0.5 },
+          ],
+        },
+      ],
+    };
+    const { app } = buildApp(vi.fn().mockResolvedValue(result));
+
+    const response = await request(app).get('/api/forecast/daily?days=2').expect(200);
+
+    expect(response.body.dailyForecasts[0].chartBreakdown).toEqual([]);
+    expect(response.body.dailyForecasts[1].chartBreakdown).toEqual([
+      { categoryId: null, categoryName: null, vendor: null, income: 0, expenses: 10, investments: 0 },
+    ]);
   });
 
   it('combines populated actuals, budgets, and category forecasts', async () => {
@@ -356,12 +625,20 @@ describe('Shared /api/forecast routes', () => {
       .expect(200);
 
     expect(response.body).toMatchObject({ available: true, sampleCount: 42, expenseMae: 18.5 });
-    expect(evaluateForecast).toHaveBeenCalledWith({ days: 120 });
+    expect(evaluateForecast).toHaveBeenCalledWith({ days: 120, modelId: undefined });
     expect(generateForecast).not.toHaveBeenCalled();
 
     const invalid = await request(app)
       .get('/api/forecast/accuracy?days=2')
       .expect(400);
     expect(invalid.body.error).toBe('days must be between 7 and 365');
+  });
+
+  it('filters accuracy by forecast version', async () => {
+    vi.useRealTimers();
+    const { app, evaluateForecast } = buildApp();
+    await request(app).get('/api/forecast/accuracy?days=90&model=pattern-v1').expect(200);
+    expect(evaluateForecast).toHaveBeenCalledWith({ days: 90, modelId: 'pattern-v1' });
+    await request(app).get('/api/forecast/accuracy/compare').expect(404);
   });
 });

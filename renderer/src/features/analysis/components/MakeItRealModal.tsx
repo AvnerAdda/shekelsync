@@ -16,7 +16,7 @@ import {
   alpha,
 } from '@mui/material';
 import CloseIcon from '@mui/icons-material/Close';
-import { BarChart } from '@mui/x-charts';
+import { Bar, BarChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { useTranslation } from 'react-i18next';
 import { apiClient } from '@renderer/lib/api-client';
 import { useFinancePrivacy } from '@app/contexts/FinancePrivacyContext';
@@ -346,36 +346,31 @@ const MakeItRealModal: React.FC<MakeItRealModalProps> = ({ open, onClose }) => {
               {t('categoryHours.subtitle')}
             </Typography>
             <Box sx={{ height: 300, width: '100%' }}>
-              <BarChart
-                height={300}
-                hideLegend
-                series={[
-                  {
-                    data: data.categoryCosts?.map((c: any) => c.hours) || [],
-                    label: t('categoryHours.hours'),
-                    color: theme.palette.warning.main,
-                  },
-                ]}
-                xAxis={[{
-                  data: data.categoryCosts?.map((c: any) => c.category) || [],
-                  scaleType: 'band',
-                }]}
-                yAxis={[{
-                  label: t('categoryHours.yAxisLabel'),
-                }]}
-                sx={{
-                  '.MuiBarElement-root': {
-                    fill: `url(#categoryHoursGradient)`,
-                  }
-                }}
-              >
-                <defs>
-                  <linearGradient id="categoryHoursGradient" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor={theme.palette.warning.main} stopOpacity={0.8} />
-                    <stop offset="100%" stopColor={theme.palette.warning.dark} stopOpacity={0.4} />
-                  </linearGradient>
-                </defs>
-              </BarChart>
+              <ResponsiveContainer width="100%" height="100%" minWidth={0}>
+                <BarChart
+                  data={data.categoryCosts || []}
+                  margin={{ top: 8, right: 16, bottom: 8, left: 12 }}
+                  accessibilityLayer
+                  aria-label={t('categoryHours.title')}
+                >
+                  <defs>
+                    <linearGradient id="categoryHoursGradient" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor={theme.palette.warning.main} stopOpacity={0.8} />
+                      <stop offset="100%" stopColor={theme.palette.warning.dark} stopOpacity={0.4} />
+                    </linearGradient>
+                  </defs>
+                  <XAxis dataKey="category" tick={{ fill: theme.palette.text.secondary, fontSize: 12 }} />
+                  <YAxis
+                    tick={{ fill: theme.palette.text.secondary, fontSize: 12 }}
+                    label={{ value: t('categoryHours.yAxisLabel'), angle: -90, position: 'insideLeft', fill: theme.palette.text.secondary }}
+                  />
+                  <Tooltip
+                    contentStyle={{ backgroundColor: theme.palette.background.paper, borderColor: theme.palette.divider }}
+                    labelStyle={{ color: theme.palette.text.primary }}
+                  />
+                  <Bar dataKey="hours" name={t('categoryHours.hours')} fill="url(#categoryHoursGradient)" isAnimationActive={false} />
+                </BarChart>
+              </ResponsiveContainer>
             </Box>
           </Paper>
         </Grid>

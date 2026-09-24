@@ -2,6 +2,28 @@ export type SpendingCategory = 'growth' | 'stability' | 'essential' | 'reward';
 export type VariabilityType = 'fixed' | 'variable' | 'seasonal';
 export type SpendingAllocation = SpendingCategory | 'unallocated';
 
+export interface SpendingTimelinePoint {
+  date: string;
+  window_start: string;
+  income: number;
+  expenses: number;
+  net: number;
+  surplus: number;
+  deficit: number;
+  has_income: boolean;
+  expense_amounts: Record<SpendingAllocation, number>;
+  allocation_amounts: Record<SpendingAllocation, number>;
+  percentages: Record<SpendingAllocation, number | null>;
+  transaction_counts: Record<SpendingAllocation, number>;
+}
+
+export interface SpendingTimelineResponse {
+  period: { start: string; end: string; rolling_days: number; history_start: string };
+  points: SpendingTimelinePoint[];
+  targets: Record<SpendingCategory, number>;
+  categories_by_allocation: Record<SpendingAllocation, CategoryWithSpending[]>;
+}
+
 // Allocation type descriptions
 export const ALLOCATION_DESCRIPTIONS: Record<SpendingCategory, string> = {
   essential: 'Fixed costs: rent, utilities, groceries, transport',

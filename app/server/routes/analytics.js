@@ -276,6 +276,7 @@ function createAnalyticsRouter() {
       let status = 500;
       if (error.message.includes('not found')) status = 404;
       else if (error.message.includes('cannot be accepted')) status = 400;
+      else if (error.message.includes('Maximum active quests reached')) status = 409;
       res.status(status).json({
         error: 'Failed to accept quest',
         message: error?.message || 'Internal server error',

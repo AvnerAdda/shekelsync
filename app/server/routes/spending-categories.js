@@ -13,6 +13,20 @@ function handleServiceError(res, error, fallbackMessage) {
 function createSpendingCategoriesRouter() {
   const router = express.Router();
 
+  router.get('/timeline', async (req, res) => {
+    try {
+      res.set('Cache-Control', 'no-store');
+      res.json(await spendingCategoriesService.getSpendingCategoryTimeline(req.query || {}));
+    } catch (error) { handleServiceError(res, error, 'Failed to load spending timeline'); }
+  });
+
+  router.get('/timeline/transactions', async (req, res) => {
+    try {
+      res.set('Cache-Control', 'no-store');
+      res.json(await spendingCategoriesService.getSpendingTimelineTransactions(req.query || {}));
+    } catch (error) { handleServiceError(res, error, 'Failed to load timeline transactions'); }
+  });
+
   /**
    * POST /api/spending-categories/initialize
    * Initialize spending category mappings for all categories

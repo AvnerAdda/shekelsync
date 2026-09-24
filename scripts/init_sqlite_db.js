@@ -281,6 +281,34 @@ Options:
 }
 
 const TABLE_DEFINITIONS = [
+  `CREATE TABLE IF NOT EXISTS savings_goals (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          name TEXT NOT NULL CHECK (length(trim(name)) BETWEEN 1 AND 120),
+          target_amount REAL NOT NULL CHECK (target_amount > 0 AND target_amount <= 1000000000),
+          saved_amount REAL NOT NULL DEFAULT 0 CHECK (saved_amount >= 0 AND saved_amount <= 1000000000),
+          monthly_contribution REAL NOT NULL DEFAULT 0 CHECK (monthly_contribution >= 0 AND monthly_contribution <= 1000000000),
+          target_date TEXT,
+          reserve_location TEXT NOT NULL DEFAULT 'included_cash' CHECK (reserve_location IN ('included_cash', 'external')),
+          created_at TEXT NOT NULL DEFAULT (datetime('now')),
+          updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+        );
+        CREATE TABLE IF NOT EXISTS cash_scenarios (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          name TEXT NOT NULL CHECK (length(trim(name)) BETWEEN 1 AND 120),
+          changes_json TEXT NOT NULL,
+          created_at TEXT NOT NULL DEFAULT (datetime('now')),
+          updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+        );
+        CREATE TABLE IF NOT EXISTS planning_settings (
+          id INTEGER PRIMARY KEY CHECK (id = 1),
+          cash_buffer REAL NOT NULL DEFAULT 0 CHECK (cash_buffer >= 0 AND cash_buffer <= 1000000000),
+          next_income_date TEXT,
+          card_commitments_amount REAL CHECK (card_commitments_amount >= 0 AND card_commitments_amount <= 1000000000),
+          card_commitments_confirmed_at TEXT,
+          card_balance_signature TEXT,
+          updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+        );
+        INSERT OR IGNORE INTO planning_settings (id) VALUES (1);`,
   `CREATE TABLE IF NOT EXISTS institution_nodes (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       parent_id INTEGER,
@@ -1252,6 +1280,7 @@ const TABLE_DEFINITIONS = [
       generated_date TEXT NOT NULL,
       target_date TEXT NOT NULL,
       truth_revision INTEGER NOT NULL DEFAULT 0,
+      model_id TEXT NOT NULL DEFAULT 'pattern-v1',
       horizon_days INTEGER NOT NULL,
       expected_income REAL NOT NULL DEFAULT 0,
       expected_expenses REAL NOT NULL DEFAULT 0,
@@ -1261,7 +1290,7 @@ const TABLE_DEFINITIONS = [
       p90_cash_flow REAL,
       created_at TEXT NOT NULL DEFAULT (datetime('now')),
       updated_at TEXT NOT NULL DEFAULT (datetime('now')),
-      UNIQUE(generated_date, target_date, truth_revision)
+      UNIQUE(generated_date, target_date, truth_revision, model_id)
     );`,
   `CREATE TABLE IF NOT EXISTS financial_patterns (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -1545,7 +1574,8 @@ const INDEX_STATEMENTS = [
   'CREATE INDEX IF NOT EXISTS idx_subscription_alerts_severity ON subscription_alerts(severity);',
   'CREATE INDEX IF NOT EXISTS idx_subscription_alerts_created ON subscription_alerts(created_at DESC);',
   'CREATE UNIQUE INDEX IF NOT EXISTS idx_subscription_alerts_identity ON subscription_alerts(identity_key) WHERE identity_key IS NOT NULL;',
-  'CREATE INDEX IF NOT EXISTS idx_forecast_prediction_snapshots_target ON forecast_prediction_snapshots(target_date, horizon_days);'
+  'CREATE INDEX IF NOT EXISTS idx_forecast_prediction_snapshots_target ON forecast_prediction_snapshots(target_date, horizon_days);',
+  'CREATE INDEX IF NOT EXISTS idx_forecast_prediction_snapshots_model ON forecast_prediction_snapshots(model_id, target_date, horizon_days);'
 ];
 
 // FTS5 Full-Text Search Setup for SQLite
