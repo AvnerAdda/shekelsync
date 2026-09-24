@@ -1072,6 +1072,7 @@
       "history": "Daily Income vs Expenses",
       "calendar": "Calendar",
       "netPosition": "Net Position",
+      "allocation": "Rolling Allocation",
       "scenarios": "End of Month Scenarios"
     },
     "calendar": {
@@ -1988,6 +1989,9 @@
         "latest": "Latest",
         "chartInteraction": "Hover for details. Click to select a day.",
         "chartTitle": "Rolling allocation time series",
+        "rolling30": "30-day rolling",
+        "splitBySpendingType": "Split by spending type",
+        "empty": "No allocation data for this period.",
         "chartHelp": "Time runs left to right; the colored areas stack as percentages of income. Dashed horizontal lines mark your cumulative targets; the solid line marks 100%.",
         "chartLabel": "Spending allocation time series: time on the X-axis, percent on the Y-axis",
         "boundary": "boundary {{value}}%",

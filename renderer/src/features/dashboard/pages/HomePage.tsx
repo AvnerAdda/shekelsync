@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
-import { Box, Typography, CircularProgress, Alert, Button } from '@mui/material';
+import { Box, Typography, CircularProgress, LinearProgress, Alert, Button } from '@mui/material';
 import AccountBalanceIcon from '@mui/icons-material/AccountBalance';
 import InfoIcon from '@mui/icons-material/InfoOutlined';
 import { format, subMonths, startOfMonth, endOfMonth } from 'date-fns';
@@ -547,7 +547,9 @@ const DashboardHomeContent: React.FC = () => {
     if (!isLoading) signalStartupReady();
   }, [isLoading]);
 
-  if (isLoading) {
+  // Keep chart views mounted during a period refresh so the selected tab and
+  // its display options survive changing the dashboard dates.
+  if (isLoading && !effectiveData?.summary) {
     return (
       <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '80vh' }}>
         <CircularProgress />
@@ -630,7 +632,8 @@ const DashboardHomeContent: React.FC = () => {
   };
 
   return (
-    <Box data-dashboard-ready="true">
+    <Box data-dashboard-ready={isLoading ? undefined : 'true'} aria-busy={isLoading}>
+      {isLoading && <LinearProgress sx={{ mb: 2 }} />}
       <DashboardWelcome />
       {!primaryHasHistory && hasTransactions && (
         <Alert

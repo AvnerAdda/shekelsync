@@ -1,6 +1,6 @@
 import React from 'react';
 import { alpha, createTheme, ThemeProvider } from '@mui/material/styles';
-import { fireEvent, render, screen, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import TransactionHistorySection from '../TransactionHistorySection';
 import { getLogScaleData } from '../transaction-history-axis';
@@ -75,6 +75,7 @@ vi.mock('recharts', async () => {
 });
 
 vi.mock('../IncomeExpenseCalendar', () => ({ default: () => null }));
+vi.mock('../RollingAllocationPanel', () => ({ default: () => <div>Rolling allocation panel</div> }));
 vi.mock('@renderer/shared/modals/TransactionDetailModal', () => ({ default: () => null }));
 vi.mock('@renderer/features/financial-truth/FinancialCorrectionDialog', () => ({ default: () => null }));
 
@@ -155,6 +156,36 @@ describe('TransactionHistorySection income, expense, and investment chart', () =
 
   afterEach(() => {
     vi.useRealTimers();
+  });
+
+  it('opens rolling allocation as the fourth view', () => {
+    renderHistory();
+    expect(screen.queryByText('Rolling allocation panel')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'tabs.allocation' }));
+    expect(screen.getByText('Rolling allocation panel')).toBeInTheDocument();
+    expect(screen.queryByTestId('composed-chart')).not.toBeInTheDocument();
+  });
+
+  it('includes signed net investments in the average badge and tooltip, excluding forecasts', async () => {
+    renderHistory({
+      data: { history: [
+        { date: '2026-09-01', expenses: 30, income: 90, investments: 60 },
+        { date: '2026-09-02', expenses: 0, income: 0, investments: -120 },
+        { date: '2026-09-03', expenses: 0, income: 0 },
+      ] },
+      forecastData,
+    });
+    const summary = screen.getByText('patterns.avgByPeriod').parentElement!;
+    expect(within(summary).getByLabelText('legend.investments')).toHaveTextContent('◇ -₪20');
+    fireEvent.mouseOver(summary);
+    await act(async () => { vi.advanceTimersByTime(250); });
+    const tooltip = screen.getByRole('tooltip');
+    const last7 = within(tooltip).getByText('avgTooltip.last7').parentElement!;
+    expect(within(last7).getByLabelText('legend.investments')).toHaveTextContent('◇ -₪20');
+    const weekly = within(tooltip).getByText('avgTooltip.thisWeek').parentElement!;
+    expect(within(weekly).getByLabelText('legend.investments')).toHaveTextContent('◇ -₪60');
+    const median = within(tooltip).getByText('avgTooltip.median30').parentElement!;
+    expect(within(median).getByLabelText('legend.investments')).toHaveTextContent('◇ ₪0');
   });
 
   it('shows dated transactions for an aggregated period even when its anchor also has a forecast', () => {

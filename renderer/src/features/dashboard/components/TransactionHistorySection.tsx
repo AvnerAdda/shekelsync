@@ -27,9 +27,11 @@ import TimelineIcon from '@mui/icons-material/Timeline';
 import NotesIcon from '@mui/icons-material/Notes';
 import LocalOfferIcon from '@mui/icons-material/LocalOffer';
 import TuneIcon from '@mui/icons-material/Tune';
+import StackedLineChartIcon from '@mui/icons-material/StackedLineChart';
 import InstitutionBadge from '@renderer/shared/components/InstitutionBadge';
 import CategoryIcon from '@renderer/features/breakdown/components/CategoryIcon';
 import IncomeExpenseCalendar from './IncomeExpenseCalendar';
+import RollingAllocationPanel from './RollingAllocationPanel';
 import ForecastDayDetails from './ForecastDayDetails';
 import { useDashboardFilters } from '../DashboardFiltersContext';
 import { useTranslation } from 'react-i18next';
@@ -126,6 +128,7 @@ const TransactionHistorySection: React.FC<TransactionHistorySectionProps> = ({
   const TAB_HISTORY = 0;
   const TAB_CALENDAR = 1;
   const TAB_NET_POSITION = 2;
+  const TAB_ALLOCATION = 3;
 
   // Tab state
   const [activeTab, setActiveTab] = useState(TAB_HISTORY);
@@ -243,10 +246,11 @@ const TransactionHistorySection: React.FC<TransactionHistorySectionProps> = ({
   const avgDailyMetrics = React.useMemo(() => {
     const fullHistory: any[] = chartHistory;
     if (fullHistory.length === 0) {
-      const zero = { expenses: 0, income: 0 };
+      const zero = { expenses: 0, income: 0, investments: 0 };
       return {
         periodAvgExpenses: 0,
         periodAvgIncome: 0,
+        periodAvgInvestments: 0,
         daily: { last7: zero, last30: zero, last90: zero },
         weekly: { lastWeek: zero, lastMonth: zero, last90: zero },
         median30: zero,
@@ -263,33 +267,37 @@ const TransactionHistorySection: React.FC<TransactionHistorySectionProps> = ({
     const cutoff90 = format(subDays(today, 90), 'yyyy-MM-dd');
 
     // Accumulators – single pass over fullHistory
-    let allExp = 0, allInc = 0;
-    let sum7Exp = 0, sum7Inc = 0, cnt7 = 0;
-    let sum30Exp = 0, sum30Inc = 0, cnt30 = 0;
-    let sum90Exp = 0, sum90Inc = 0, cnt90 = 0;
+    let allExp = 0, allInc = 0, allInv = 0;
+    let sum7Exp = 0, sum7Inc = 0, sum7Inv = 0, cnt7 = 0;
+    let sum30Exp = 0, sum30Inc = 0, sum30Inv = 0, cnt30 = 0;
+    let sum90Exp = 0, sum90Inc = 0, sum90Inv = 0, cnt90 = 0;
     let peakExpenseDay: any = null;
     let peakIncomeDay: any = null;
     const expenses30: number[] = [];
     const income30: number[] = [];
+    const investments30: number[] = [];
 
     for (const d of fullHistory) {
       const exp = d.expenses || 0;
       const inc = d.income || 0;
+      const inv = d.investments || 0;
       allExp += exp;
       allInc += inc;
+      allInv += inv;
 
       if (d.date > todayStr) continue;
 
       if (d.date >= cutoff90) {
-        sum90Exp += exp; sum90Inc += inc; cnt90++;
+        sum90Exp += exp; sum90Inc += inc; sum90Inv += inv; cnt90++;
         if (d.date >= cutoff30) {
-          sum30Exp += exp; sum30Inc += inc; cnt30++;
+          sum30Exp += exp; sum30Inc += inc; sum30Inv += inv; cnt30++;
           expenses30.push(exp);
           income30.push(inc);
+          investments30.push(inv);
           if (!peakExpenseDay || exp > (peakExpenseDay.expenses || 0)) peakExpenseDay = d;
           if (!peakIncomeDay || inc > (peakIncomeDay.income || 0)) peakIncomeDay = d;
           if (d.date >= cutoff7) {
-            sum7Exp += exp; sum7Inc += inc; cnt7++;
+            sum7Exp += exp; sum7Inc += inc; sum7Inv += inv; cnt7++;
           }
         }
       }
@@ -311,22 +319,33 @@ const TransactionHistorySection: React.FC<TransactionHistorySectionProps> = ({
     return {
       periodAvgExpenses,
       periodAvgIncome,
+      periodAvgInvestments: avg(allInv, chartHistory.length),
       daily: {
-        last7: { expenses: avg(sum7Exp, cnt7), income: avg(sum7Inc, cnt7) },
-        last30: { expenses: avg(sum30Exp, cnt30), income: avg(sum30Inc, cnt30) },
-        last90: { expenses: avg(sum90Exp, cnt90), income: avg(sum90Inc, cnt90) },
+        last7: { expenses: avg(sum7Exp, cnt7), income: avg(sum7Inc, cnt7), investments: avg(sum7Inv, cnt7) },
+        last30: { expenses: avg(sum30Exp, cnt30), income: avg(sum30Inc, cnt30), investments: avg(sum30Inv, cnt30) },
+        last90: { expenses: avg(sum90Exp, cnt90), income: avg(sum90Inc, cnt90), investments: avg(sum90Inv, cnt90) },
       },
       weekly: {
-        lastWeek: { expenses: sum7Exp, income: sum7Inc },
-        lastMonth: { expenses: sum30Exp / Math.max(30 / 7, 1), income: sum30Inc / Math.max(30 / 7, 1) },
-        last90: { expenses: sum90Exp / Math.max(90 / 7, 1), income: sum90Inc / Math.max(90 / 7, 1) },
+        lastWeek: { expenses: sum7Exp, income: sum7Inc, investments: sum7Inv },
+        lastMonth: { expenses: sum30Exp / Math.max(30 / 7, 1), income: sum30Inc / Math.max(30 / 7, 1), investments: sum30Inv / Math.max(30 / 7, 1) },
+        last90: { expenses: sum90Exp / Math.max(90 / 7, 1), income: sum90Inc / Math.max(90 / 7, 1), investments: sum90Inv / Math.max(90 / 7, 1) },
       },
-      median30: { expenses: median(expenses30), income: median(income30) },
+      median30: { expenses: median(expenses30), income: median(income30), investments: median(investments30) },
       peakExpenseDay,
       peakIncomeDay,
-      allTime: { expenses: avg(allExp, fullHistory.length), income: avg(allInc, fullHistory.length) },
+      allTime: { expenses: avg(allExp, fullHistory.length), income: avg(allInc, fullHistory.length), investments: avg(allInv, fullHistory.length) },
     };
   }, [chartHistory, chartTotalExpenses, chartTotalIncome]);
+
+  const renderAverageValues = (values: { expenses: number; income: number; investments: number }) => <>
+    <Box component="span" sx={{ color: 'error.main', whiteSpace: 'nowrap' }}>↓ {formatCurrencyValue(values.expenses)}</Box>
+    {' / '}
+    <Box component="span" sx={{ color: 'success.main', whiteSpace: 'nowrap' }}>↑ {formatCurrencyValue(values.income)}</Box>
+    {' / '}
+    <Box component="span" aria-label={t('legend.investments')} sx={{ color: 'info.main', whiteSpace: 'nowrap' }}>
+      ◇ {values.investments < 0 ? '-' : ''}{formatCurrencyValue(Math.abs(values.investments))}
+    </Box>
+  </>;
 
   const handleOpenTransactionDetail = (txn: any) => {
     setSelectedTransaction({
@@ -760,6 +779,23 @@ const TransactionHistorySection: React.FC<TransactionHistorySectionProps> = ({
                 }}
               >
                 <AccountBalanceIcon fontSize="small" />
+              </IconButton>
+            </MuiTooltip>
+            <MuiTooltip title={t('tabs.allocation')}>
+              <IconButton
+                size="small"
+                aria-label={t('tabs.allocation')}
+                aria-pressed={activeTab === TAB_ALLOCATION}
+                onClick={() => setActiveTab(TAB_ALLOCATION)}
+                sx={{
+                  bgcolor: activeTab === TAB_ALLOCATION ? 'primary.main' : 'transparent',
+                  color: activeTab === TAB_ALLOCATION ? 'primary.contrastText' : 'text.secondary',
+                  borderRadius: '8px',
+                  transition: 'all 0.2s',
+                  '&:hover': { bgcolor: activeTab === TAB_ALLOCATION ? 'primary.dark' : 'action.hover' },
+                }}
+              >
+                <StackedLineChartIcon fontSize="small" />
               </IconButton>
             </MuiTooltip>
           </Box>
@@ -1346,7 +1382,7 @@ const TransactionHistorySection: React.FC<TransactionHistorySectionProps> = ({
               slotProps={{
                 tooltip: {
                   sx: {
-                    maxWidth: 340,
+                    maxWidth: 440,
                     p: 0,
                     bgcolor: 'background.paper',
                     color: 'text.primary',
@@ -1376,6 +1412,11 @@ const TransactionHistorySection: React.FC<TransactionHistorySectionProps> = ({
                     }}>
                     {t('avgTooltip.heading')}
                   </Typography>
+                  <Box sx={{ display: 'flex', gap: 1.5, flexWrap: 'wrap', mb: 1 }}>
+                    <Typography variant="caption" color="error.main">↓ {t('legend.expenses')}</Typography>
+                    <Typography variant="caption" color="success.main">↑ {t('legend.income')}</Typography>
+                    <Typography variant="caption" color="info.main">◇ {t('legend.investments')}</Typography>
+                  </Box>
 
                   {/* Daily averages */}
                   <Typography
@@ -1403,9 +1444,7 @@ const TransactionHistorySection: React.FC<TransactionHistorySectionProps> = ({
                           fontWeight: 500,
                           ml: 2
                         }}>
-                        <Box component="span" sx={{ color: 'error.main' }}>↓ {formatCurrencyValue(d.expenses)}</Box>
-                        {' / '}
-                        <Box component="span" sx={{ color: 'success.main' }}>↑ {formatCurrencyValue(d.income)}</Box>
+                        {renderAverageValues(d)}
                       </Typography>
                     </Box>
                   ))}
@@ -1438,9 +1477,7 @@ const TransactionHistorySection: React.FC<TransactionHistorySectionProps> = ({
                           fontWeight: 500,
                           ml: 2
                         }}>
-                        <Box component="span" sx={{ color: 'error.main' }}>↓ {formatCurrencyValue(d.expenses)}</Box>
-                        {' / '}
-                        <Box component="span" sx={{ color: 'success.main' }}>↑ {formatCurrencyValue(d.income)}</Box>
+                        {renderAverageValues(d)}
                       </Typography>
                     </Box>
                   ))}
@@ -1468,9 +1505,7 @@ const TransactionHistorySection: React.FC<TransactionHistorySectionProps> = ({
                         fontWeight: 500,
                         ml: 2
                       }}>
-                      <Box component="span" sx={{ color: 'error.main' }}>↓ {formatCurrencyValue(avgDailyMetrics.median30.expenses)}</Box>
-                      {' / '}
-                      <Box component="span" sx={{ color: 'success.main' }}>↑ {formatCurrencyValue(avgDailyMetrics.median30.income)}</Box>
+                      {renderAverageValues(avgDailyMetrics.median30)}
                     </Typography>
                   </Box>
                   <Box sx={{ display: 'flex', justifyContent: 'space-between', py: 0.3 }}>
@@ -1483,9 +1518,7 @@ const TransactionHistorySection: React.FC<TransactionHistorySectionProps> = ({
                         fontWeight: 500,
                         ml: 2
                       }}>
-                      <Box component="span" sx={{ color: 'error.main' }}>↓ {formatCurrencyValue(avgDailyMetrics.allTime.expenses)}</Box>
-                      {' / '}
-                      <Box component="span" sx={{ color: 'success.main' }}>↑ {formatCurrencyValue(avgDailyMetrics.allTime.income)}</Box>
+                      {renderAverageValues(avgDailyMetrics.allTime)}
                     </Typography>
                   </Box>
                   {avgDailyMetrics.peakExpenseDay && (
@@ -1547,13 +1580,8 @@ const TransactionHistorySection: React.FC<TransactionHistorySectionProps> = ({
                     display: 'inline-block',
                     pb: 0.25
                   }}>
-                  <Box component="span" sx={{ color: 'error.main' }}>
-                    ↓ {formatCurrencyValue(avgDailyMetrics.periodAvgExpenses)}
-                  </Box>
-                  {' / '}
-                  <Box component="span" sx={{ color: 'success.main' }}>
-                    ↑ {formatCurrencyValue(avgDailyMetrics.periodAvgIncome)}
-                  </Box>
+                  {renderAverageValues({ expenses: avgDailyMetrics.periodAvgExpenses,
+                    income: avgDailyMetrics.periodAvgIncome, investments: avgDailyMetrics.periodAvgInvestments })}
                 </Typography>
               </Box>
             </MuiTooltip>
@@ -1640,6 +1668,7 @@ const TransactionHistorySection: React.FC<TransactionHistorySectionProps> = ({
       )}
         </>
       )}
+      {activeTab === TAB_ALLOCATION && <RollingAllocationPanel />}
       {/* Tab 1: Income and expense calendar */}
       {activeTab === TAB_CALENDAR && (
         <IncomeExpenseCalendar

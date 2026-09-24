@@ -255,6 +255,19 @@ describe('HomePage dashboard fallback', () => {
     mockHistoryProps = undefined;
   });
 
+  it('keeps the chart panel mounted while an existing dashboard refreshes', () => {
+    const { rerender } = render(<HomePage />);
+    const panel = screen.getByText('transaction-history');
+    mockPrimaryLoading = true;
+    rerender(<HomePage />);
+    expect(screen.getByText('transaction-history')).toBe(panel);
+    expect(screen.getByRole('progressbar')).toBeInTheDocument();
+    mockPrimaryLoading = false;
+    rerender(<HomePage />);
+    expect(screen.getByText('transaction-history')).toBe(panel);
+    expect(screen.queryByRole('progressbar')).not.toBeInTheDocument();
+  });
+
   it.each([
     ['weekly', '2026-04-27', '2026-05-01', '2026-05-03'],
     ['weekly', '2026-05-04', '2026-05-04', '2026-05-10'],
