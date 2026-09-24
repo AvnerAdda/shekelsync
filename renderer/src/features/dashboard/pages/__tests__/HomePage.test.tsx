@@ -1,5 +1,5 @@
 import React from 'react';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import HomePage from '../HomePage';
 
@@ -17,6 +17,9 @@ const mockRefreshPairingGap = vi.fn();
 const mockRefreshInsights = vi.fn();
 const mockSetHoveredDate = vi.fn();
 const mockFetchTransactionsByDate = vi.fn();
+const mockFetchTransactionsByRange = vi.fn();
+let mockAggregationPeriod = 'daily';
+let mockHistoryProps: any;
 
 const selectedStartDate = new Date(2026, 4, 1);
 const selectedEndDate = new Date(2026, 4, 31);
@@ -81,7 +84,7 @@ vi.mock('@renderer/features/dashboard/DashboardFiltersContext', () => ({
   useDashboardFilters: () => ({
     startDate: selectedStartDate,
     endDate: selectedEndDate,
-    aggregationPeriod: 'daily',
+    aggregationPeriod: mockAggregationPeriod,
     hoveredDate: null,
     setHoveredDate: mockSetHoveredDate,
     periodPreset: 'custom',
@@ -163,6 +166,7 @@ vi.mock('@renderer/features/dashboard/hooks/useTransactionsByDate', () => ({
     transactions: [],
     loading: false,
     fetchByDate: mockFetchTransactionsByDate,
+    fetchByRange: mockFetchTransactionsByRange,
   }),
 }));
 
@@ -184,7 +188,10 @@ vi.mock('@renderer/features/dashboard/components/DashboardSummarySection', () =>
 }));
 
 vi.mock('@renderer/features/dashboard/components/TransactionHistorySection', () => ({
-  default: () => <div>transaction-history</div>,
+  default: (props: any) => {
+    mockHistoryProps = props;
+    return <div>transaction-history</div>;
+  },
 }));
 
 vi.mock('@renderer/features/dashboard/components/BreakdownTabsSection', () => ({
@@ -243,6 +250,38 @@ describe('HomePage dashboard fallback', () => {
     mockRefreshInsights.mockReset();
     mockSetHoveredDate.mockReset();
     mockFetchTransactionsByDate.mockReset();
+    mockFetchTransactionsByRange.mockReset();
+    mockAggregationPeriod = 'daily';
+    mockHistoryProps = undefined;
+  });
+
+  it.each([
+    ['weekly', '2026-04-27', '2026-05-01', '2026-05-03'],
+    ['weekly', '2026-05-04', '2026-05-04', '2026-05-10'],
+    ['monthly', '2026-05-01', '2026-05-01', '2026-05-31'],
+  ])('loads the complete clipped %s bar period', (aggregation, anchor, start, end) => {
+    mockAggregationPeriod = aggregation;
+    render(<HomePage />);
+
+    act(() => mockHistoryProps.handleChartAreaClick({ activeLabel: anchor }));
+
+    expect(mockFetchTransactionsByRange).toHaveBeenCalledWith(start, end);
+    expect(mockFetchTransactionsByDate).not.toHaveBeenCalled();
+    expect(mockSetHoveredDate).toHaveBeenCalledWith(anchor);
+    expect(mockHistoryProps.transactionPeriod).toEqual({ startDate: start, endDate: end });
+
+    // Calendar selections remain single-day, even while the chart is aggregated.
+    act(() => mockHistoryProps.fetchTransactionsByDate('2026-05-09'));
+    expect(mockFetchTransactionsByDate).toHaveBeenCalledWith('2026-05-09');
+    expect(mockHistoryProps.transactionPeriod).toBeNull();
+  });
+
+  it('keeps daily chart clicks on the single-day endpoint', () => {
+    render(<HomePage />);
+    act(() => mockHistoryProps.handleChartAreaClick({ activeLabel: '2026-05-09' }));
+    expect(mockFetchTransactionsByDate).toHaveBeenCalledWith('2026-05-09');
+    expect(mockFetchTransactionsByRange).not.toHaveBeenCalled();
+    expect(mockHistoryProps.transactionPeriod).toBeNull();
   });
 
   it('offers previous-period data without switching automatically, then lets the user toggle it on and off', async () => {

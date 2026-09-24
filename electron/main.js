@@ -1644,7 +1644,8 @@ async function buildMainWindow() {
     if (!mainWindow.isFocused()) {
       mainWindow.focus();
     }
-    if (isDev && !mainWindow.webContents.isDevToolsOpened()) {
+    // Opening DevTools disables transparency, exposing square window corners.
+    if (isDev && !windowAppearance.transparent && !mainWindow.webContents.isDevToolsOpened()) {
       mainWindow.webContents.openDevTools();
     }
   };

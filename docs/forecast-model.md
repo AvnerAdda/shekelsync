@@ -36,6 +36,39 @@ dates. These changes do not establish that the simulation intervals have calibra
 
 ## Selection and evaluation
 
+### Investment schedules
+
+Investment forecasts learn each source separately using category, bank, account, normalized
+transaction name, and transfer direction. Payments from the same source on the same local
+calendar day are combined before learning a schedule. UTC timestamps are converted to local
+payment dates so midnight bank imports do not shift the inferred day into the previous month.
+
+Three regular observations are normally required (four for weekly transfers). The latest
+three payment amounts determine the median amount and the recent dates determine the calendar
+anchor, including month-end and leap years. Contributions and withdrawals remain separate
+signed streams. Irregular lump sums and sparse property transfers are not projected as recurring
+payments, and pikadon-related transactions remain outside the dashboard investment forecast.
+Already-paid occurrences are suppressed, including early payments across a month boundary;
+inferred streams expire after 2.5 missed cycles.
+
+A narrowly identified mortgage payment can establish an initial monthly estimate from its
+first debit. Mortgage fees, insurance, and payoff descriptions do not qualify. This rule uses
+the observed amount and local payment day, not a hard-coded account, amount, or date. Dates
+remain estimates: bank holidays and future payment changes are not inferred from one debit.
+
+Unconfirmed imported subscriptions are reconciled with this transaction evidence. Manual,
+confirmed, corrected, paused, ended, and suppressed patterns remain authoritative. Explicit
+investment schedules are classified as investments rather than income or expenses. Forecast
+totals, transaction details, and simulation inputs use the same signed investment events.
+
+Investment validation includes source separation, outlier resistance, changes in amounts and
+dates, short/irregular histories, new mortgages, local timestamps, saved controls, and signed
+simulation reconciliation. A read-only March–August replay of the local ledger was also used
+to check that one-off property purchases no longer inflate subsequent months; it is an
+exploratory historical check, not evidence of prospective prediction accuracy.
+
+### Earlier income and expense evaluation
+
 Development compared calendar averages, medians, exponentially weighted estimates, payment
 schedules, shorter expense windows, and adaptive expense estimators. Parameters were selected
 on March–June transaction outcomes; July–August was excluded from parameter selection.

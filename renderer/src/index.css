@@ -1,8 +1,8 @@
 @import '@fontsource-variable/inter';
 @import '@app/styles/globals.css';
 
-/* Custom window styling for Electron frameless window - updated */
-html, body {
+/* Keep the document canvas transparent, including after MUI mounts CssBaseline. */
+html, html body {
   --app-window-radius: 12px;
   margin: 0 !important;
   padding: 0 !important;
@@ -13,6 +13,12 @@ html, body {
   min-width: 100vw;
   box-sizing: border-box;
   background: transparent;
+}
+
+/* Clip every layer, including dialogs and menus portaled outside #root. */
+body {
+  border-radius: var(--app-window-radius);
+  clip-path: inset(0 round var(--app-window-radius));
 }
 
 #root {
@@ -75,13 +81,6 @@ html.reduce-visual-effects body.window-maximized #root {
 
 .non-draggable {
   -webkit-app-region: no-drag;
-}
-
-/* Window border radius (platform-specific) */
-@supports (border-radius: 16px) {
-  body {
-    border-radius: 0;
-  }
 }
 
 /* Allow text selection throughout the app by default */

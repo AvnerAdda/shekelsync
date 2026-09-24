@@ -44,6 +44,21 @@ describe('income schedules across payment patterns', () => {
       ...monthly.map(t => ({ ...t, price: 200, vendor: 'second-bank' }))];
     expect(total(build(rows))).toBe(1500);
   });
+  it('keeps each projected income source name and bank paired with its own amount', () => {
+    const rows = [...monthly,
+      ...monthly.map(row => ({ ...row, price: 300, name: 'קצבה', vendor: 'benefits-bank' })),
+      ...monthly.map(row => ({ ...row, price: 200, vendor: 'second-bank' }))];
+    const schedule = build(rows);
+    const forecasts: any[] = dates('2026-04-01', 30).map(date => ({ date, predictions: [], expectedExpenses: 0 }));
+    const simulations = forecasts.map(day => ({ date: day.date, monthKey: '2026-04', entries: [] }));
+    applyIncomeSchedule(forecasts, simulations, schedule, engine);
+    expect(forecasts.flatMap(day => day.predictions)).toEqual(expect.arrayContaining([
+      expect.objectContaining({ transactionName: 'Payroll', vendor: 'bank', expectedAmount: 1000, categoryDefinitionId: 1 }),
+      expect.objectContaining({ transactionName: 'קצבה', vendor: 'benefits-bank', expectedAmount: 300, categoryDefinitionId: 1 }),
+      expect.objectContaining({ transactionName: 'Payroll', vendor: 'second-bank', expectedAmount: 200, categoryDefinitionId: 1 }),
+    ]));
+    expect(forecasts.flatMap(day => day.predictions)).toHaveLength(3);
+  });
   it('does not forecast a salary payment already received early', () => {
     const rows = [...monthly, tx('2026-03-30')];
     expect(total(build(rows))).toBe(0);

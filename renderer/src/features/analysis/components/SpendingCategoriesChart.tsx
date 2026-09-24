@@ -1,553 +1,200 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
-  Box,
-  Card,
-  CardContent,
-  Typography,
-  CircularProgress,
-  Alert,
-  Chip,
-  LinearProgress,
-  Grid,
-  Tooltip,
-  ToggleButton,
-  ToggleButtonGroup,
-  alpha,
-  useTheme,
+  Accordion, AccordionDetails, AccordionSummary, Alert, alpha, Box, Button, Chip, Grid, LinearProgress, MenuItem, Paper, Stack, TextField,
+  ToggleButton, ToggleButtonGroup, Typography,
 } from '@mui/material';
-import type { Theme } from '@mui/material/styles';
-import GrowthIcon from '@mui/icons-material/TrendingUp';
-import StabilityIcon from '@mui/icons-material/Security';
-import EssentialIcon from '@mui/icons-material/Home';
-import RewardIcon from '@mui/icons-material/CardGiftcard';
-import OtherIcon from '@mui/icons-material/MoreHoriz';
-import { useSpendingCategories } from '@renderer/features/budgets/hooks/useSpendingCategories';
-import { useFinancePrivacy } from '@app/contexts/FinancePrivacyContext';
-import type {
-  SpendingAllocation,
-  SpendingCategoryBreakdownItem,
-} from '@renderer/types/spending-categories';
+import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
+import ArrowOutwardIcon from '@mui/icons-material/ArrowOutward';
 import { useTranslation } from 'react-i18next';
-import { subDays, format } from 'date-fns';
+import { apiClient } from '@renderer/lib/api-client';
+import { useFinancePrivacy } from '@app/contexts/FinancePrivacyContext';
+import { FINANCIAL_TRUTH_CHANGED_EVENT } from '@renderer/features/financial-truth/types';
+import { PLANNING_CHANGED_EVENT } from '@renderer/features/planning/types';
+import type { SpendingAllocation, SpendingTimelineResponse } from '@renderer/types/spending-categories';
+import SpendingTimeline, { ALLOCATION_COLORS, ALLOCATION_ORDER } from './SpendingTimeline';
+import SpendingCategoryTargetsMinimal from './SpendingCategoryTargetsMinimal';
 import SpendingCategoryTransactionsModal from './SpendingCategoryTransactionsModal';
+import { normalizeTargets } from './spendingCategoryTargetsHelpers';
 
-interface SpendingCategoriesChartProps {
-  months?: number;
-}
-
-type TimeRangeOption = 'last30' | 'last60' | 'last90';
-type ViewMode = 'current' | 'incomeIndexed' | 'salaryIndexed';
-
-const SPENDING_CATEGORY_COLORS: Record<SpendingAllocation | 'other', string> = {
-  essential: '#2196F3', // Blue
-  growth: '#4CAF50',    // Green
-  stability: '#FF9800', // Orange
-  reward: '#E91E63',    // Pink
-  unallocated: '#9E9E9E', // Grey
-  other: '#9E9E9E',     // Legacy grey
-};
-
-const SPENDING_CATEGORY_ICONS: Record<SpendingAllocation | 'other', React.ReactNode> = {
-  essential: <EssentialIcon />,
-  growth: <GrowthIcon />,
-  stability: <StabilityIcon />,
-  reward: <RewardIcon />,
-  unallocated: <OtherIcon />,
-  other: <OtherIcon />,
-};
-
-const SpendingCategoriesChart: React.FC<SpendingCategoriesChartProps> = ({ months = 3 }) => {
-  const theme = useTheme();
-  const { breakdown, loading, error, fetchBreakdown } = useSpendingCategories({ autoLoad: false });
+export default function SpendingCategoriesChart({ months = 3 }: { months?: number }) {
+  const { t, i18n } = useTranslation('translation', { keyPrefix: 'analysisPage.spendingChart' });
   const { formatCurrency } = useFinancePrivacy();
-  const { t } = useTranslation('translation', { keyPrefix: 'analysisPage.spendingChart' });
-
-  const [timeRange, setTimeRange] = useState<TimeRangeOption>('last30');
-  const [viewMode, setViewMode] = useState<ViewMode>('current');
+  const [rollingDays, setRollingDays] = useState(30);
+  const [historyDays, setHistoryDays] = useState(Math.min(366, Math.max(30, months * 30)));
+  const [data, setData] = useState<SpendingTimelineResponse | null>(null);
+  const [selectedDate, setSelectedDate] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<SpendingAllocation | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(false);
+  const requestId = useRef(0);
 
-  const timeRangeConfigs = useMemo<Record<TimeRangeOption, {
-    label: string;
-    fetchParams: {
-      currentMonthOnly?: boolean;
-      months?: number;
-      startDate?: string;
-      endDate?: string;
-    };
-  }>>(() => {
-    const today = new Date();
-    const todayStr = format(today, 'yyyy-MM-dd');
-    return {
-      last30: {
-        label: t('timeRanges.last30Days', { defaultValue: 'Last 30 Days' }),
-        fetchParams: {
-          currentMonthOnly: false,
-          startDate: format(subDays(today, 30), 'yyyy-MM-dd'),
-          endDate: todayStr,
-        },
-      },
-      last60: {
-        label: t('timeRanges.last60Days', { defaultValue: 'Last 60 Days' }),
-        fetchParams: {
-          currentMonthOnly: false,
-          startDate: format(subDays(today, 60), 'yyyy-MM-dd'),
-          endDate: todayStr,
-        },
-      },
-      last90: {
-        label: t('timeRanges.last90Days', { defaultValue: 'Last 90 Days' }),
-        fetchParams: {
-          currentMonthOnly: false,
-          startDate: format(subDays(today, 90), 'yyyy-MM-dd'),
-          endDate: todayStr,
-        },
-      },
-    };
-  }, [t]);
-
-  const timeRangeLabel = timeRangeConfigs[timeRange]?.label ?? '';
+  const refresh = useCallback(async () => {
+    const request = ++requestId.current;
+    setLoading(true);
+    setError(false);
+    try {
+      const response = await apiClient.get<SpendingTimelineResponse>(
+        `/api/spending-categories/timeline?rollingDays=${rollingDays}&historyDays=${historyDays}`, { cacheMode: 'no-store' });
+      if (!response.ok || !Array.isArray(response.data?.points) || !response.data?.targets) throw new Error('Unavailable');
+      if (request !== requestId.current) return;
+      setData(response.data);
+      setSelectedDate((previous) => response.data.points.some((point) => point.date === previous)
+        ? previous : response.data.points.at(-1)?.date || '');
+    } catch {
+      if (request === requestId.current) { setData(null); setError(true); }
+    } finally {
+      if (request === requestId.current) setLoading(false);
+    }
+  }, [rollingDays, historyDays]);
 
   useEffect(() => {
-    const config = timeRangeConfigs[timeRange];
-    if (config) {
-      void fetchBreakdown(config.fetchParams);
-    }
-  }, [timeRange, timeRangeConfigs, fetchBreakdown]);
+    setData(null);
+    void refresh();
+    const onRefresh = () => { void refresh(); };
+    const onFocus = () => { if (document.visibilityState !== 'hidden') void refresh(); };
+    window.addEventListener('dataRefresh', onRefresh);
+    window.addEventListener(PLANNING_CHANGED_EVENT, onRefresh);
+    window.addEventListener(FINANCIAL_TRUTH_CHANGED_EVENT, onRefresh);
+    window.addEventListener('focus', onFocus);
+    return () => {
+      // Invalidate in-flight requests when this range is no longer displayed.
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+      ++requestId.current;
+      window.removeEventListener('dataRefresh', onRefresh);
+      window.removeEventListener(PLANNING_CHANGED_EVENT, onRefresh);
+      window.removeEventListener(FINANCIAL_TRUTH_CHANGED_EVENT, onRefresh);
+      window.removeEventListener('focus', onFocus);
+    };
+  }, [refresh]);
 
-  if (loading) {
-    return (
-      <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', py: 4 }}>
-        <CircularProgress />
-      </Box>
-    );
-  }
-
-  if (error) {
-    return (
-      <Alert severity="error" sx={{ mb: 2 }}>
-        {error}
-      </Alert>
-    );
-  }
-
-  if (!breakdown || breakdown.breakdown.length === 0) {
-    return (
-      <Alert severity="info">
-        <Typography variant="body1" sx={{
-          fontWeight: "bold"
-        }}>
-          {t('empty.title')}
-        </Typography>
-        <Typography variant="body2">
-          {t('empty.description')}
-        </Typography>
-      </Alert>
-    );
-  }
-
-  const totalIncome = breakdown.total_income;
-  const totalSalary = breakdown.total_salary ?? 0;
-  const hasIncome = totalIncome > 0;
-  const hasSalary = totalSalary > 0;
-
-  const processedItems = breakdown.breakdown
-    .filter(item => item.spending_category !== 'unallocated')
-    .map((item) => {
-      const label = t(`categories.${item.spending_category}`, { defaultValue: item.spending_category });
-      const incomePercentage = hasIncome ? (item.total_amount / totalIncome) * 100 : 0;
-      const salaryPercentage = hasSalary ? (item.total_amount / totalSalary) * 100 : 0;
-      const recommendedIncomeAmount = hasIncome ? (totalIncome * item.target_percentage) / 100 : 0;
-      const recommendedSalaryAmount = hasSalary ? (totalSalary * item.target_percentage) / 100 : 0;
-      const percentage = viewMode === 'incomeIndexed'
-        ? incomePercentage
-        : viewMode === 'salaryIndexed'
-          ? salaryPercentage
-          : item.actual_percentage;
-      const displayAmount = viewMode === 'incomeIndexed'
-        ? recommendedIncomeAmount
-        : viewMode === 'salaryIndexed'
-          ? recommendedSalaryAmount
-          : item.total_amount;
-      const variance = percentage - item.target_percentage;
-      const status: SpendingCategoryBreakdownItem['status'] = variance > 5 ? 'over' : variance < -5 ? 'under' : 'on_track';
-
-      return {
-        ...item,
-        label,
-        incomePercentage,
-        salaryPercentage,
-        recommendedIncomeAmount,
-        recommendedSalaryAmount,
-        displayAmount,
-        percentage,
-        variance,
-        status,
-      };
-    });
-
-  const handleTimeRangeChange = (_: React.MouseEvent<HTMLElement>, newRange: TimeRangeOption | null) => {
-    if (newRange) {
-      setTimeRange(newRange);
-    }
-  };
-
-  const handleViewModeChange = (_: React.MouseEvent<HTMLElement>, newValue: ViewMode | null) => {
-    if (newValue) {
-      setViewMode(newValue);
-    }
-  };
-
-  const handleCategoryCardClick = (spendingCategory: SpendingAllocation) => {
-    setSelectedCategory(spendingCategory);
-  };
-
-  const handleCategoryCardKeyDown = (event: React.KeyboardEvent, spendingCategory: SpendingAllocation) => {
-    if (event.key === 'Enter' || event.key === ' ') {
-      event.preventDefault();
-      handleCategoryCardClick(spendingCategory);
-    }
-  };
-
-  const closeCategoryTransactionsModal = () => {
-    setSelectedCategory(null);
-  };
-
-  const selectedCategoryLabel = selectedCategory
-    ? t(`categories.${selectedCategory}`, { defaultValue: selectedCategory })
-    : '';
-
-  const handleDataChanged = () => {
-    const config = timeRangeConfigs[timeRange];
-    if (config) {
-      void fetchBreakdown(config.fetchParams);
-    }
-  };
-
-  const toggleGroupStyles = {
-    bgcolor: (theme: Theme) => alpha(theme.palette.background.paper, 0.4),
-    backdropFilter: 'blur(10px)',
-    borderRadius: 2,
-    p: 0.5,
-    border: '1px solid',
-    borderColor: (theme: Theme) => alpha(theme.palette.divider, 0.1),
-    '& .MuiToggleButton-root': {
-      border: 'none',
-      borderRadius: 1.5,
-      px: 2,
-      py: 0.5,
-      color: 'text.secondary',
-      '&.Mui-selected': {
-        bgcolor: (theme: Theme) => alpha(theme.palette.primary.main, 0.1),
-        color: 'primary.main',
-        fontWeight: 600,
-      },
-      '&:hover': {
-        bgcolor: (theme: Theme) => alpha(theme.palette.action.hover, 0.1),
-      }
-    }
-  };
+  const selected = data?.points.find((point) => point.date === selectedDate) || data?.points.at(-1);
+  const targets = normalizeTargets(data?.targets);
+  const dateLabel = (date: string) => new Intl.DateTimeFormat(i18n.language, { year: 'numeric', month: 'short', day: 'numeric' }).format(new Date(`${date}T12:00:00`));
+  const rangeLabel = selected ? `${dateLabel(selected.window_start)} – ${dateLabel(selected.date)}` : '';
+  const chooseRange = (_: unknown, value: number | null) => { if (value) { setSelectedCategory(null); setRollingDays(value); } };
 
   return (
-    <Box>
-      <Typography
-        variant="h6"
-        gutterBottom
-        sx={{
-          fontWeight: "bold",
-          background: `linear-gradient(135deg, ${theme.palette.primary.main} 0%, ${theme.palette.secondary.main} 100%)`,
-          WebkitBackgroundClip: 'text',
-          WebkitTextFillColor: 'transparent'
-        }}>
-        {t('title')}
-      </Typography>
-      <Typography variant="body2" gutterBottom sx={{
-        color: "text.secondary"
-      }}>
-        {t('subtitle')}
-      </Typography>
-      <Box
-        sx={{
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          flexWrap: 'wrap',
-          gap: 1.5,
-          mb: 2,
-          mt: 2,
-        }}
-      >
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
-          <Typography
-            variant="caption"
-            sx={{
-              color: "text.secondary",
-              fontWeight: 600
-            }}>
-            {t('timeRanges.label')}
-          </Typography>
-          <ToggleButtonGroup
-            size="small"
-            exclusive
-            value={timeRange}
-            onChange={handleTimeRangeChange}
-            sx={toggleGroupStyles}
-          >
-            <ToggleButton value="last30">{t('timeRanges.last30Days', { defaultValue: '30d' })}</ToggleButton>
-            <ToggleButton value="last60">{t('timeRanges.last60Days', { defaultValue: '60d' })}</ToggleButton>
-            <ToggleButton value="last90">{t('timeRanges.last90Days', { defaultValue: '90d' })}</ToggleButton>
-          </ToggleButtonGroup>
+    <Stack spacing={2.5}>
+      <Stack direction={{ xs: 'column', md: 'row' }} sx={{ justifyContent: 'space-between', gap: 2, alignItems: { md: 'center' } }}>
+        <Box sx={{ maxWidth: 490 }}>
+          <Typography variant="h5" component="h2" sx={{ fontWeight: 750, letterSpacing: '-0.025em', mb: 0.5 }}>{t('timeline.title')}</Typography>
+          <Typography variant="body2" color="text.secondary">{t('timeline.subtitle', { days: rollingDays })}</Typography>
         </Box>
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
-          <Typography variant="caption" sx={{
-            color: "text.secondary"
-          }}>
-            {viewMode === 'current'
-              ? t('viewToggle.currentHint')
-              : viewMode === 'incomeIndexed'
-                ? (hasIncome
-                  ? t('viewToggle.incomeHint', {
-                    amount: formatCurrency(totalIncome, { absolute: true, maximumFractionDigits: 0 }),
-                  })
-                  : t('viewToggle.noIncome'))
-                : (hasSalary
-                  ? t('viewToggle.salaryHint', {
-                    amount: formatCurrency(totalSalary, { absolute: true, maximumFractionDigits: 0 }),
-                  })
-                  : t('viewToggle.noSalary'))}
-          </Typography>
-          <ToggleButtonGroup
-            size="small"
-            exclusive
-            value={viewMode}
-            onChange={handleViewModeChange}
-            sx={toggleGroupStyles}
-          >
-            <ToggleButton value="current">{t('viewToggle.current')}</ToggleButton>
-            <ToggleButton value="incomeIndexed">{t('viewToggle.incomeIndexed')}</ToggleButton>
-            <ToggleButton value="salaryIndexed">{t('viewToggle.salaryIndexed')}</ToggleButton>
-          </ToggleButtonGroup>
-        </Box>
-      </Box>
-      <Grid container spacing={3} sx={{ mt: 1 }}>
-        {/* Breakdown Details Full Width */}
-        <Grid size={{ xs: 12 }}>
-          <Card elevation={0} sx={{
-            borderRadius: 4,
-            bgcolor: (theme) => alpha(theme.palette.background.paper, 0.4),
-            backdropFilter: 'blur(20px)',
-            border: '1px solid',
-            borderColor: (theme) => alpha(theme.palette.common.white, 0.1),
-            boxShadow: (theme) => `0 8px 32px 0 ${alpha(theme.palette.common.black, 0.05)}`,
-          }}>
-            <CardContent>
-              <Typography variant="subtitle2" gutterBottom sx={{ fontWeight: 700, opacity: 0.8 }}>
-                {t('targetVsActualRange', { range: timeRangeLabel })}
-              </Typography>
-              <Grid container spacing={2}>
-                {processedItems.map((item) => {
-                  const color = SPENDING_CATEGORY_COLORS[item.spending_category] || '#9E9E9E';
-                  const isOver = item.status === 'over';
-                  const isUnder = item.status === 'under';
-
-                  return (
-                    <Grid key={item.spending_category} size={{ xs: 12, md: 6 }}>
-                      <Box
-                        role="button"
-                        tabIndex={0}
-                        onClick={() => handleCategoryCardClick(item.spending_category)}
-                        onKeyDown={(event) => handleCategoryCardKeyDown(event, item.spending_category)}
-                        sx={{
-                          p: 2,
-                          borderRadius: 3,
-                          bgcolor: (theme) => alpha(theme.palette.background.paper, 0.3),
-                          border: '1px solid',
-                          borderColor: (theme) => alpha(theme.palette.divider, 0.1),
-                          transition: 'all 0.2s',
-                          cursor: 'pointer',
-                          '&:hover': {
-                            bgcolor: (theme) => alpha(theme.palette.background.paper, 0.6),
-                            transform: 'translateY(-2px)',
-                            boxShadow: (theme) => `0 4px 12px 0 ${alpha(color, 0.1)}`
-                          },
-                          '&:focus-visible': {
-                            outline: `2px solid ${alpha(color, 0.6)}`,
-                            outlineOffset: 2,
-                          },
-                        }}
-                      >
-                        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1.5 }}>
-                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
-                            <Box sx={{ 
-                              color: color,
-                              p: 1,
-                              borderRadius: 2,
-                              bgcolor: alpha(color, 0.1),
-                              display: 'flex'
-                            }}>
-                              {SPENDING_CATEGORY_ICONS[item.spending_category] || SPENDING_CATEGORY_ICONS.unallocated}
-                            </Box>
-                            <Box>
-                              <Typography variant="body2" sx={{
-                                fontWeight: "bold"
-                              }}>
-                                {item.label}
-                              </Typography>
-                              <Chip
-                                label={`${item.percentage.toFixed(0)}%${viewMode === 'incomeIndexed' ? ` ${t('labels.ofIncome')}` : viewMode === 'salaryIndexed' ? ` ${t('labels.ofSalary')}` : ''}`}
-                                size="small"
-                                sx={{ 
-                                  height: 20, 
-                                  fontSize: '0.7rem',
-                                  bgcolor: alpha(color, 0.1), 
-                                  color: color, 
-                                  fontWeight: 'bold',
-                                  mt: 0.5
-                                }}
-                              />
-                            </Box>
-                          </Box>
-                          <Box sx={{ textAlign: 'right' }}>
-                            <Typography
-                              variant="body1"
-                              sx={{
-                                fontWeight: "800",
-                                color: theme.palette.text.primary
-                              }}>
-                              {formatCurrency(item.displayAmount, { absolute: true, maximumFractionDigits: 0 })}
-                            </Typography>
-                            <Typography
-                              variant="caption"
-                              sx={{
-                                color: "text.secondary",
-                                display: 'block'
-                              }}>
-                              {viewMode === 'incomeIndexed'
-                                ? t('labels.incomeTarget', { value: item.target_percentage.toFixed(0) })
-                                : viewMode === 'salaryIndexed'
-                                  ? t('labels.salaryTarget', { value: item.target_percentage.toFixed(0) })
-                                  : t('labels.target', { value: item.target_percentage.toFixed(0) })}
-                            </Typography>
-                            {viewMode !== 'current' && (
-                              <Typography
-                                variant="caption"
-                                sx={{
-                                  color: "text.secondary",
-                                  display: 'block'
-                                }}>
-                                {t('labels.currentSpend', {
-                                  amount: formatCurrency(item.total_amount, { absolute: true, maximumFractionDigits: 0 }),
-                                })}
-                              </Typography>
-                            )}
-                          </Box>
-                        </Box>
-
-                        {/* Progress Bar */}
-                        <Box sx={{ position: 'relative', mt: 1 }}>
-                          <LinearProgress
-                            variant="determinate"
-                            value={Math.min(item.percentage, 100)}
-                            sx={{
-                              height: 8,
-                              borderRadius: 4,
-                              bgcolor: alpha(color, 0.1),
-                              '& .MuiLinearProgress-bar': {
-                                bgcolor: color,
-                                borderRadius: 4,
-                              },
-                            }}
-                          />
-                          {/* Target marker */}
-                          <Box
-                            sx={{
-                              position: 'absolute',
-                              left: `${Math.min(item.target_percentage, 100)}%`,
-                              top: -3,
-                              width: 2,
-                              height: 14,
-                              bgcolor: 'text.primary',
-                              borderRadius: 1,
-                              boxShadow: '0 0 4px rgba(0,0,0,0.5)',
-                              zIndex: 1
-                            }}
-                          />
-                        </Box>
-
-                        {/* Status */}
-                        <Box sx={{ display: 'flex', justifyContent: 'space-between', mt: 1 }}>
-                          <Typography variant="caption" sx={{
-                            color: "text.secondary"
-                          }}>
-                            {t('labels.transactions', { count: item.transaction_count })}
-                          </Typography>
-                          {(isOver || isUnder) && (
-                            <Tooltip title={isOver ? t('tooltips.overTarget') : t('tooltips.underTarget')}>
-                              <Typography
-                                variant="caption"
-                                sx={{
-                                  color: isOver ? 'error.main' : 'info.main',
-                                  fontWeight: 'bold',
-                                  bgcolor: isOver ? alpha(theme.palette.error.main, 0.1) : alpha(theme.palette.info.main, 0.1),
-                                  px: 0.8,
-                                  py: 0.2,
-                                  borderRadius: 1
-                                }}
-                              >
-                                {isOver ? '+' : ''}{item.variance.toFixed(0)}%
-                              </Typography>
-                            </Tooltip>
-                          )}
-                        </Box>
-                      </Box>
-                    </Grid>
-                  );
-                })}
-              </Grid>
-            </CardContent>
-          </Card>
-        </Grid>
-      </Grid>
-      {/* Total Spending */}
-      <Card elevation={0} sx={{ 
-        mt: 2,
-        borderRadius: 4,
-        bgcolor: (theme) => alpha(theme.palette.background.paper, 0.4),
-        backdropFilter: 'blur(20px)',
-        border: '1px solid',
-        borderColor: (theme) => alpha(theme.palette.common.white, 0.1),
-      }}>
-        <CardContent>
-          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <Typography variant="subtitle2" sx={{
-              color: "text.secondary"
-            }}>
-              {t('labels.totalSpendingRange', { range: timeRangeLabel })}
-            </Typography>
-            <Typography
-              variant="h5"
-              sx={{
-                fontWeight: "bold",
-                background: `linear-gradient(90deg, ${theme.palette.primary.main}, ${theme.palette.secondary.main})`,
-                WebkitBackgroundClip: 'text',
-                WebkitTextFillColor: 'transparent'
-              }}>
-              {formatCurrency(breakdown.total_spending, { absolute: true, maximumFractionDigits: 0 })}
-            </Typography>
+        <Stack direction="row" sx={{ gap: 1.5, alignItems: 'end', flexWrap: 'wrap', flexShrink: 0 }}>
+          <Box>
+            <Typography variant="caption" component="p" color="text.secondary" sx={{ mb: 0.75 }}>{t('timeline.rollingWindow')}</Typography>
+            <ToggleButtonGroup exclusive value={rollingDays} onChange={chooseRange} size="small" aria-label={t('timeline.rollingWindow')}
+              sx={{ bgcolor: 'background.paper', p: 0.5, borderRadius: 2, border: '1px solid', borderColor: 'divider',
+                '& .MuiToggleButton-root': { border: 0, borderRadius: '8px !important', px: 1.5, py: 0.5 },
+                '& .Mui-selected': { bgcolor: 'primary.main', color: 'primary.contrastText', '&:hover': { bgcolor: 'primary.dark' } } }}>
+              {[30, 60, 90].map((days) => <ToggleButton key={days} value={days}>{t('timeline.days', { days })}</ToggleButton>)}
+            </ToggleButtonGroup>
           </Box>
-        </CardContent>
-      </Card>
-      <SpendingCategoryTransactionsModal
-        open={Boolean(selectedCategory)}
-        onClose={closeCategoryTransactionsModal}
-        spendingCategory={selectedCategory}
-        categoryLabel={selectedCategoryLabel}
-        timeRangeLabel={timeRangeLabel}
-        periodStart={breakdown?.period?.start ?? ''}
-        periodEnd={breakdown?.period?.end ?? ''}
-        onDataChanged={handleDataChanged}
-      />
-    </Box>
+          <TextField select size="small" label={t('timeline.history')} value={historyDays}
+            onChange={(event) => { setSelectedCategory(null); setHistoryDays(Number(event.target.value)); }}
+            sx={{ minWidth: 135, bgcolor: 'background.paper', borderRadius: 2 }}>
+            {[30, 90, 180, 365].map((days) => <MenuItem key={days} value={days}>{t('timeline.days', { days })}</MenuItem>)}
+          </TextField>
+        </Stack>
+      </Stack>
+      {loading && <LinearProgress aria-label={t('timeline.loading')} sx={{ borderRadius: 1 }} />}
+      {error && <Alert severity="error" action={<Button color="inherit" onClick={() => void refresh()}>{t('timeline.retry')}</Button>}>{t('timeline.error')}</Alert>}
+      {data && selected && <>
+        <Paper variant="outlined" sx={{ borderRadius: 3, overflow: 'hidden' }}>
+          <Stack direction={{ xs: 'column', sm: 'row' }} sx={{ px: 2.5, pt: 2, gap: 1, justifyContent: 'space-between', alignItems: { sm: 'center' } }}>
+            <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 600 }}>{t('timeline.selectedWindow')}</Typography>
+            <Typography variant="caption" sx={{ color: 'text.secondary', fontVariantNumeric: 'tabular-nums' }}>{rangeLabel}</Typography>
+          </Stack>
+          <Grid container>
+            {([
+              ['income', selected.income, 'success.main'], ['expenses', -selected.expenses, 'text.primary'],
+              [selected.deficit > 0 ? 'deficit' : 'growthRemainder', selected.deficit > 0 ? -selected.deficit : selected.surplus,
+                selected.deficit > 0 ? 'error.main' : 'primary.main'],
+            ] as const).map(([key, amount, color], index) => <Grid key={key} size={{ xs: 12, sm: 4 }}>
+              <Box data-testid={`spending-summary-${key}`} sx={{ px: 2.5, py: 2,
+                borderInlineStartWidth: { sm: index > 0 ? 1 : 0 }, borderInlineStartStyle: { sm: 'solid' }, borderColor: 'divider' }}>
+                <Typography variant="body2" color="text.secondary">{t(`timeline.${key}`)}</Typography>
+                <Typography variant="h4" sx={{ color, fontWeight: 700, letterSpacing: '-0.035em', fontVariantNumeric: 'tabular-nums', my: 0.5, fontSize: { xs: 28, lg: 32 } }}>
+                  {formatCurrency(amount, { maximumFractionDigits: 2, showSign: true })}
+                </Typography>
+                <Typography variant="caption" color="text.secondary">
+                  {key === 'income' ? (selected.has_income ? t('timeline.incomeBase') : t('timeline.noIncomeRow'))
+                    : key === 'expenses' ? t('timeline.expenseShare', { value: selected.has_income ? (selected.expenses / selected.income * 100).toFixed(1) : '—' })
+                      : selected.deficit > 0 ? t('timeline.deficitHelp') : t('timeline.remainderHelp')}
+                </Typography>
+              </Box>
+            </Grid>)}
+          </Grid>
+        </Paper>
+        {!selected.has_income && <Alert severity="info">{t('timeline.noIncome')}</Alert>}
+        <Paper variant="outlined" sx={{ p: { xs: 1.5, sm: 2.5 }, borderRadius: 3 }}>
+          <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'center', gap: 1, mb: 2 }}>
+            <Box>
+              <Typography variant="subtitle1" component="h3" sx={{ fontWeight: 700 }}>{t('timeline.chartTitle')}</Typography>
+              <Typography variant="caption" color="text.secondary">{t('timeline.chartCaption', { days: rollingDays })}</Typography>
+            </Box>
+            <Chip label={t(selected.has_income ? 'timeline.incomeBase' : 'timeline.noIncomeRow')} size="small" variant="outlined" sx={{ flexShrink: 0, color: 'text.secondary' }} />
+          </Stack>
+          <SpendingTimeline points={data.points} targets={targets} selectedDate={selected.date} onSelect={setSelectedDate} />
+        </Paper>
+        <Box>
+          <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'baseline', gap: 2, mb: 1.5 }}>
+            <Typography variant="subtitle1" component="h3" sx={{ fontWeight: 700 }}>{t('timeline.allocationTitle')}</Typography>
+            <Typography variant="caption" color="text.secondary">{t('timeline.detailsHint')}</Typography>
+          </Stack>
+          <Grid container spacing={1.5}>
+            {ALLOCATION_ORDER.filter((key) => key !== 'unallocated' || selected.transaction_counts.unallocated > 0).map((key) => <Grid key={key} size={{ xs: 12, sm: 6, lg: key === 'unallocated' ? 12 : 3 }}>
+              <Box component="button" type="button" onClick={() => setSelectedCategory(key)}
+                aria-label={t('timeline.openCategory', { category: t(`categories.${key}`) })}
+                sx={{ width: '100%', height: '100%', bgcolor: 'background.paper', textAlign: 'start', cursor: 'pointer',
+                  color: 'text.primary', border: '1px solid', borderColor: 'divider', borderRadius: 2.5, p: 2,
+                  transition: 'border-color 150ms, box-shadow 150ms',
+                  '&:hover': { borderColor: ALLOCATION_COLORS[key], boxShadow: `0 4px 16px ${alpha(ALLOCATION_COLORS[key], 0.1)}` },
+                  '&:focus-visible': { outline: `2px solid ${ALLOCATION_COLORS[key]}` } }}>
+                <Stack direction="row" sx={{ alignItems: 'center', gap: 1 }}>
+                  <Box sx={{ width: 8, height: 8, bgcolor: ALLOCATION_COLORS[key], borderRadius: '50%' }} />
+                  <Typography variant="body2" sx={{ fontWeight: 650, flex: 1 }}>{t(`categories.${key}`)}</Typography>
+                  <ArrowOutwardIcon sx={{ fontSize: 16, color: 'text.disabled' }} />
+                </Stack>
+                <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'baseline', gap: 1, mt: 1.5, mb: 0.5 }}>
+                  <Typography variant="h5" sx={{ fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>{selected.percentages[key] == null ? '—' : `${selected.percentages[key].toFixed(1)}%`}</Typography>
+                  <Typography variant="body2" sx={{ fontVariantNumeric: 'tabular-nums' }}>{formatCurrency(selected.allocation_amounts[key], { maximumFractionDigits: 2 })}</Typography>
+                </Stack>
+                <Typography variant="caption" color="text.secondary" component="p">
+                  {key === 'unallocated' ? t('timeline.unallocatedHelp') : t('labels.target', { value: targets[key] })}
+                </Typography>
+                {key === 'growth' && <Box sx={{ borderTop: '1px solid', borderColor: 'divider', mt: 1.5, pt: 1 }}>
+                  <Stack direction="row" sx={{ justifyContent: 'space-between', gap: 1 }}>
+                    <Typography variant="caption" color="text.secondary">{t('timeline.growthSpent')}</Typography>
+                    <Typography variant="caption">{formatCurrency(selected.expense_amounts.growth, { maximumFractionDigits: 2 })}</Typography>
+                  </Stack>
+                  <Stack direction="row" sx={{ justifyContent: 'space-between', gap: 1 }}>
+                    <Typography variant="caption" color="text.secondary">{t('timeline.growthUnspent')}</Typography>
+                    <Typography variant="caption">{formatCurrency(selected.surplus, { maximumFractionDigits: 2 })}</Typography>
+                  </Stack>
+                </Box>}
+              </Box>
+            </Grid>)}
+          </Grid>
+        </Box>
+        <Accordion disableGutters elevation={0} sx={{ border: '1px solid', borderColor: 'divider', borderRadius: '16px !important', '&:before': { display: 'none' } }}>
+          <AccordionSummary expandIcon={<ExpandMoreIcon />} data-testid="spending-targets-toggle" sx={{ px: 2.5, py: 0.5 }}>
+            <Box><Typography variant="subtitle2">{t('timeline.targetsTitle')}</Typography><Typography variant="caption" color="text.secondary">{t('timeline.targetsHelp')}</Typography></Box>
+          </AccordionSummary>
+          <AccordionDetails sx={{ px: 2.5, pb: 2.5 }}><SpendingCategoryTargetsMinimal data={data} income={selected.income} onDataChanged={refresh} /></AccordionDetails>
+        </Accordion>
+        <Accordion disableGutters elevation={0} sx={{ bgcolor: 'transparent', '&:before': { display: 'none' } }}>
+          <AccordionSummary expandIcon={<ExpandMoreIcon />} sx={{ px: 0 }}><Typography variant="caption" color="text.secondary">{t('timeline.calculationTitle')}</Typography></AccordionSummary>
+          <AccordionDetails sx={{ px: 0 }}>
+            <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>{t('timeline.chartHelp')}</Typography>
+            <Typography variant="body2" color="text.secondary">{t('timeline.accounting')}</Typography>
+          </AccordionDetails>
+        </Accordion>
+        <SpendingCategoryTransactionsModal open={selectedCategory !== null} onClose={() => setSelectedCategory(null)}
+          spendingCategory={selectedCategory} categoryLabel={selectedCategory ? t(`categories.${selectedCategory}`) : ''}
+          timeRangeLabel={rangeLabel} periodStart={selected.window_start} periodEnd={selected.date} incomeBasis
+          onDataChanged={() => { void refresh(); }} />
+      </>}
+    </Stack>
   );
-};
-
-export default SpendingCategoriesChart;
+}

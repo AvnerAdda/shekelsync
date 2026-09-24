@@ -922,6 +922,46 @@ const MIGRATIONS = [
       `);
     },
   },
+  {
+    version: 10,
+    name: 'savings-goals-cash-scenarios-and-spendability-settings',
+    mutatesSchema: true,
+    up: (db) => {
+      // Local planning builds also used version 9. Reconcile the forecast
+      // schema when upgrading those databases, while preserving their goals.
+      MIGRATIONS.find((migration) => migration.version === 9).up(db);
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS savings_goals (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          name TEXT NOT NULL CHECK (length(trim(name)) BETWEEN 1 AND 120),
+          target_amount REAL NOT NULL CHECK (target_amount > 0 AND target_amount <= 1000000000),
+          saved_amount REAL NOT NULL DEFAULT 0 CHECK (saved_amount >= 0 AND saved_amount <= 1000000000),
+          monthly_contribution REAL NOT NULL DEFAULT 0 CHECK (monthly_contribution >= 0 AND monthly_contribution <= 1000000000),
+          target_date TEXT,
+          reserve_location TEXT NOT NULL DEFAULT 'included_cash' CHECK (reserve_location IN ('included_cash', 'external')),
+          created_at TEXT NOT NULL DEFAULT (datetime('now')),
+          updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+        );
+        CREATE TABLE IF NOT EXISTS cash_scenarios (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          name TEXT NOT NULL CHECK (length(trim(name)) BETWEEN 1 AND 120),
+          changes_json TEXT NOT NULL,
+          created_at TEXT NOT NULL DEFAULT (datetime('now')),
+          updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+        );
+        CREATE TABLE IF NOT EXISTS planning_settings (
+          id INTEGER PRIMARY KEY CHECK (id = 1),
+          cash_buffer REAL NOT NULL DEFAULT 0 CHECK (cash_buffer >= 0 AND cash_buffer <= 1000000000),
+          next_income_date TEXT,
+          card_commitments_amount REAL CHECK (card_commitments_amount >= 0 AND card_commitments_amount <= 1000000000),
+          card_commitments_confirmed_at TEXT,
+          card_balance_signature TEXT,
+          updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+        );
+        INSERT OR IGNORE INTO planning_settings (id) VALUES (1);
+      `);
+    },
+  },
 ];
 
 const CURRENT_SCHEMA_VERSION = MIGRATIONS.length

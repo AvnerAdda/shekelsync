@@ -21,6 +21,7 @@ import { DashboardFiltersProvider, useDashboardFilters } from '@renderer/feature
 import DashboardSummarySection from '@renderer/features/dashboard/components/DashboardSummarySection';
 import DashboardWelcome from '@renderer/features/dashboard/components/DashboardWelcome';
 import TransactionHistorySection from '@renderer/features/dashboard/components/TransactionHistorySection';
+import { getLogScaleData } from '@renderer/features/dashboard/components/transaction-history-axis';
 import BreakdownTabsSection from '@renderer/features/dashboard/components/BreakdownTabsSection';
 import MoneyReviewDashboardSection from '@renderer/features/money-review/components/MoneyReviewDashboardSection';
 import { signalStartupReady } from '@renderer/app/startup/startup-readiness';
@@ -29,6 +30,7 @@ import {
   financialTruthChangeAffects,
 } from '@renderer/features/financial-truth/types';
 import { CHART_COLORS } from '@renderer/shared/chart-colors';
+import { getTransactionPeriod, type TransactionPeriod } from '../utils/transaction-period';
 
 type YAxisScale = 'linear' | 'log';
 
@@ -63,6 +65,7 @@ const DashboardHomeContent: React.FC = () => {
   const { startDate, endDate, aggregationPeriod, hoveredDate, setHoveredDate, periodPreset } = useDashboardFilters();
   const [compareToLastMonth, setCompareToLastMonth] = useState<boolean>(false);
   const [selectedBreakdownType, setSelectedBreakdownType] = useState<'overall' | 'expense' | 'income' | 'investment'>('overall');
+  const [transactionPeriod, setTransactionPeriod] = useState<TransactionPeriod | null>(null);
   const {
     budgetUsage,
     hasBankAccounts,
@@ -71,8 +74,13 @@ const DashboardHomeContent: React.FC = () => {
   const {
     transactions: dateTransactions,
     loading: loadingTransactions,
-    fetchByDate: fetchTransactionsByDate,
+    fetchByDate: fetchDateTransactions,
+    fetchByRange: fetchRangeTransactions,
   } = useTransactionsByDate();
+  const fetchTransactionsByDate = useCallback((date: string, throughDate?: string) => {
+    setTransactionPeriod(throughDate ? { startDate: date, endDate: throughDate } : null);
+    return throughDate ? fetchRangeTransactions(date, throughDate) : fetchDateTransactions(date);
+  }, [fetchDateTransactions, fetchRangeTransactions]);
   const {
     data: pairingGapData,
     loading: pairingGapLoading,
@@ -180,12 +188,21 @@ const DashboardHomeContent: React.FC = () => {
       const clickedDateObj = parseLocalDate(clickedDate);
       clickedDateObj.setHours(0, 0, 0, 0);
 
-      const isForecastDate = clickedDateObj > today;
+      const isForecastDate = aggregationPeriod === 'daily' && clickedDateObj > today;
 
       if (isForecastDate) {
+        setTransactionPeriod(null);
         setHoveredDate(clickedDate);
       } else {
-        fetchTransactionsByDate(clickedDate);
+        if (aggregationPeriod === 'daily') {
+          fetchTransactionsByDate(clickedDate);
+        } else {
+          const period = getTransactionPeriod(clickedDate, aggregationPeriod,
+            shouldUseFallback ? fallbackStartDate : startDate,
+            shouldUseFallback ? fallbackEndDate : endDate);
+          if (!period) return;
+          fetchTransactionsByDate(period.startDate, period.endDate);
+        }
         setHoveredDate(clickedDate);
       }
     }
@@ -606,24 +623,10 @@ const DashboardHomeContent: React.FC = () => {
 
   // Format Y-axis for log scale (show original values but with log positioning)
   const formatYAxisLog = (value: number) => {
-    if (value <= 0) return '0';
+    if (value === 0) return '0';
     // Convert back from log to actual value for display
-    const actualValue = Math.pow(10, value);
-    return formatCurrencyValue(actualValue);
-  };
-
-  // Transform data for log scale visualization
-  const getLogScaleData = (history: any[]) => {
-    if (!history) return [];
-    return history.map(item => ({
-      ...item,
-      // Transform to log10, handling zeros (use 0.1 as minimum to avoid -infinity)
-      income: item.income > 0 ? Math.log10(item.income) : 0,
-      expenses: item.expenses > 0 ? Math.log10(item.expenses) : 0,
-      // Keep original values for tooltip
-      originalIncome: item.income,
-      originalExpenses: item.expenses,
-    }));
+    const actualValue = Math.pow(10, Math.abs(value));
+    return `${value < 0 ? '-' : ''}${formatCurrencyValue(actualValue)}`;
   };
 
   return (
@@ -703,6 +706,7 @@ const DashboardHomeContent: React.FC = () => {
         fetchTransactionsByDate={fetchTransactionsByDate}
         dateTransactions={dateTransactions}
         loadingTransactions={loadingTransactions}
+          transactionPeriod={transactionPeriod}
           parseLocalDate={parseLocalDate}
           formatCurrency={formatCurrency}
           forecastData={forecastData}

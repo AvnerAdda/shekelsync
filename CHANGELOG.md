@@ -12,6 +12,31 @@ Release binaries are published at
 
 ## [Unreleased]
 
+### Fixed
+- Recognize shekel currency symbols from card imports and distinguish foreign
+  currency amounts, stale card syncs, and invalid amounts in planning messages.
+- Daily-only forecasts no longer fail when simulations are disabled. Available
+  to spend recognizes the current model's paydays and falls back to a labelled
+  estimate from recent imported spending without requiring manual settings.
+
+### Added
+- A spending-category time series with daily rolling income and expense windows,
+  colored cumulative areas, saved target reference lines, surplus allocated to
+  Growth, and deficits displayed when spending exceeds 100% of income.
+- Savings goals with deadlines, progress, monthly contributions, and cash
+  reserves in Plan. Saved what-if scenarios compare dated one-time or monthly
+  changes against the current plan without changing financial history.
+- An available-to-spend estimate in Plan with a next-income horizon,
+  protected savings, cash buffer, automatic recurring income detection and card
+  commitments from imported billing data. It refreshes after sync, uses a rolling
+  30-day period for irregular income, and supports optional overrides alongside
+  missing-data and freshness checks.
+- Debt repayment comparisons and monthly schedules in Wealth, including extra
+  payments, highest-interest-first and smallest-balance-first strategies, and
+  separate calculations for each currency.
+- Local persistence for goals, scenarios, and planning settings through an
+  additive versioned database migration.
+
 ## [0.2.0] - 2026-09-01
 
 ### Added

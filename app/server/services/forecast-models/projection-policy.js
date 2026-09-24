@@ -10,6 +10,13 @@ function loadProjectionCategories(db) {
   } catch { return []; }
 }
 
+function isProtectedInvestmentPattern(pattern) {
+  const isManual = Boolean(pattern.source)
+    && pattern.source !== 'detected' && pattern.source !== 'legacy_subscription';
+  return isManual || Boolean(pattern.confirmed) || Boolean(pattern.corrections?.length)
+    || Boolean(pattern.state && pattern.state !== 'active');
+}
+
 function prepareProjectionPolicy(transactions, truthSnapshot, engine, categoryDefinitions = []) {
   const categories = new Map(categoryDefinitions.map(c => [Number(c.id), { category: c.name, categoryType: c.category_type,
     categoryNameEn: c.name_en, isCountedAsIncome: c.is_counted_as_income,
@@ -18,6 +25,14 @@ function prepareProjectionPolicy(transactions, truthSnapshot, engine, categoryDe
     .forEach(t => categories.set(Number(t.category_definition_id), descriptorFor(t)));
   const patterns = (truthSnapshot.patterns || []).flatMap(pattern => {
     const category = categories.get(Number(pattern.categoryDefinitionId));
+    if (category?.categoryType === 'investment') {
+      // Imported automatic subscriptions are inference, not a user-approved schedule.
+      // Keep saved decisions authoritative while projecting investment cash separately.
+      if (!isProtectedInvestmentPattern(pattern)) return [];
+      return [{ ...pattern, projectionCategoryType: 'investment',
+        investmentDirection: pattern.direction === 'income' ? -1 : 1,
+        incomeType: null, expenseType: null }];
+    }
     const descriptor = { ...category,
       categoryType: pattern.direction, transactionName: pattern.displayName };
     const incomeType = pattern.direction === 'income'
@@ -38,4 +53,4 @@ function prepareProjectionPolicy(transactions, truthSnapshot, engine, categoryDe
       || (Number(t.price) > 0 && !engine.isNonOperatingIncomePattern(descriptorFor(t)))),
   };
 }
-module.exports = { descriptorFor, loadProjectionCategories, prepareProjectionPolicy };
+module.exports = { descriptorFor, loadProjectionCategories, prepareProjectionPolicy, isProtectedInvestmentPattern };

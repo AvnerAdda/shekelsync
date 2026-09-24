@@ -118,7 +118,8 @@ function buildIncomeSchedule(transactions, dates, now, engine, truthSnapshot = {
         output.daily.set(date, (output.daily.get(date) || 0) + amount * probability);
         allocations.push({ date, probability });
       }
-      if (allocations.length) output.events.push({ key: `${sourceKey}:${occurrenceDate}`, amount, stdDev, allocations });
+      if (allocations.length) output.events.push({ key: `${sourceKey}:${occurrenceDate}`, amount, stdDev, allocations,
+        transactionName: rows.at(-1).name, vendor: rows.at(-1).vendor || null });
     }
   }
   return result;
@@ -147,6 +148,7 @@ function applyIncomeSchedule(dailyForecasts, simulationEntriesByDay, schedule, e
       if (!day || !simulation) continue;
       day.predictions.push({ patternKey: `income_schedule:${event.key}`, category: model.category,
         categoryDefinitionId: model.categoryDefinitionId, categoryType: 'income', incomeType: 'operating',
+        transactionName: event.transactionName || null, vendor: event.vendor || null,
         probability, expectedAmount: event.amount, probabilityWeightedAmount: event.amount * probability,
         amountRange: { low: Math.max(0, event.amount - event.stdDev), high: event.amount + event.stdDev },
         predictionKind: 'recurring_income', isCalibrated: true });

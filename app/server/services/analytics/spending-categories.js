@@ -1026,6 +1026,20 @@ async function updateSpendingCategoryTargets(targets) {
 }
 
 module.exports = {
+  async getSpendingCategoryTimeline(params = {}) {
+    const client = await database.getClient();
+    try {
+      await ensureSpendingCategorySchema(client);
+      return await require('./spending-timeline.js').getTimeline(client, params);
+    } finally { client.release(); }
+  },
+  async getSpendingTimelineTransactions(params = {}) {
+    const client = await database.getClient();
+    try {
+      await ensureSpendingCategorySchema(client);
+      return await require('./spending-timeline.js').getTimelineTransactions(client, params);
+    } finally { client.release(); }
+  },
   initializeSpendingCategories,
   getSpendingCategoryMappings,
   updateSpendingCategoryMapping,
