@@ -102,6 +102,8 @@ const QuestsPanel: React.FC = () => {
     setActionLoading(questId);
     try {
       await acceptQuest(questId);
+    } catch {
+      // useQuests exposes the failure through the error alert.
     } finally {
       setActionLoading(null);
     }
@@ -111,6 +113,8 @@ const QuestsPanel: React.FC = () => {
     setActionLoading(questId);
     try {
       await declineQuest(questId);
+    } catch {
+      // useQuests exposes the failure through the error alert.
     } finally {
       setActionLoading(null);
     }
@@ -120,8 +124,18 @@ const QuestsPanel: React.FC = () => {
     setActionLoading(questId);
     try {
       await verifyQuest(questId);
+    } catch {
+      // useQuests exposes the failure through the error alert.
     } finally {
       setActionLoading(null);
+    }
+  };
+
+  const handleGenerate = async () => {
+    try {
+      await generateQuests(false);
+    } catch {
+      // useQuests exposes the failure through the error alert.
     }
   };
 
@@ -480,7 +494,7 @@ const QuestsPanel: React.FC = () => {
         <Button
           variant="outlined"
           startIcon={generating ? <CircularProgress size={16} /> : <RefreshIcon />}
-          onClick={() => generateQuests(false)}
+          onClick={handleGenerate}
           disabled={generating}
         >
           {generating ? t('actions.generating') : t('actions.generate')}

@@ -558,7 +558,7 @@ describe('quest generation and lifecycle coverage', () => {
     const client = createDbClient(
       withCleanupHandlers([
         { match: /SELECT \* FROM smart_action_items WHERE id = \$1/, result: { rows: [{ id: 12, action_type: 'quest_reduce_spending', user_status: 'active', quest_duration_days: 7, points_reward: 90 }] } },
-      { match: /SELECT COUNT\(\*\) as count[\s\S]*user_status IN \('active', 'accepted'\)/, result: { rows: [{ count: 2 }] } },
+      { match: /SELECT COUNT\(\*\) as count[\s\S]*user_status = 'accepted'/, result: { rows: [{ count: 2 }] } },
         { match: /SELECT name, tbl_name, sql FROM sqlite_master/, result: { rows: [] } },
       ]),
     );
@@ -622,7 +622,7 @@ describe('quest generation and lifecycle coverage', () => {
           }],
         }),
       },
-      { match: /SELECT COUNT\(\*\) as count[\s\S]*user_status IN \('active', 'accepted'\)/, result: { rows: [{ count: 1 }] } },
+      { match: /SELECT COUNT\(\*\) as count[\s\S]*user_status = 'accepted'/, result: { rows: [{ count: 1 }] } },
       { match: /SELECT name, tbl_name, sql FROM sqlite_master[\s\S]*tbl_name = 'smart_action_items'/, result: { rows: [] } },
       { match: /DROP TRIGGER IF EXISTS/i, result: { rows: [] } },
       { match: /PRAGMA foreign_keys = OFF/i, result: { rows: [] } },
@@ -691,7 +691,7 @@ describe('quest generation and lifecycle coverage', () => {
     const limitClient = createDbClient(
       withCleanupHandlers([
         { match: /SELECT \* FROM smart_action_items WHERE id = \$1/, result: { rows: [{ id: 2, action_type: 'quest_reduce_spending', user_status: 'active', quest_duration_days: 7 }] } },
-      { match: /SELECT COUNT\(\*\) as count[\s\S]*user_status IN \('active', 'accepted'\)/, result: { rows: [{ count: 5 }] } },
+      { match: /SELECT COUNT\(\*\) as count[\s\S]*user_status = 'accepted'/, result: { rows: [{ count: 5 }] } },
       ]),
     );
     setMockDatabase(limitClient);

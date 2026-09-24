@@ -97,7 +97,12 @@ export function useQuests(options: UseQuestsOptions = {}) {
       const response = await apiClient.post(`/api/analytics/quests/${questId}/accept`);
 
       if (!response.ok) {
-        throw new Error('Failed to accept quest');
+        const details = response.data as { message?: unknown } | null;
+        throw new Error(
+          typeof details?.message === 'string' && details.message.trim()
+            ? details.message
+            : 'Failed to accept quest',
+        );
       }
 
       const data = response.data as AcceptQuestResponse;
