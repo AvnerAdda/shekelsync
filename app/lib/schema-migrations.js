@@ -836,6 +836,132 @@ const MIGRATIONS = [
       `);
     },
   },
+  {
+    version: 9,
+    name: 'forecast-snapshot-model-id',
+    mutatesSchema: true,
+    up: (db) => {
+      if (!tableExists(db, 'forecast_prediction_snapshots')) {
+        db.exec(`
+          CREATE TABLE IF NOT EXISTS forecast_prediction_snapshots (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            generated_date TEXT NOT NULL,
+            target_date TEXT NOT NULL,
+            truth_revision INTEGER NOT NULL DEFAULT 0,
+            model_id TEXT NOT NULL DEFAULT 'pattern-v1',
+            horizon_days INTEGER NOT NULL,
+            expected_income REAL NOT NULL DEFAULT 0,
+            expected_expenses REAL NOT NULL DEFAULT 0,
+            expected_cash_flow REAL NOT NULL DEFAULT 0,
+            p10_cash_flow REAL,
+            p50_cash_flow REAL,
+            p90_cash_flow REAL,
+            created_at TEXT NOT NULL DEFAULT (datetime('now')),
+            updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+            UNIQUE(generated_date, target_date, truth_revision, model_id)
+          );
+
+          CREATE INDEX IF NOT EXISTS idx_forecast_prediction_snapshots_target
+            ON forecast_prediction_snapshots(target_date, horizon_days);
+
+          CREATE INDEX IF NOT EXISTS idx_forecast_prediction_snapshots_model
+            ON forecast_prediction_snapshots(model_id, target_date, horizon_days);
+        `);
+        return;
+      }
+
+      const columns = new Set(
+        db.prepare("PRAGMA table_info('forecast_prediction_snapshots')").all().map((column) => column.name),
+      );
+      if (columns.has('model_id')) {
+        db.exec(`
+          CREATE INDEX IF NOT EXISTS idx_forecast_prediction_snapshots_model
+            ON forecast_prediction_snapshots(model_id, target_date, horizon_days);
+        `);
+        return;
+      }
+
+      db.exec(`
+        CREATE TABLE forecast_prediction_snapshots_v9 (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          generated_date TEXT NOT NULL,
+          target_date TEXT NOT NULL,
+          truth_revision INTEGER NOT NULL DEFAULT 0,
+          model_id TEXT NOT NULL DEFAULT 'pattern-v1',
+          horizon_days INTEGER NOT NULL,
+          expected_income REAL NOT NULL DEFAULT 0,
+          expected_expenses REAL NOT NULL DEFAULT 0,
+          expected_cash_flow REAL NOT NULL DEFAULT 0,
+          p10_cash_flow REAL,
+          p50_cash_flow REAL,
+          p90_cash_flow REAL,
+          created_at TEXT NOT NULL DEFAULT (datetime('now')),
+          updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+          UNIQUE(generated_date, target_date, truth_revision, model_id)
+        );
+
+        INSERT INTO forecast_prediction_snapshots_v9 (
+          generated_date, target_date, truth_revision, model_id, horizon_days,
+          expected_income, expected_expenses, expected_cash_flow,
+          p10_cash_flow, p50_cash_flow, p90_cash_flow, created_at, updated_at
+        )
+        SELECT
+          generated_date, target_date, truth_revision, 'pattern-v1', horizon_days,
+          expected_income, expected_expenses, expected_cash_flow,
+          p10_cash_flow, p50_cash_flow, p90_cash_flow, created_at, updated_at
+        FROM forecast_prediction_snapshots;
+
+        DROP TABLE forecast_prediction_snapshots;
+        ALTER TABLE forecast_prediction_snapshots_v9 RENAME TO forecast_prediction_snapshots;
+
+        CREATE INDEX IF NOT EXISTS idx_forecast_prediction_snapshots_target
+          ON forecast_prediction_snapshots(target_date, horizon_days);
+
+        CREATE INDEX IF NOT EXISTS idx_forecast_prediction_snapshots_model
+          ON forecast_prediction_snapshots(model_id, target_date, horizon_days);
+      `);
+    },
+  },
+  {
+    version: 10,
+    name: 'savings-goals-cash-scenarios-and-spendability-settings',
+    mutatesSchema: true,
+    up: (db) => {
+      // Local planning builds also used version 9. Reconcile the forecast
+      // schema when upgrading those databases, while preserving their goals.
+      MIGRATIONS.find((migration) => migration.version === 9).up(db);
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS savings_goals (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          name TEXT NOT NULL CHECK (length(trim(name)) BETWEEN 1 AND 120),
+          target_amount REAL NOT NULL CHECK (target_amount > 0 AND target_amount <= 1000000000),
+          saved_amount REAL NOT NULL DEFAULT 0 CHECK (saved_amount >= 0 AND saved_amount <= 1000000000),
+          monthly_contribution REAL NOT NULL DEFAULT 0 CHECK (monthly_contribution >= 0 AND monthly_contribution <= 1000000000),
+          target_date TEXT,
+          reserve_location TEXT NOT NULL DEFAULT 'included_cash' CHECK (reserve_location IN ('included_cash', 'external')),
+          created_at TEXT NOT NULL DEFAULT (datetime('now')),
+          updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+        );
+        CREATE TABLE IF NOT EXISTS cash_scenarios (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          name TEXT NOT NULL CHECK (length(trim(name)) BETWEEN 1 AND 120),
+          changes_json TEXT NOT NULL,
+          created_at TEXT NOT NULL DEFAULT (datetime('now')),
+          updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+        );
+        CREATE TABLE IF NOT EXISTS planning_settings (
+          id INTEGER PRIMARY KEY CHECK (id = 1),
+          cash_buffer REAL NOT NULL DEFAULT 0 CHECK (cash_buffer >= 0 AND cash_buffer <= 1000000000),
+          next_income_date TEXT,
+          card_commitments_amount REAL CHECK (card_commitments_amount >= 0 AND card_commitments_amount <= 1000000000),
+          card_commitments_confirmed_at TEXT,
+          card_balance_signature TEXT,
+          updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+        );
+        INSERT OR IGNORE INTO planning_settings (id) VALUES (1);
+      `);
+    },
+  },
 ];
 
 const CURRENT_SCHEMA_VERSION = MIGRATIONS.length

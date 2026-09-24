@@ -1,19 +1,47 @@
 import i18n from 'i18next';
 import { initReactI18next } from 'react-i18next';
 import he from './locales/he.json';
+import planningHe from '../features/planning/locales/he.json';
+import spendabilityHe from '../features/planning/locales/spendability-he.json';
+import debtPlanningHe from '../features/investments/locales/debt-planning-he.json';
 
 export const SUPPORTED_LOCALES = ['he', 'en', 'fr'] as const;
 export type SupportedLocale = (typeof SUPPORTED_LOCALES)[number];
 
 type TranslationResource = Record<string, unknown>;
 
+function withPlanningResources(
+  base: TranslationResource,
+  planning: TranslationResource,
+  spendability: TranslationResource,
+  debtPlanning: TranslationResource,
+): TranslationResource {
+  return { ...base, planning: { ...planning, spendability }, debtPlanning };
+}
+
+const hebrewResource = withPlanningResources(he, planningHe, spendabilityHe, debtPlanningHe);
+
 const localeLoaders: Record<SupportedLocale, () => Promise<TranslationResource>> = {
-  he: async () => he,
-  en: async () => (await import('./locales/en.json')).default,
-  fr: async () => (await import('./locales/fr.json')).default,
+  he: async () => hebrewResource,
+  en: async () => {
+    const [base, planning, spendability, debt] = await Promise.all([
+      import('./locales/en.json'), import('../features/planning/locales/en.json'),
+      import('../features/planning/locales/spendability-en.json'),
+      import('../features/investments/locales/debt-planning-en.json'),
+    ]);
+    return withPlanningResources(base.default, planning.default, spendability.default, debt.default);
+  },
+  fr: async () => {
+    const [base, planning, spendability, debt] = await Promise.all([
+      import('./locales/fr.json'), import('../features/planning/locales/fr.json'),
+      import('../features/planning/locales/spendability-fr.json'),
+      import('../features/investments/locales/debt-planning-fr.json'),
+    ]);
+    return withPlanningResources(base.default, planning.default, spendability.default, debt.default);
+  },
 };
 
-const loadedResources = new Map<SupportedLocale, TranslationResource>([['he', he]]);
+const loadedResources = new Map<SupportedLocale, TranslationResource>([['he', hebrewResource]]);
 const loadingResources = new Map<SupportedLocale, Promise<TranslationResource>>();
 let initializationPromise: Promise<unknown> | null = null;
 let languageRequestSequence = 0;
@@ -25,7 +53,7 @@ function ensureI18nInitialized(): void {
   initializationPromise = i18n
     .use(initReactI18next)
     .init({
-      resources: { he: { translation: he } },
+      resources: { he: { translation: hebrewResource } },
       lng: 'he',
       fallbackLng: 'he',
       supportedLngs: SUPPORTED_LOCALES,

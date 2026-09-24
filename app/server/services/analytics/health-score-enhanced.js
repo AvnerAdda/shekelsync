@@ -50,10 +50,11 @@ function toIso(date) {
   return date;
 }
 
-async function fetchMonthlyCashFlow(runQuery, start, end) {
+async function fetchMonthlyCashFlow(runQuery, start, end, groupByDay = false) {
   const result = await runQuery(
     `
     SELECT
+      ${groupByDay ? 't.date AS date,' : ''}
       strftime('%Y-%m', t.date) AS month,
       SUM(CASE
         WHEN (
@@ -80,13 +81,14 @@ async function fetchMonthlyCashFlow(runQuery, start, end) {
       AND t.vendor = tpe.transaction_vendor
     WHERE t.date >= $1 AND t.date <= $2
       AND tpe.transaction_identifier IS NULL
-    GROUP BY strftime('%Y-%m', t.date)
-    ORDER BY month ASC
+    GROUP BY ${groupByDay ? 't.date,' : ''} strftime('%Y-%m', t.date)
+    ORDER BY ${groupByDay ? 't.date,' : ''} month ASC
     `,
     [start, end, BANK_CATEGORY_NAME],
   );
 
   return result.rows.map((row) => ({
+    ...(groupByDay ? { dateIso: row.date } : {}),
     month: row.month,
     income: Number.parseFloat(row.income || 0),
     expense: Number.parseFloat(row.expense || 0),
@@ -120,6 +122,7 @@ async function fetchExpenseTransactions(runQuery, start, end) {
   );
 
   return result.rows.map((row) => ({
+    dateIso: row.date,
     date: new Date(row.date),
     amount: Number.parseFloat(row.amount || 0),
     category: row.category_name || 'Uncategorized',
@@ -368,8 +371,73 @@ async function computeEnhancedHealthScore({ months, startDate, endDate, currentB
   });
 }
 
+function sliceDateRange(rows, startIso, endIso) {
+  // Keep the database's raw date strings: date-only bounds intentionally have
+  // the same inclusive TEXT comparisons as the single-window SQL queries.
+  const boundary = (dateIso, inclusive) => {
+    let low = 0;
+    let high = rows.length;
+    while (low < high) {
+      const mid = Math.floor((low + high) / 2);
+      if (rows[mid].dateIso < dateIso || (inclusive && rows[mid].dateIso === dateIso)) {
+        low = mid + 1;
+      } else {
+        high = mid;
+      }
+    }
+    return low;
+  };
+
+  return rows.slice(boundary(startIso, false), boundary(endIso, true));
+}
+
+async function prepareEnhancedHealthScoreHistory({ startDate, endDate, client }) {
+  const runner = client.query.bind(client);
+  const startIso = toIso(startDate);
+  const endIso = toIso(endDate);
+  const [dailyCashFlow, expenses] = await Promise.all([
+    fetchMonthlyCashFlow(runner, startIso, endIso, true),
+    fetchExpenseTransactions(runner, startIso, endIso),
+  ]);
+
+  // This snapshot belongs to one history request; no cross-request cache can
+  // become stale after transactions or categorization change.
+  return ({ months, startDate: windowStart, endDate: windowEnd, currentBalance }) => {
+    const windowStartIso = toIso(windowStart);
+    const windowEndIso = toIso(windowEnd);
+    const monthlyTotals = new Map();
+    for (const row of sliceDateRange(dailyCashFlow, windowStartIso, windowEndIso)) {
+      const month = monthlyTotals.get(row.month) || {
+        month: row.month, income: 0, expense: 0, txnCount: 0,
+      };
+      month.income += row.income;
+      month.expense += row.expense;
+      month.txnCount += row.txnCount;
+      monthlyTotals.set(row.month, month);
+    }
+
+    // SQLite determines the calendar month (including timestamp offsets).
+    // Include zero-flow months because they affect expense volatility.
+    const monthlyCashFlow = [...monthlyTotals.values()].sort((a, b) => {
+      if (a.month === b.month) return 0;
+      if (a.month === null) return -1;
+      if (b.month === null) return 1;
+      return a.month < b.month ? -1 : 1;
+    });
+
+    return computeEnhancedScores({
+      months,
+      monthlyCashFlow,
+      expenses: sliceDateRange(expenses, windowStartIso, windowEndIso),
+      currentBalance,
+      dateRange: { startDate: new Date(windowStartIso), endDate: new Date(windowEndIso) },
+    });
+  };
+}
+
 module.exports = {
   computeEnhancedHealthScore,
+  prepareEnhancedHealthScoreHistory,
   _internal: {
     computeEnhancedScores,
   },

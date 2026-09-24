@@ -21,6 +21,11 @@ function runScenario(scenario) {
 }
 
 describe('schema migrations (PRAGMA user_version)', () => {
+  it('upgrades either branch of v9 without losing goals or forecast history', () => {
+    const result = runScenario('planning-v10-from-either-v9');
+    expect(result.status, result.stderr || result.stdout).toBe(0);
+    expect(result.stdout).toContain('schema-migrations:planning-v10-from-either-v9:ok');
+  });
   it('applies pending migrations in order and stamps user_version', () => {
     const result = runScenario('applies-in-order');
     expect(result.status, result.stderr || result.stdout).toBe(0);
@@ -61,6 +66,12 @@ describe('schema migrations (PRAGMA user_version)', () => {
     const result = runScenario('review-forecast-v8-from-legacy');
     expect(result.status, result.stderr || result.stdout).toBe(0);
     expect(result.stdout).toContain('schema-migrations:review-forecast-v8-from-legacy:ok');
+  });
+
+  it('adds forecast snapshot model_id and preserves legacy rows', () => {
+    const result = runScenario('review-forecast-v9-model-id');
+    expect(result.status, result.stderr || result.stdout).toBe(0);
+    expect(result.stdout).toContain('schema-migrations:review-forecast-v9-model-id:ok');
   });
 
   it('migrates legacy assets once, preserves ledger data, and mirrors later updates', () => {

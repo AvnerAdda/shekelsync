@@ -1,6 +1,6 @@
 const database = require('../database.js');
 const { BANK_CATEGORY_NAME } = require('../../../lib/category-constants.js');
-const { computeEnhancedHealthScore } = require('./health-score-enhanced.js');
+const { prepareEnhancedHealthScoreHistory } = require('./health-score-enhanced.js');
 
 let dateFnsPromise = null;
 
@@ -131,9 +131,14 @@ async function getHealthScoreHistory(params = {}) {
   const client = await database.getClient();
 
   try {
-    const [baseBalance, dailyFlows] = await Promise.all([
+    const [baseBalance, dailyFlows, computeScore] = await Promise.all([
       fetchBalanceBase(client, startIso),
       fetchDailyNetFlows(client, startIso, endIso),
+      prepareEnhancedHealthScoreHistory({
+        startDate: subDays(startDate, windowDays - 1),
+        endDate,
+        client,
+      }),
     ]);
 
     const flowsByDate = new Map(dailyFlows.map((row) => [row.date, row]));
@@ -154,12 +159,11 @@ async function getHealthScoreHistory(params = {}) {
       const windowStart = subDays(pointDate, windowDays - 1);
       const currentBalance = balancesByDate.get(pointIso) ?? baseBalance;
 
-      const score = await computeEnhancedHealthScore({
+      const score = computeScore({
         months: Math.max(1, Math.round(windowDays / 30)),
         startDate: windowStart,
         endDate: pointDate,
         currentBalance,
-        client,
       });
 
       points.push({
@@ -188,4 +192,3 @@ module.exports = {
 };
 
 module.exports.default = module.exports;
-

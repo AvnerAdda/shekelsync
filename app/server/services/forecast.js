@@ -8,6 +8,8 @@ const fs = require('fs');
 const Database = require('better-sqlite3');
 const { Worker } = require('worker_threads');
 const financialTruthService = require('./financial-truth.js');
+const forecastModelRegistry = require('./forecast-models/registry.js');
+const { loadProjectionCategories, prepareProjectionPolicy } = require('./forecast-models/projection-policy.js');
 let databaseCtor = Database;
 
 function parsePositiveInt(value, fallback) {
@@ -87,6 +89,8 @@ function getAllTransactions(db, sinceDate = null) {
       t.date,
       t.name,
       t.price,
+      t.account_number,
+      t.is_pikadon_related,
       t.category_type,
       t.category_definition_id,
       cd.name as category_name,
@@ -280,6 +284,8 @@ function isNonOperatingIncomePattern(pattern) {
 function isOperatingIncomePattern(pattern) {
   if (!pattern || pattern.categoryType !== 'income') return false;
   if (isNonOperatingIncomePattern(pattern)) return false;
+  // Respect custom/localized income categories without requiring an English payroll label.
+  if (pattern.isCountedAsIncome != null && Number(pattern.isCountedAsIncome) === 1) return true;
 
   const texts = getPatternCategoryTexts(pattern);
   return texts.some(text => (
@@ -554,6 +560,12 @@ function analyzeCategoryPatterns(transactions) {
     const uniqueMonths = Object.keys(p.monthlyOccurrences).length;
     p.monthsOfHistory = uniqueMonths;
     p.uniqueTransactionNameCount = Object.keys(p.transactionNames || {}).length;
+    // Category models may aggregate merchants and banks. Only show source identity
+    // when every observation agrees, without changing the model's grouping key.
+    const sourceNames = new Set(p.transactions.map(txn => typeof txn.name === 'string' ? txn.name.trim() || null : null));
+    const sourceVendors = new Set(p.transactions.map(txn => typeof txn.vendor === 'string' ? txn.vendor.trim() || null : null));
+    p.sourceTransactionName = sourceNames.size === 1 ? [...sourceNames][0] : null;
+    p.vendor = sourceVendors.size === 1 ? [...sourceVendors][0] : null;
 
     const hasMinimumMonths = uniqueMonths >= 2;
     const minimumOccurrencesThreshold = p.categoryType === 'expense' ? 2 : 3;
@@ -1090,6 +1102,7 @@ function refreshForecastDayPredictions(day) {
   let expectedNonOperatingIncome = 0;
   let expectedOperatingExpenses = 0;
   let expectedNonOperatingExpenses = 0;
+  let expectedInvestments = 0;
   let hasIncomePrediction = false;
   day.predictions.forEach((prediction) => {
     const amount = Number(prediction.probabilityWeightedAmount) || 0;
@@ -1100,6 +1113,8 @@ function refreshForecastDayPredictions(day) {
     } else if (prediction?.categoryType === 'expense') {
       if (prediction.expenseType === 'non_operating') expectedNonOperatingExpenses += amount;
       else expectedOperatingExpenses += amount;
+    } else if (prediction?.categoryType === 'investment') {
+      expectedInvestments += amount;
     }
   });
   if (hasIncomePrediction) {
@@ -1108,6 +1123,7 @@ function refreshForecastDayPredictions(day) {
   }
   day.expectedOperatingExpenses = expectedOperatingExpenses;
   day.expectedNonOperatingExpenses = expectedNonOperatingExpenses;
+  day.expectedInvestments = expectedInvestments;
   day.expectedCashFlow = (Number(day.expectedIncome) || 0) - (Number(day.expectedExpenses) || 0);
   day.expectedOperatingCashFlow = (Number(day.expectedOperatingIncome) || 0) - (Number(day.expectedOperatingExpenses) || 0);
   day.expectedNonOperatingCashFlow = (Number(day.expectedNonOperatingIncome) || 0) - (Number(day.expectedNonOperatingExpenses) || 0);
@@ -1204,7 +1220,8 @@ function reconcileVariableExpenseForecasts(monthForecasts, monthSimulationEntrie
           patternKey: baseline.patternKey,
           category: baseline.category,
           categoryDefinitionId: baseline.categoryDefinitionId ?? null,
-          transactionName: baseline.category,
+          transactionName: pattern?.sourceTransactionName || pattern?.transactionName || null,
+          vendor: pattern?.vendor || null,
           monthlyKey: `${baseline.patternKey}:monthly-baseline`,
           categoryType: 'expense',
           expenseType,
@@ -1563,6 +1580,25 @@ function simulateScenario(simulationEntriesByDay, chosenMonthlyOccurrenceDateByM
   };
 
   const monthlyOccurrences = {};
+  const scheduledOccurrences = new Map();
+  // One draw per receipt, even when its timing probability spans several days.
+  const occurrenceEntries = new Map();
+  simulationEntriesByDay.forEach(day => day.entries.forEach(entry => {
+    if (!entry.occurrenceKey) return;
+    if (!occurrenceEntries.has(entry.occurrenceKey)) occurrenceEntries.set(entry.occurrenceKey, []);
+    occurrenceEntries.get(entry.occurrenceKey).push({ date: day.date, entry });
+  }));
+  occurrenceEntries.forEach((entries, key) => {
+    const draw = Math.random();
+    let cumulative = 0;
+    for (const { date, entry } of entries) {
+      cumulative += entry.probability;
+      if (draw < cumulative) {
+        scheduledOccurrences.set(key, { date, amount: sampleAmount(entry.avgAmount, entry.stdDev) });
+        break;
+      }
+    }
+  });
 
   simulationEntriesByDay.forEach(dayInfo => {
     const monthKey = dayInfo.monthKey;
@@ -1579,6 +1615,14 @@ function simulateScenario(simulationEntriesByDay, chosenMonthlyOccurrenceDateByM
     let dayInvestments = 0;
 
     dayInfo.entries.forEach(entry => {
+      if (entry.occurrenceKey) {
+        const occurrence = scheduledOccurrences.get(entry.occurrenceKey);
+        if (occurrence?.date === dayInfo.date) {
+          dayIncome += occurrence.amount;
+          dayOperatingIncome += occurrence.amount;
+        }
+        return;
+      }
       const effectiveProb = entry.probability;
       if (entry.patternType === 'monthly') {
         const monthlyKey = entry.monthlyKey;
@@ -1602,7 +1646,7 @@ function simulateScenario(simulationEntriesByDay, chosenMonthlyOccurrenceDateByM
             if (entry.expenseType === 'non_operating') dayNonOperatingExpenses += amount;
             else dayOperatingExpenses += amount;
           }
-          else if (entry.categoryType === 'investment') dayInvestments += amount;
+          else if (entry.categoryType === 'investment') dayInvestments += amount * (entry.investmentDirection ?? 1);
         }
       } else {
         if (willOccur(effectiveProb)) {
@@ -1616,7 +1660,7 @@ function simulateScenario(simulationEntriesByDay, chosenMonthlyOccurrenceDateByM
             if (entry.expenseType === 'non_operating') dayNonOperatingExpenses += amount;
             else dayOperatingExpenses += amount;
           }
-          else if (entry.categoryType === 'investment') dayInvestments += amount;
+          else if (entry.categoryType === 'investment') dayInvestments += amount * (entry.investmentDirection ?? 1);
         }
       }
     });
@@ -1695,7 +1739,7 @@ function forecastDay(date, patterns, adjustments, patternEntries, simulationEntr
       const expectedAmount = pattern.useDailyTotal ? pattern.avgDailyTotal : pattern.avgAmount;
       const stdDev = pattern.useDailyTotal ? pattern.stdDevDailyTotal : pattern.stdDev;
       const monthlyKey = pattern._cache?.monthlyKey || pattern.patternKey || pattern.transactionName || pattern.category;
-      const transactionName = pattern.transactionName || pattern.category;
+      const transactionName = pattern.sourceTransactionName || pattern.transactionName || null;
       const incomeType = pattern.categoryType === 'income'
         ? (pattern._cache?.incomeType ?? (isOperatingIncomePattern(pattern) ? 'operating' : 'non_operating'))
         : null;
@@ -1708,6 +1752,7 @@ function forecastDay(date, patterns, adjustments, patternEntries, simulationEntr
         category: pattern.category,
         categoryDefinitionId: pattern.categoryDefinitionId ?? null,
         transactionName,
+        vendor: pattern.vendor || null,
         monthlyKey,
         categoryType: pattern.categoryType,
         incomeType,
@@ -1942,21 +1987,40 @@ function injectResolvedRecurringPredictions(dailyForecasts, simulationEntriesByD
   );
   const daysByDate = new Map(dailyForecasts.map((day) => [day.date, day]));
   const simulationsByDate = new Map(simulationEntriesByDay.map((day) => [day.date, day]));
+  const patternsById = new Map((truthSnapshot.patterns || []).map(pattern => [Number(pattern.id), pattern]));
 
   occurrences.forEach((occurrence) => {
     const day = daysByDate.get(occurrence.date);
     if (!day) return;
-    const isIncome = occurrence.categoryType === 'income';
+    const pattern = patternsById.get(Number(occurrence.patternId));
+    const isInvestment = pattern?.projectionCategoryType === 'investment';
+    const investmentDirection = isInvestment ? (pattern.investmentDirection ?? 1) : null;
+    const isIncome = !isInvestment && occurrence.categoryType === 'income';
+    const signedInvestmentAmount = amount => Math.abs(Number(amount) || 0) * investmentDirection;
+    const investmentRange = isInvestment && occurrence.amountRange
+      ? [signedInvestmentAmount(occurrence.amountRange.low), signedInvestmentAmount(occurrence.amountRange.high)]
+      : null;
     const prediction = {
       ...occurrence,
+      ...(isInvestment ? {
+        categoryType: 'investment',
+        predictionKind: 'recurring_investment',
+        investmentDirection,
+        expectedAmount: signedInvestmentAmount(occurrence.expectedAmount),
+        probabilityWeightedAmount: signedInvestmentAmount(occurrence.probabilityWeightedAmount),
+        ...(investmentRange ? { amountRange: { low: Math.min(...investmentRange), high: Math.max(...investmentRange) } } : {}),
+      } : {}),
       patternKey: `financial_pattern:${occurrence.patternId}`,
       monthlyKey: `financial_pattern:${occurrence.patternId}`,
-      incomeType: isIncome ? 'operating' : null,
-      expenseType: isIncome ? null : 'operating',
+      vendor: typeof pattern?.vendor === 'string' ? pattern.vendor.trim() || null : null,
+      incomeType: isIncome ? (occurrence.incomeType || 'operating') : null,
+      expenseType: isIncome || isInvestment ? null : (occurrence.expenseType || 'operating'),
       isUserResolvedPattern: true,
     };
     day.predictions.push(prediction);
-    if (isIncome) {
+    if (isInvestment) {
+      day.expectedInvestments = (Number(day.expectedInvestments) || 0) + prediction.probabilityWeightedAmount;
+    } else if (isIncome) {
       day.expectedIncome = (Number(day.expectedIncome) || 0) + occurrence.probabilityWeightedAmount;
       day.expectedOperatingIncome = (Number(day.expectedOperatingIncome) || 0) + occurrence.probabilityWeightedAmount;
     } else {
@@ -1968,12 +2032,13 @@ function injectResolvedRecurringPredictions(dailyForecasts, simulationEntriesByD
       simulation.entries.push({
         patternKey: prediction.patternKey,
         monthlyKey: prediction.monthlyKey,
-        categoryType: occurrence.categoryType,
+        categoryType: prediction.categoryType,
+        ...(isInvestment ? { investmentDirection } : {}),
         incomeType: prediction.incomeType,
         expenseType: prediction.expenseType,
         patternType: 'financial_pattern',
         probability: occurrence.probability,
-        avgAmount: occurrence.expectedAmount,
+        avgAmount: isInvestment ? Math.abs(Number(occurrence.expectedAmount) || 0) : occurrence.expectedAmount,
         stdDev: occurrence.amountRange
           ? Math.max(0, (occurrence.amountRange.high - occurrence.amountRange.low) / 4)
           : 0,
@@ -2023,6 +2088,7 @@ function buildEmptyForecastResult(startDate, endDate, truthSnapshot, monteCarloR
     day.cumulativeNonOperatingExpenses = 0;
   });
   const withCumulative = (scenario) => {
+    if (!scenario) return null;
     let sum = 0;
     return {
       ...scenario,
@@ -2033,6 +2099,7 @@ function buildEmptyForecastResult(startDate, endDate, truthSnapshot, monteCarloR
     };
   };
   return {
+    modelId: forecastModelRegistry.DEFAULT_ACTIVE_MODEL,
     generated: new Date().toISOString(),
     truthRevision: truthSnapshot.truthRevision,
     analysisInfo: { totalTransactions: 0, projectedEvidenceTransactions: 0, totalCategories: 0, insufficientHistory: true },
@@ -2054,9 +2121,12 @@ function buildEmptyForecastResult(startDate, endDate, truthSnapshot, monteCarloR
   };
 }
 
-function recordForecastPredictionSnapshots(db, result, generatedDate = new Date()) {
+function recordForecastPredictionSnapshots(db, result, generatedDate = new Date(), modelId = forecastModelRegistry.DEFAULT_ACTIVE_MODEL) {
   if (!db || !result?.dailyForecasts?.length) return;
   const generatedDateKey = formatDate(generatedDate);
+  const resolvedModelId = forecastModelRegistry.normalizeModelId(modelId)
+    || forecastModelRegistry.normalizeModelId(result.modelId)
+    || forecastModelRegistry.DEFAULT_ACTIVE_MODEL;
   const scenarioMaps = Object.fromEntries(['p10', 'p50', 'p90'].map((key) => [
     key,
     new Map((result.scenarios?.[key]?.dailyResults || []).map((day) => [day.date, day])),
@@ -2064,11 +2134,11 @@ function recordForecastPredictionSnapshots(db, result, generatedDate = new Date(
   try {
     const insert = db.prepare(`
       INSERT INTO forecast_prediction_snapshots (
-        generated_date, target_date, truth_revision, horizon_days,
+        generated_date, target_date, truth_revision, model_id, horizon_days,
         expected_income, expected_expenses, expected_cash_flow,
         p10_cash_flow, p50_cash_flow, p90_cash_flow, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
-      ON CONFLICT(generated_date, target_date, truth_revision) DO UPDATE SET
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
+      ON CONFLICT(generated_date, target_date, truth_revision, model_id) DO UPDATE SET
         horizon_days = excluded.horizon_days,
         expected_income = excluded.expected_income,
         expected_expenses = excluded.expected_expenses,
@@ -2088,6 +2158,7 @@ function recordForecastPredictionSnapshots(db, result, generatedDate = new Date(
           generatedDateKey,
           day.date,
           Number(result.truthRevision) || 0,
+          resolvedModelId,
           horizonDays,
           Number(day.expectedIncome) || 0,
           Number(day.expectedExpenses) || 0,
@@ -2100,7 +2171,7 @@ function recordForecastPredictionSnapshots(db, result, generatedDate = new Date(
     });
     write();
   } catch (error) {
-    // Compatibility for test fixtures and databases awaiting the v8 migration.
+    // Compatibility for test fixtures and databases awaiting forecast snapshot migrations.
     if (process.env.NODE_ENV !== 'test') {
       console.warn('[Forecast] Could not record accuracy snapshots:', error?.message || error);
     }
@@ -2173,11 +2244,32 @@ function summarizeAccuracyReadiness(rows) {
   };
 }
 
-function getForecastAccuracy(options = {}) {
-  const days = Math.max(7, Math.min(365, Number.parseInt(options.days, 10) || 90));
-  const db = openForecastDb();
-  try {
-    const rows = db.prepare(`
+function buildForecastAccuracyPayload(rows, days, modelId = null) {
+  const buckets = [
+    { key: 'days_1_7', min: 1, max: 7 },
+    { key: 'days_8_30', min: 8, max: 30 },
+    { key: 'days_31_90', min: 31, max: 90 },
+  ];
+  return {
+    available: rows.length > 0,
+    modelId: modelId || forecastModelRegistry.DEFAULT_ACTIVE_MODEL,
+    evaluationWindowDays: days,
+    ...summarizeAccuracyReadiness(rows),
+    ...summarizeAccuracyRows(rows),
+    byHorizon: Object.fromEntries(buckets.map((bucket) => [
+      bucket.key,
+      summarizeAccuracyRows(rows.filter((row) => (
+        Number(row.horizon_days) >= bucket.min && Number(row.horizon_days) <= bucket.max
+      ))),
+    ])),
+  };
+}
+
+function loadForecastAccuracyRows(db, days, modelId = null) {
+  const normalizedModelId = forecastModelRegistry.normalizeModelId(modelId);
+  const modelFilter = normalizedModelId ? 'AND snapshot.model_id = ?' : '';
+  const params = normalizedModelId ? [`-${days} days`, normalizedModelId] : [`-${days} days`];
+  return db.prepare(`
       WITH actuals AS (
         SELECT substr(t.date, 1, 10) AS target_date,
           SUM(CASE WHEN t.category_type = 'income' AND t.price > 0 THEN t.price ELSE 0 END) AS actual_income,
@@ -2200,39 +2292,49 @@ function getForecastAccuracy(options = {}) {
         AND snapshot.target_date >= date('now', 'localtime', ?)
         AND snapshot.target_date <= (SELECT MAX(target_date) FROM actuals)
         AND snapshot.horizon_days BETWEEN 1 AND 90
+        ${modelFilter}
       ORDER BY snapshot.target_date, snapshot.horizon_days
-    `).all(`-${days} days`);
-    const buckets = [
-      { key: 'days_1_7', min: 1, max: 7 },
-      { key: 'days_8_30', min: 8, max: 30 },
-      { key: 'days_31_90', min: 31, max: 90 },
-    ];
-    return {
-      available: rows.length > 0,
-      evaluationWindowDays: days,
-      ...summarizeAccuracyReadiness(rows),
-      ...summarizeAccuracyRows(rows),
-      byHorizon: Object.fromEntries(buckets.map((bucket) => [
-        bucket.key,
-        summarizeAccuracyRows(rows.filter((row) => (
-          Number(row.horizon_days) >= bucket.min && Number(row.horizon_days) <= bucket.max
-        ))),
-      ])),
-    };
+    `).all(...params);
+}
+
+function getForecastAccuracy(options = {}) {
+  const days = Math.max(7, Math.min(365, Number.parseInt(options.days, 10) || 90));
+  const modelId = forecastModelRegistry.normalizeModelId(options.modelId)
+    || forecastModelRegistry.resolveActiveModelId(options);
+  const db = openForecastDb();
+  try {
+    const rows = loadForecastAccuracyRows(db, days, modelId);
+    return buildForecastAccuracyPayload(rows, days, modelId);
   } catch (error) {
-    if (String(error?.message || '').includes('no such table')) {
-      return {
-        available: false,
-        evaluationWindowDays: days,
-        ...summarizeAccuracyReadiness([]),
-        ...summarizeAccuracyRows([]),
-        byHorizon: {},
-      };
+    if (String(error?.message || '').includes('no such table')
+      || /no such column:.*model_id/.test(String(error?.message || ''))) {
+      return buildForecastAccuracyPayload([], days, modelId);
     }
     throw error;
   } finally {
     db.close();
   }
+}
+
+function buildForecastEngine() {
+  return {
+    analyzeCategoryPatterns,
+    buildPatternCaches,
+    buildVariableExpenseMonthlyBaselines,
+    generateForecastAcrossMonths,
+    injectResolvedRecurringPredictions,
+    runMonteCarloSimulation,
+    resolveForecastWindow,
+    formatDate,
+    isLastDayOfMonth,
+    isOperatingIncomePattern,
+    isOperatingExpensePattern,
+    isNonOperatingIncomePattern,
+    isNonOperatingExpensePattern,
+    logPatternSummary,
+    refreshForecastDayPredictions,
+    log,
+  };
 }
 
 // ==================== MAIN EXPORT ====================
@@ -2297,6 +2399,7 @@ async function generateDailyForecastLocal(options = {}) {
       monteCarloRuns: CONFIG.monteCarloRuns,
       historyMonths,
       truthRevision: truthSnapshot.truthRevision,
+      modelId: forecastModelRegistry.resolveActiveModelId(options),
     });
 
     if (!skipCache) {
@@ -2325,7 +2428,8 @@ async function generateDailyForecastLocal(options = {}) {
         forecastDays: CONFIG.forecastDays,
         forecastMonths: CONFIG.forecastMonths,
       });
-      const emptyResult = buildEmptyForecastResult(startDate, endDate, truthSnapshot, CONFIG.monteCarloRuns);
+      const emptyTruth = prepareProjectionPolicy([], truthSnapshot, buildForecastEngine(), loadProjectionCategories(db)).truthSnapshot;
+      const emptyResult = buildEmptyForecastResult(startDate, endDate, emptyTruth, CONFIG.monteCarloRuns);
       if (!skipCache) forecastResultCache.set(cacheKey, { value: emptyResult, expiresAt: Date.now() + cacheDurationMs });
       return emptyResult;
     }
@@ -2336,164 +2440,43 @@ async function generateDailyForecastLocal(options = {}) {
       last: allTransactions[allTransactions.length - 1]?.date || null,
     };
 
+    const historicalTransactions = allTransactions;
     // Explicit recurring evidence is forecast once through the shared pattern
     // layer, never a second time through the residual category baseline.
     allTransactions = allTransactions.filter((transaction) => (
       !truthSnapshot.excludedTransactionKeys.has(`${transaction.identifier}\u0000${transaction.vendor}`)
     ));
 
-    const patterns = analyzeCategoryPatterns(allTransactions);
-    const patternEntries = buildPatternCaches(patterns);
-    const variableExpenseBaselines = buildVariableExpenseMonthlyBaselines(allTransactions, patterns, now);
-    const currentMonthTransactions = allTransactions.filter(txn => txn.month === currentMonth);
-    const categoryCount = Object.keys(patterns).length;
-    logPatternSummary(patterns);
+    historicalTransactionSummary.historySince = historySince;
 
-    const { startDate: forecastStartDate, endDate: forecastEndDate } = resolveForecastWindow(now, {
-      includeToday: CONFIG.includeToday,
-      forecastDays: CONFIG.forecastDays,
-      forecastMonths: CONFIG.forecastMonths,
-    });
-    if (!CONFIG.includeToday && isLastDayOfMonth(now)) {
-      log('ℹ️ Today is the last day of the month; starting forecast from next month.');
-    }
-
-    const { dailyForecasts, adjustmentsByMonth, simulationEntriesByDay } = generateForecastAcrossMonths(
-      patterns,
-      patternEntries,
+    const modelId = forecastModelRegistry.resolveActiveModelId(options);
+    const model = forecastModelRegistry.getModel(modelId);
+    const results = model.generateForecast({
+      engine: buildForecastEngine(),
       db,
-      forecastStartDate,
-      forecastEndDate,
       now,
-      currentMonthTransactions,
-      variableExpenseBaselines,
-      truthSnapshot.categoryExpectations,
-    );
-    injectResolvedRecurringPredictions(dailyForecasts, simulationEntriesByDay, truthSnapshot);
-    const monteCarloResults = runMonteCarloSimulation(dailyForecasts, simulationEntriesByDay, CONFIG.monteCarloRuns);
-
-    let cumulativeCashFlow = 0;
-    let cumulativeOperatingCashFlow = 0;
-    let cumulativeNonOperatingCashFlow = 0;
-    let cumulativeOperatingExpenses = 0;
-    let cumulativeNonOperatingExpenses = 0;
-    dailyForecasts.forEach(day => {
-      cumulativeCashFlow += Number(day.expectedCashFlow) || 0;
-      cumulativeOperatingCashFlow += Number(day.expectedOperatingCashFlow) || 0;
-      cumulativeNonOperatingCashFlow += Number(day.expectedNonOperatingCashFlow) || 0;
-      cumulativeOperatingExpenses += Number(day.expectedOperatingExpenses) || 0;
-      cumulativeNonOperatingExpenses += Number(day.expectedNonOperatingExpenses) || 0;
-      day.cumulativeCashFlow = cumulativeCashFlow;
-      day.cumulativeOperatingCashFlow = cumulativeOperatingCashFlow;
-      day.cumulativeNonOperatingCashFlow = cumulativeNonOperatingCashFlow;
-      day.cumulativeOperatingExpenses = cumulativeOperatingExpenses;
-      day.cumulativeNonOperatingExpenses = cumulativeNonOperatingExpenses;
+      currentMonth,
+      currentDay,
+      allTransactions,
+      historicalTransactions,
+      truthSnapshot,
+      historicalTransactionSummary,
+      config: {
+        includeToday: CONFIG.includeToday,
+        forecastDays: CONFIG.forecastDays,
+        forecastMonths: CONFIG.forecastMonths,
+        monteCarloRuns: CONFIG.monteCarloRuns,
+      },
     });
-
-    const results = {
-      generated: new Date().toISOString(),
-      truthRevision: truthSnapshot.truthRevision,
-      analysisInfo: {
-        totalTransactions: historicalTransactionSummary.count,
-        projectedEvidenceTransactions: allTransactions.length,
-        firstTransaction: historicalTransactionSummary.first,
-        lastTransaction: historicalTransactionSummary.last,
-        totalCategories: categoryCount,
-        variableExpenseBaselines: Object.keys(variableExpenseBaselines).length,
-        currentMonth,
-        currentDay,
-        currentMonthTransactions: currentMonthTransactions.length,
-        historySince,
-      },
-      forecastPeriod: {
-        start: formatDate(forecastStartDate),
-        end: formatDate(forecastEndDate),
-        days: dailyForecasts.length,
-      },
-      dailyForecasts,
-      monteCarloResults: {
-        worstCase: monteCarloResults.worst,
-        baseCase: monteCarloResults.base,
-        bestCase: monteCarloResults.best,
-        numSimulations: monteCarloResults.numSimulations,
-      },
-      scenarios: {}, // filled below with cumulative cash flow per scenario
-      categoryPatterns: Object.values(patterns).map(p => ({
-        patternKey: p.patternKey,
-        category: p.category,
-        categoryNameEn: p.categoryNameEn || null,
-        categoryDefinitionId: p.categoryDefinitionId ?? null,
-        transactionName: p.transactionName,
-        categoryType: p.categoryType,
-        incomeType: p.categoryType === 'income'
-          ? (p._cache?.incomeType ?? (isOperatingIncomePattern(p) ? 'operating' : 'non_operating'))
-          : null,
-        expenseType: p.categoryType === 'expense'
-          ? (p._cache?.expenseType ?? (isOperatingExpensePattern(p) ? 'operating' : 'non_operating'))
-          : null,
-        isCountedAsIncome: p.isCountedAsIncome,
-        patternType: p.patternType,
-        avgAmount: p.avgAmount,
-        stdDev: p.stdDev,
-        minAmount: p.minAmount,
-        maxAmount: p.maxAmount,
-        coefficientOfVariation: p.coefficientOfVariation,
-        isFixedAmount: p.isFixedAmount,
-        confidence: p.confidence,
-        monthsOfHistory: p.monthsOfHistory,
-        avgOccurrencesPerWeek: p.avgOccurrencesPerWeek,
-        incomeAmountBaseline: p.incomeAmountBaseline,
-        incomeOneOffCount: p.incomeOneOffCount || 0,
-        uniqueTransactionNameCount: p.uniqueTransactionNameCount,
-        insufficientData: p.insufficientData || false,
-        skipReason: p.skipReason || null,
-        avgOccurrencesPerMonth: p.avgOccurrencesPerMonth,
-        mostLikelyDaysOfWeek: p.mostLikelyDaysOfWeek,
-        mostLikelyDaysOfMonth: p.mostLikelyDaysOfMonth,
-        lastOccurrence: p.lastOccurrence,
-        daysSinceLastOccurrence: p.daysSinceLastOccurrence,
-      })),
-      monthlyAdjustments: adjustmentsByMonth,
-    };
-
-  // Derive scenarios with cumulative cash flow (p10/p50/p90) for frontend consumers
-function withCumulative(scenario) {
-  let cum = 0;
-  let operatingCum = 0;
-  let nonOperatingCum = 0;
-  let operatingExpensesCum = 0;
-  let nonOperatingExpensesCum = 0;
-  const dailyWithCum = (scenario.dailyResults || []).map(d => {
-    cum += Number(d.cashFlow) || 0;
-    operatingCum += Number(d.operatingCashFlow) || 0;
-    nonOperatingCum += Number(d.nonOperatingCashFlow) || 0;
-    operatingExpensesCum += Number(d.operatingExpenses) || 0;
-    nonOperatingExpensesCum += Number(d.nonOperatingExpenses) || 0;
-    return {
-      ...d,
-      cumulativeCashFlow: cum,
-      cumulativeOperatingCashFlow: operatingCum,
-      cumulativeNonOperatingCashFlow: nonOperatingCum,
-      cumulativeOperatingExpenses: operatingExpensesCum,
-      cumulativeNonOperatingExpenses: nonOperatingExpensesCum,
-    };
-  });
-  return { ...scenario, dailyResults: dailyWithCum };
-}
-
-results.scenarios = {
-  p10: withCumulative(monteCarloResults.worst),
-  p50: withCumulative(monteCarloResults.base),
-  p90: withCumulative(monteCarloResults.best),
-};
 
     if (options.recordSnapshot !== false) {
-      recordForecastPredictionSnapshots(db, results, now);
+      recordForecastPredictionSnapshots(db, results, now, modelId);
     }
 
     if (!skipCache) {
       forecastResultCache.set(cacheKey, { value: results, expiresAt: Date.now() + cacheDurationMs });
     }
+
     return results;
   } finally {
     db.close();
@@ -2538,6 +2521,7 @@ async function runRevisionCheckedWorker(options) {
 }
 
 async function generateDailyForecast(options = {}) {
+  const activeModelId = forecastModelRegistry.resolveActiveModelId(options);
   const normalizedKey = JSON.stringify({
     includeToday: options.includeToday ?? false,
     forecastDays: options.forecastDays ?? null,
@@ -2545,6 +2529,7 @@ async function generateDailyForecast(options = {}) {
     monteCarloRuns: options.monteCarloRuns ?? DEFAULT_MONTE_CARLO_RUNS,
     historyMonths: options.historyMonths ?? DEFAULT_HISTORY_MONTHS,
     noCache: options.noCache === true || options.noCache === 'true' || options.noCache === '1',
+    modelId: activeModelId,
   });
   const existing = forecastInFlight.get(normalizedKey);
   if (existing) return existing;

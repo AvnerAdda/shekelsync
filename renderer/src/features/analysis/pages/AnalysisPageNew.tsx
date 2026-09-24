@@ -1,5 +1,5 @@
 import React, { lazy, Suspense, useState, useEffect, useCallback, useMemo, useRef } from 'react';
-import { useLocation } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import {
   Box,
   Paper,
@@ -33,6 +33,7 @@ import DashboardIcon from '@mui/icons-material/Dashboard';
 import ActionsIcon from '@mui/icons-material/Lightbulb';
 import SpendingIcon from '@mui/icons-material/PieChart';
 import BudgetIcon from '@mui/icons-material/AccountBalance';
+import SavingsOutlinedIcon from '@mui/icons-material/SavingsOutlined';
 import ScoringIcon from '@mui/icons-material/Speed';
 import CalendarIcon from '@mui/icons-material/CalendarToday';
 import PsychologyIcon from '@mui/icons-material/Psychology';
@@ -61,13 +62,13 @@ import { useFinancePrivacy } from '@app/contexts/FinancePrivacyContext';
 import LockedPagePlaceholder from '@renderer/shared/empty-state/LockedPagePlaceholder';
 import LoadingState from '@renderer/components/LoadingState';
 import { resolveOnboardingGate } from '@renderer/features/layout/components/onboarding-gate';
+import { PLANNING_CHANGED_EVENT } from '@renderer/features/planning/types';
 import {
   FINANCIAL_TRUTH_CHANGED_EVENT,
   financialTruthChangeAffects,
 } from '@renderer/features/financial-truth/types';
 import QuestsPanel from '../components/QuestsPanel';
 import SpendingCategoriesChart from '../components/SpendingCategoriesChart';
-import SpendingCategoryTargetsMinimal from '../components/SpendingCategoryTargetsMinimal';
 import FinancialHealthScore, { type FinancialHealthSnapshot } from '../components/FinancialHealthScore';
 import DashboardInsightsSectionToggle from '../components/DashboardInsightsSectionToggle';
 import SubscriptionsTab from '../components/SubscriptionsTab';
@@ -99,6 +100,7 @@ const FinancialRhythmModal = lazy(() => import('../components/FinancialRhythmMod
 const MoneyPersonalityModal = lazy(() => import('../components/MoneyPersonalityModal'));
 const PersonalizedFutureModal = lazy(() => import('../components/PersonalizedFutureModal'));
 const MakeItRealModal = lazy(() => import('../components/MakeItRealModal'));
+const PlanningWorkspace = lazy(() => import('@renderer/features/planning/components/PlanningWorkspace'));
 
 type UnknownRecord = Record<string, unknown>;
 
@@ -472,12 +474,16 @@ function TabPanel(props: TabPanelProps) {
 
 const AnalysisPageNew: React.FC = () => {
   const location = useLocation();
+  const navigate = useNavigate();
   const theme = useTheme();
   const { t, i18n } = useTranslation('translation', { keyPrefix: 'analysisPage' });
   const refreshShortcutLabel = window.electronAPI?.platform?.isMacOS ? '⌘R' : 'Ctrl+R';
   const isHebrew = i18n.language === 'he';
   const locale = (i18n.language || 'he').toLowerCase();
-  const [currentTab, setCurrentTab] = useState(0);
+  const [currentTab, setCurrentTab] = useState(() => {
+    const tab = new URLSearchParams(location.search).get('tab') || '';
+    return isAnalysisTabKey(tab) ? ANALYSIS_TAB_INDEX[tab] : ANALYSIS_TAB_INDEX.dashboard;
+  });
   const [showSecondaryDashboardCards, setShowSecondaryDashboardCards] = useState(false);
   const [loading, setLoading] = useState(false);
   const [intelligence, setIntelligence] = useState<PersonalIntelligence | null>(null);
@@ -747,14 +753,21 @@ const AnalysisPageNew: React.FC = () => {
 
   const handleTabChange = (_event: React.SyntheticEvent, newValue: number) => {
     setCurrentTab(newValue);
+    const tab = ANALYSIS_TAB_DEFINITIONS.find((item) => item.index === newValue);
+    if (tab) {
+      const params = new URLSearchParams(location.search);
+      params.set('tab', tab.key);
+      navigate({ pathname: location.pathname, search: params.toString() }, { replace: true });
+    }
   };
 
   const analysisTabs = useMemo(
     () => ANALYSIS_TAB_DEFINITIONS.map((tab) => ({
       ...tab,
-      label: t(`tabs.${tab.key}`),
+      label: tab.key === 'planning' ? i18n.t('planning.spendability.tabLabel') : t(`tabs.${tab.key}`),
       icon: (
         {
+          planning: <SavingsOutlinedIcon sx={{ fontSize: 20 }} />,
           dashboard: <DashboardIcon sx={{ fontSize: 20 }} />,
           actions: <ActionsIcon sx={{ fontSize: 20 }} />,
           spending: <SpendingIcon sx={{ fontSize: 20 }} />,
@@ -765,7 +778,7 @@ const AnalysisPageNew: React.FC = () => {
         }[tab.key]
       ),
     })),
-    [t],
+    [t, i18n],
   );
 
   const secondaryDashboardSectionId = 'analysis-dashboard-deeper-insights';
@@ -774,15 +787,10 @@ const AnalysisPageNew: React.FC = () => {
     const searchParams = new URLSearchParams(location.search);
     const requestedTab = searchParams.get('tab') || '';
 
-    if (!isAnalysisTabKey(requestedTab)) {
-      return;
-    }
-
-    const nextTab = ANALYSIS_TAB_INDEX[requestedTab];
-    if (typeof nextTab === 'number' && nextTab !== currentTab) {
-      setCurrentTab(nextTab);
-    }
-  }, [currentTab, location.search]);
+    setCurrentTab(isAnalysisTabKey(requestedTab)
+      ? ANALYSIS_TAB_INDEX[requestedTab]
+      : ANALYSIS_TAB_INDEX.dashboard);
+  }, [location.pathname, location.search]);
 
   const runRefreshAll = useCallback((forceBudget: boolean) => {
     fetchIntelligence();
@@ -820,6 +828,7 @@ const AnalysisPageNew: React.FC = () => {
 
   const handleRefreshAll = useCallback(() => {
     runRefreshAll(true);
+    window.dispatchEvent(new Event(PLANNING_CHANGED_EVENT));
   }, [runRefreshAll]);
 
   useEffect(() => {
@@ -1924,6 +1933,11 @@ const AnalysisPageNew: React.FC = () => {
         </Tabs>
       </Box>
       {/* Tab Content */}
+      <TabPanel value={currentTab} index={7}>
+        <Suspense fallback={<Skeleton variant="rounded" height={300} />}>
+          <PlanningWorkspace />
+        </Suspense>
+      </TabPanel>
       <TabPanel value={currentTab} index={0}>
         {/* Dashboard Tab */}
         {isRefreshing && !intelligence && !temporalData && !behavioralData && !futureData && !timeValueData && !snapshotData ? (
@@ -2588,20 +2602,7 @@ const AnalysisPageNew: React.FC = () => {
       </TabPanel>
       <TabPanel value={currentTab} index={2}>
         {/* Spending Tab */}
-        <Paper sx={{ 
-          p: 3,
-          borderRadius: 4,
-          bgcolor: (theme) => alpha(theme.palette.background.paper, 0.4),
-          backdropFilter: 'blur(20px)',
-          border: '1px solid',
-          borderColor: (theme) => alpha(theme.palette.common.white, 0.1),
-          boxShadow: (theme) => `0 8px 32px 0 ${alpha(theme.palette.common.black, 0.05)}`,
-        }}>
-          <SpendingCategoriesChart months={3} />
-          <Box sx={{ mt: 3, pt: 3, borderTop: 1, borderColor: 'divider' }}>
-            <SpendingCategoryTargetsMinimal />
-          </Box>
-        </Paper>
+        <SpendingCategoriesChart months={3} />
       </TabPanel>
       <TabPanel value={currentTab} index={3}>
         {/* Budget Tab */}

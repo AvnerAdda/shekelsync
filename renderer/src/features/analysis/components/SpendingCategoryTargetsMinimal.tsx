@@ -17,6 +17,8 @@ import { useSpendingCategories } from '@renderer/features/budgets/hooks/useSpend
 import type { SpendingCategory, CategoryWithSpending } from '@renderer/types/spending-categories';
 import { useTranslation } from 'react-i18next';
 import CategoryIcon from '../../breakdown/components/CategoryIcon';
+import { useFinancePrivacy } from '@app/contexts/FinancePrivacyContext';
+import type { SpendingTimelineResponse } from '@renderer/types/spending-categories';
 import {
   DEFAULT_TARGETS,
   TARGET_KEYS,
@@ -42,17 +44,22 @@ const CATEGORY_LABELS: Record<string, string> = {
   unallocated: 'Unallocated',
 };
 
-const SpendingCategoryTargetsMinimal: React.FC = () => {
+interface Props {
+  data: SpendingTimelineResponse;
+  income: number;
+  onDataChanged: () => Promise<void>;
+}
+
+const SpendingCategoryTargetsMinimal: React.FC<Props> = ({ data, income, onDataChanged }) => {
   const { t, i18n } = useTranslation('translation', { keyPrefix: 'analysisPage.targets' });
+  const { formatCurrency } = useFinancePrivacy();
   const {
-    breakdown,
     loading,
     error,
-    fetchBreakdown,
     updateMapping,
     updateTargets,
-    getCategoriesForAllocation,
-  } = useSpendingCategories({ currentMonthOnly: true });
+  } = useSpendingCategories({ autoLoad: false });
+  const getCategoriesForAllocation = (key: keyof typeof data.categories_by_allocation) => data.categories_by_allocation[key] || [];
 
   const [localTargets, setLocalTargets] = useState<Record<SpendingCategory, number>>(DEFAULT_TARGETS);
   const [savingTargets, setSavingTargets] = useState(false);
@@ -60,18 +67,13 @@ const SpendingCategoryTargetsMinimal: React.FC = () => {
   const [selectedCategoryForMenu, setSelectedCategoryForMenu] = useState<CategoryWithSpending | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
 
-  // Fetch breakdown on mount
-  useEffect(() => {
-    fetchBreakdown();
-  }, [fetchBreakdown]);
-
-  const savedTargets = useMemo(() => normalizeTargets(breakdown?.targets), [breakdown?.targets]);
+  const savedTargets = useMemo(() => normalizeTargets(data.targets), [data.targets]);
 
   useEffect(() => {
     setLocalTargets(savedTargets);
   }, [savedTargets]);
 
-  const totalIncome = breakdown?.total_income || 0;
+  const totalIncome = income;
   const totalPercentage = calculateTargetTotal(localTargets);
   const isValidTotal = Math.abs(totalPercentage - 100) < 0.01;
   const hasUnsavedChanges = haveTargetsChanged(localTargets, savedTargets);
@@ -111,7 +113,7 @@ const SpendingCategoryTargetsMinimal: React.FC = () => {
   const handleCategoryAllocationChange = async (categoryId: number, newAllocation: SpendingCategory) => {
     try {
       await updateMapping(categoryId, { spendingCategory: newAllocation });
-      await fetchBreakdown();
+      await onDataChanged();
     } catch (err) {
       console.error('Failed to update category allocation:', err);
     }
@@ -143,6 +145,7 @@ const SpendingCategoryTargetsMinimal: React.FC = () => {
     setSaveError(null);
     try {
       await updateTargets(localTargets);
+      await onDataChanged();
     } catch (err) {
       console.error('Failed to update targets:', err);
       setSaveError(err instanceof Error ? err.message : t('saveError', { defaultValue: 'Failed to save allocation targets.' }));
@@ -151,7 +154,7 @@ const SpendingCategoryTargetsMinimal: React.FC = () => {
     }
   };
 
-  if (loading && !breakdown) {
+  if (loading && !data) {
     return (
       <Box sx={{ display: 'flex', justifyContent: 'center', p: 3 }}>
         <CircularProgress size={24} />
@@ -181,7 +184,7 @@ const SpendingCategoryTargetsMinimal: React.FC = () => {
             color: "text.secondary"
           }}>
             {totalIncome > 0
-              ? t('subtitle.withIncome', { amount: totalIncome.toFixed(0) })
+              ? t('subtitle.withIncome', { amount: formatCurrency(totalIncome, { maximumFractionDigits: 0 }) })
               : t('subtitle.noIncome')}
           </Typography>
         </Box>

@@ -39,6 +39,44 @@ See [`PRIVACY.md`](PRIVACY.md) for details on data handling.
 
 See the [CHANGELOG](CHANGELOG.md) for what changed between releases.
 
+## Planning your money
+
+- **Plan → Spending Categories** shows time on the horizontal axis and cumulative
+  category percentages on the vertical axis. Each day uses its own trailing
+  30-, 60-, or 90-day income and expense window. Remaining income is allocated to
+  Growth; spending above income extends beyond 100% and shows a deficit.
+  Hover or select a date to inspect its window, and adjust category targets to
+  move the horizontal reference lines. The timeline history control sets how
+  far back the chart displays without changing the rolling-window length.
+- **Plan → Available to spend** estimates what remains before your next income,
+  after expected spending, outstanding card commitments, goal reserves, and a
+  cash buffer. Recurring income dates and outstanding card payments are detected
+  automatically from the shared forecast and imported billing data, and updated
+  after each sync. Without a reliable payday, it uses a rolling 30-day period.
+  Undated recent card purchases use a labeled conservative 45-day reserve.
+  Optional overrides are available under **Adjust**; income overrides expire
+  after that date and card overrides expire when source data changes.
+  No manual setup is needed. If the detailed forecast is unavailable or incomplete,
+  recent imported transactions provide a labelled spending estimate. It nets
+  refunds within categories, excludes duplicate card repayments, and retains
+  higher known forecast expenses. Recent shekel balances and imported transaction
+  data are still needed; the app does not invent missing balances.
+- **Plan → Goals & scenarios** lets you save goals with target dates, amounts
+  already saved, and monthly contributions. Indicate whether existing savings
+  are inside the included bank balance or held elsewhere. Allocations are local
+  planning records and do not transfer money. Contributions are projected on the
+  first of each upcoming month; update saved amounts as you make progress.
+- In the same Plan tab, save **what-if scenarios** with one-time or monthly cash
+  changes, and compare their projected balances with your current plan. These
+  scenarios do not change transactions or the main forecast.
+- **Wealth → Debt repayment planner** compares existing payments with extra
+  payments directed to the highest-interest or smallest-balance debt. It shows
+  payoff timing, interest, and monthly schedules separately for each currency.
+  Estimates assume fixed rates, monthly interest, and no new borrowing or fees.
+
+Goals, scenarios, and spending settings stay in the local database and are
+included in database backups.
+
 ## Troubleshooting (for users)
 
 - **macOS says the app is "damaged" or from an unidentified developer** — this is

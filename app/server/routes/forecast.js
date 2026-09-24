@@ -112,7 +112,8 @@ function createForecastRouter({
   router.get('/accuracy', async (req, res) => {
     try {
       const days = parseIntegerQueryParam(req.query.days, 'days', { min: 7, max: 365 }) || 90;
-      res.json(await evaluateForecast({ days }));
+      const model = readSingleQueryParam(req.query.model);
+      res.json(await evaluateForecast({ days, modelId: model }));
     } catch (error) {
       res.status(error?.status || 500).json({
         error: error?.message || 'Failed to evaluate forecast accuracy',
@@ -215,19 +216,93 @@ function createForecastRouter({
       const categoryDefinitionsById = {};
       try {
         const categoryQuery = `
-          SELECT id, name, name_en, name_fr, icon, color, parent_id
+          SELECT id, name, name_en, name_fr, icon, color, parent_id, category_type
           FROM category_definitions
-          WHERE category_type = 'expense'
         `;
         const categories = db.prepare(categoryQuery).all();
         categories.forEach(cat => {
           categoryDefinitions[cat.name] = cat;
           if (cat.name_en) categoryDefinitions[cat.name_en] = cat;
+          if (cat.name_fr) categoryDefinitions[cat.name_fr] = cat;
           categoryDefinitionsById[cat.id] = cat;
         });
       } catch (err) {
         console.warn('[Forecast] Could not load category definitions:', err.message);
       }
+      const resolvePredictionCategory = prediction => prediction.categoryDefinitionId != null
+        ? categoryDefinitionsById[prediction.categoryDefinitionId]
+        : categoryDefinitions[prediction.category];
+      const resolvePredictionWeightedAmount = prediction => {
+        // An explicit zero or signed amount must survive the fallback.
+        const weightedAmount = prediction.probabilityWeightedAmount;
+        const amount = weightedAmount != null && Number.isFinite(Number(weightedAmount))
+          ? Number(weightedAmount)
+          : prediction.expectedAmount != null && prediction.probability != null
+            ? Number(prediction.expectedAmount) * Number(prediction.probability)
+            : NaN;
+        return Number.isFinite(amount) ? amount : null;
+      };
+      const serializePrediction = prediction => {
+        const categoryDefinition = resolvePredictionCategory(prediction);
+        const parentDefinition = categoryDefinitionsById[categoryDefinition?.parent_id];
+        return {
+          patternId: prediction.patternId || null,
+          occurrenceId: prediction.occurrenceId || null,
+          predictionKind: prediction.predictionKind || (prediction.categoryType === 'income' ? 'category_income' : 'category_expense'),
+          category: prediction.category,
+          categoryDefinitionId: prediction.categoryDefinitionId || null,
+          transactionName: prediction.transactionName || null,
+          categoryType: prediction.categoryType || categoryDefinition?.category_type || null,
+          category_name: categoryDefinition?.name || null,
+          parent_name: parentDefinition?.name || null,
+          category_icon: categoryDefinition?.icon || null,
+          category_color: categoryDefinition?.color || null,
+          vendor: prediction.vendor || null,
+          ...(prediction.institution ? { institution: prediction.institution } : {}),
+          incomeType: prediction.incomeType || null,
+          expenseType: prediction.expenseType || null,
+          amount: prediction.expectedAmount,
+          probability: prediction.probability,
+          probabilityWeightedAmount: resolvePredictionWeightedAmount(prediction),
+          explanation: prediction.explanation || 'Based on historical spending patterns',
+          correctionCapabilities: prediction.correctionCapabilities || (
+            prediction.categoryDefinitionId ? ['set_category_expectation'] : []
+          ),
+        };
+      };
+      const buildChartBreakdown = predictions => {
+        const groups = new Map();
+        for (const prediction of Array.isArray(predictions) ? predictions : []) {
+          const categoryDefinition = resolvePredictionCategory(prediction);
+          const categoryType = prediction.categoryType || categoryDefinition?.category_type;
+          const metric = { income: 'income', expense: 'expenses', investment: 'investments' }[categoryType];
+          if (!metric) continue;
+
+          // Use the same weighted values as the daily totals. A zero weight is
+          // meaningful; absent probabilities must not imply a certain payment.
+          const amount = resolvePredictionWeightedAmount(prediction);
+          if (amount === null || amount === 0) continue;
+
+          const rawCategoryId = categoryDefinition?.id ?? prediction.categoryDefinitionId;
+          const categoryId = rawCategoryId != null && Number.isFinite(Number(rawCategoryId))
+            ? Number(rawCategoryId)
+            : null;
+          const categoryName = categoryDefinition?.name || null;
+          const vendor = typeof prediction.vendor === 'string' ? prediction.vendor.trim() || null : null;
+          const key = JSON.stringify([categoryId, categoryName, vendor]);
+          const group = groups.get(key) || {
+            categoryId,
+            categoryName,
+            vendor,
+            income: 0,
+            expenses: 0,
+            investments: 0,
+          };
+          group[metric] += amount;
+          groups.set(key, group);
+        }
+        return [...groups.values()];
+      };
 
       // Format minimal daily fields for response. When a generator doesn't
       // emit the operating split, the cumulative fallbacks accumulate the
@@ -246,6 +321,8 @@ function createForecastRouter({
           operatingIncome: d.expectedOperatingIncome ?? d.expectedIncome,
           nonOperatingIncome: d.expectedNonOperatingIncome ?? 0,
           expenses: d.expectedExpenses,
+          investments: d.expectedInvestments ?? 0,
+          chartBreakdown: buildChartBreakdown(d.predictions),
           operatingExpenses,
           nonOperatingExpenses,
           cashFlow: d.expectedCashFlow,
@@ -258,21 +335,8 @@ function createForecastRouter({
           cumulativeNonOperatingExpenses: d.cumulativeNonOperatingExpenses ?? fallbackCumNonOperatingExpenses,
           topCategory: d.topPredictions?.[0]?.category || null,
           topProbability: d.topPredictions?.[0]?.probability || null,
-          topPredictions: (d.topPredictions || []).map(p => ({
-            patternId: p.patternId || null,
-            occurrenceId: p.occurrenceId || null,
-            predictionKind: p.predictionKind || (p.categoryType === 'income' ? 'category_income' : 'category_expense'),
-            category: p.category,
-            categoryDefinitionId: p.categoryDefinitionId || null,
-            incomeType: p.incomeType || null,
-            expenseType: p.expenseType || null,
-            amount: p.expectedAmount,
-            probability: p.probability,
-            explanation: p.explanation || 'Based on historical spending patterns',
-            correctionCapabilities: p.correctionCapabilities || (
-              p.categoryDefinitionId ? ['set_category_expectation'] : []
-            )
-          }))
+          predictions: (Array.isArray(d.predictions) ? d.predictions : (d.topPredictions || [])).map(serializePrediction),
+          topPredictions: (d.topPredictions || []).map(serializePrediction),
         };
       });
 

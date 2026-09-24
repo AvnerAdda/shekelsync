@@ -9,6 +9,7 @@ describe('analysis tab definitions', () => {
   it('keeps every analysis workflow in display order', () => {
     expect(ANALYSIS_TAB_DEFINITIONS.map((tab) => tab.key)).toEqual([
       'dashboard',
+      'planning',
       'actions',
       'spending',
       'budget',

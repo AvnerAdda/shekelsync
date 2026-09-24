@@ -1,4 +1,5 @@
 export type AnalysisTabKey =
+  | 'planning'
   | 'dashboard'
   | 'actions'
   | 'spending'
@@ -14,6 +15,7 @@ export interface AnalysisTabDefinition {
 
 export const ANALYSIS_TAB_DEFINITIONS: AnalysisTabDefinition[] = [
   { key: 'dashboard', index: 0 },
+  { key: 'planning', index: 7 },
   { key: 'actions', index: 1 },
   { key: 'spending', index: 2 },
   { key: 'budget', index: 3 },

@@ -136,7 +136,6 @@ const MoneyReviewPage: React.FC<MoneyReviewPageProps> = ({
       coverage: forecastAccuracy.intervalCoverage == null ? '—' : `${Math.round(forecastAccuracy.intervalCoverage)}%`,
     })
     : '';
-
   const handleFilterChange = (_event: React.SyntheticEvent, value: MoneyReviewFilter) => {
     setFilter(value);
     setGroupFilter('all');

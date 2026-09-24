@@ -407,6 +407,8 @@ function validateCredentialRows(rows, candidateKey) {
   };
 }
 
+const { getProbeDatabase } = require('./sqlite-probe');
+
 function resolveDatabaseConstructor(override) {
   if (override) return override;
   const module = requireFromApp('better-sqlite3');
@@ -463,10 +465,18 @@ function validateCredentialKey(candidateKey, options = {}) {
 
   const databasePath = store.databasePath;
   let database;
+  let ownsDatabase = false;
   try {
-    const Database = resolveDatabaseConstructor(options.databaseCtor);
-    database = new Database(databasePath, { readonly: true, fileMustExist: true });
-    database.pragma('query_only = ON');
+    if (options.sqliteDb) {
+      database = options.sqliteDb;
+    } else if (options.databaseCtor) {
+      const Database = resolveDatabaseConstructor(options.databaseCtor);
+      database = new Database(databasePath, { readonly: true, fileMustExist: true });
+      database.pragma('query_only = ON');
+      ownsDatabase = true;
+    } else {
+      database = getProbeDatabase(databasePath);
+    }
     const table = database
       .prepare("SELECT 1 AS present FROM sqlite_master WHERE type = 'table' AND name = 'vendor_credentials'")
       .get();
@@ -497,10 +507,12 @@ function validateCredentialKey(candidateKey, options = {}) {
   } catch {
     return emptyResult('unavailable', { configStatus: store.configStatus, ...auxiliaryDetails });
   } finally {
-    try {
-      database?.close();
-    } catch {
-      // Read-only validation cleanup is best-effort.
+    if (ownsDatabase) {
+      try {
+        database?.close();
+      } catch {
+        // Read-only validation cleanup is best-effort.
+      }
     }
   }
 }

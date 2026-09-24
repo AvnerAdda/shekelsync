@@ -62,6 +62,7 @@ import RealEstateSimulatorDialog from '../components/RealEstateSimulatorDialog';
 import RealEstateOverviewSection from '../components/RealEstateOverviewSection';
 import AllocationTargetsPanel from '../components/AllocationTargetsPanel';
 import LiabilitiesManager from '../components/LiabilitiesManager';
+import DebtRepaymentPlanner from '../components/DebtRepaymentPlanner';
 import FxSettingsPanel from '../components/FxSettingsPanel';
 import BenchmarkComparisonPanel from '../components/BenchmarkComparisonPanel';
 import { useInvestmentBalanceSheet } from '../hooks/useBalanceSheet';
@@ -209,6 +210,13 @@ const InvestmentsPageContent: React.FC = () => {
   const positionsRequestIdRef = useRef(0);
   const activityRequestIdRef = useRef(0);
   const coverageRequestIdRef = useRef(0);
+  const portfolioChartRequestRef = useRef<{
+    portfolio: PortfolioSummary | null;
+    timeRange: HistoryTimeRangeOption;
+    scope: PortfolioChartScopeOption;
+    blocked: boolean;
+    promise: Promise<void[]>;
+  } | null>(null);
 
   useEffect(() => {
     const requestedTab = resolveInvestmentTabFromSearch(location.search);
@@ -326,8 +334,10 @@ const InvestmentsPageContent: React.FC = () => {
   }, [chartScope, historyTimeRange, portfolioData, shouldBlockPageData]);
 
   const fetchPerformanceData = useCallback(async (portfolioOverride?: PortfolioSummary | null) => {
-    if (shouldBlockPageData) {
+    const sourcePortfolio = portfolioOverride ?? portfolioData;
+    if (shouldBlockPageData || !sourcePortfolio?.summary || sourcePortfolio.summary.totalAccounts === 0) {
       performanceRequestIdRef.current += 1;
+      setPerformanceData(null);
       setPerformanceLoading(false);
       setPerformanceError(null);
       return;
@@ -336,17 +346,14 @@ const InvestmentsPageContent: React.FC = () => {
     setPerformanceLoading(true);
     setPerformanceError(null);
     try {
-      const sourcePortfolio = portfolioOverride ?? portfolioData;
       const params = new URLSearchParams({
         range: historyTimeRange,
         assetScope: chartScope,
         normalizeCurrencies: '1',
         includePositionEvents: '1',
       });
-      if (sourcePortfolio) {
-        const uniqueAccountIds = getPortfolioAccountIds(sourcePortfolio, chartScope);
-        uniqueAccountIds.forEach((id) => params.append('accountIds', id.toString()));
-      }
+      const uniqueAccountIds = getPortfolioAccountIds(sourcePortfolio, chartScope);
+      uniqueAccountIds.forEach((id) => params.append('accountIds', id.toString()));
 
       const response = await apiClient.get<InvestmentPerformanceResponse>(
         `/api/investments/performance?${params.toString()}`,
@@ -460,22 +467,52 @@ const InvestmentsPageContent: React.FC = () => {
     }
   }, [shouldBlockPageData]);
 
+  const fetchPortfolioChartData = useCallback((portfolioOverride?: PortfolioSummary | null, force = false) => {
+    const sourcePortfolio = portfolioOverride ?? portfolioData;
+    const previousRequest = portfolioChartRequestRef.current;
+    if (!force
+      && previousRequest?.portfolio === sourcePortfolio
+      && previousRequest.timeRange === historyTimeRange
+      && previousRequest.scope === chartScope
+      && previousRequest.blocked === shouldBlockPageData) {
+      return previousRequest.promise;
+    }
+
+    // A refreshed summary also runs the chart effect. Share that load with the
+    // refresh handler so both paths await the same requests.
+    const promise = Promise.all([
+      fetchHistoryData(sourcePortfolio),
+      fetchPerformanceData(sourcePortfolio),
+    ]);
+    portfolioChartRequestRef.current = {
+      portfolio: sourcePortfolio,
+      timeRange: historyTimeRange,
+      scope: chartScope,
+      blocked: shouldBlockPageData,
+      promise,
+    };
+    return promise;
+  }, [chartScope, fetchHistoryData, fetchPerformanceData, historyTimeRange, portfolioData, shouldBlockPageData]);
+
   useEffect(() => {
     void fetchPortfolioData();
   }, [fetchPortfolioData, refreshTrigger]);
 
   useEffect(() => {
-    if (!shouldBlockPageData) {
-      void fetchPerformanceData();
-      void fetchInvestmentActivity();
-      void fetchPositions();
-      void fetchCoverage();
-    }
-  }, [fetchCoverage, fetchInvestmentActivity, fetchPerformanceData, fetchPositions, refreshTrigger, shouldBlockPageData]);
+    void fetchInvestmentActivity();
+  }, [fetchInvestmentActivity, refreshTrigger]);
 
   useEffect(() => {
-    void fetchHistoryData();
-  }, [fetchHistoryData]);
+    void fetchPositions();
+  }, [fetchPositions, refreshTrigger]);
+
+  useEffect(() => {
+    void fetchCoverage();
+  }, [fetchCoverage, refreshTrigger]);
+
+  useEffect(() => {
+    void fetchPortfolioChartData();
+  }, [fetchPortfolioChartData]);
 
   const openAccountsManagement = useCallback((request?: AccountsModalOpenRequest) => {
     window.dispatchEvent(new CustomEvent('openAccountsModal', { detail: request }));
@@ -486,8 +523,7 @@ const InvestmentsPageContent: React.FC = () => {
     try {
       const nextPortfolio = await fetchPortfolioData();
       await Promise.all([
-        fetchHistoryData(nextPortfolio),
-        fetchPerformanceData(nextPortfolio),
+        fetchPortfolioChartData(nextPortfolio, !nextPortfolio),
         fetchInvestmentActivity(),
         fetchPositions(),
         fetchCoverage(),
@@ -500,10 +536,9 @@ const InvestmentsPageContent: React.FC = () => {
       setIsRefreshing(false);
     }
   }, [
-    fetchHistoryData,
     fetchInvestmentActivity,
     fetchCoverage,
-    fetchPerformanceData,
+    fetchPortfolioChartData,
     fetchPortfolioData,
     fetchPositions,
     refreshBalanceSheet,
@@ -1000,6 +1035,12 @@ const InvestmentsPageContent: React.FC = () => {
 
               <LiabilitiesManager onChanged={handleRefreshAll} />
 
+              <DebtRepaymentPlanner
+                liabilities={balanceSheetData?.liabilities.manual}
+                loading={balanceSheetLoading}
+                error={balanceSheetError}
+              />
+
               <FxSettingsPanel
                 currencies={balanceSheetData?.assets.currencies.distinct || []}
                 onChanged={handleRefreshAll}
@@ -1157,6 +1198,16 @@ const InvestmentsPageContent: React.FC = () => {
             </Button>
           </Box>
         </Paper>
+      )}
+      {!hasPortfolio && !portfolioLoading && !portfolioError && (
+        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3, mt: 3 }}>
+          <LiabilitiesManager onChanged={handleRefreshAll} />
+          <DebtRepaymentPlanner
+            liabilities={balanceSheetData?.liabilities.manual}
+            loading={balanceSheetLoading}
+            error={balanceSheetError}
+          />
+        </Box>
       )}
     </Box>
   );
