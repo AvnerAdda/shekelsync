@@ -64,6 +64,7 @@ run.sh
 
 # Coverage directory used by tools like istanbul
 coverage/
+.vitest/
 
 # Miscellaneous
 .cache/

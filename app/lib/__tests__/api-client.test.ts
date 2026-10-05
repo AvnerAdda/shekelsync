@@ -1,3 +1,5 @@
+// @vitest-environment node
+// These transport tests supply their own window/document objects for each runtime.
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
 import { getAuthorizationHeader } from '@/lib/session-store';
 import { apiClient, invalidateApiCache } from '../api-client';

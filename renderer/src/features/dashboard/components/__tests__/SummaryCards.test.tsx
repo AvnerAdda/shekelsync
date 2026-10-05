@@ -152,6 +152,12 @@ describe('SummaryCards component', () => {
     expect(screen.queryByText('Current Month')).not.toBeInTheDocument();
   });
 
+  it('shows net refunds as a cash-flow credit rather than an expense debit', () => {
+    render(<SummaryCards totalIncome={0} totalExpenses={-50} portfolioValue={0} />);
+    expect(screen.getByText('+₪50')).toBeInTheDocument();
+    expect(screen.queryByText('-₪50')).not.toBeInTheDocument();
+  });
+
   it('shows pending expenses grouped by processed date on hover', async () => {
     const user = userEvent.setup();
 

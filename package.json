@@ -31,7 +31,7 @@
     "http-proxy-middleware": "^4.2.0"
   },
   "overrides": {
-    "follow-redirects": "^1.15.12",
-    "picomatch": "^2.3.2"
+    "follow-redirects": "^1.16.0",
+    "picomatch": "^4.0.7"
   }
 }

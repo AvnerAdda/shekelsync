@@ -1975,11 +1975,11 @@
         "inspectDate": "Inspect date",
         "selectHelp": "Hover to see a rolling window. Click the chart or choose a date to inspect its totals below.",
         "expenseShare": "{{value}}% of income",
-        "deficitHelp": "Expenses exceed income in this window.",
+        "deficitHelp": "Expenses and investment outflows exceed income in this window.",
         "remainderHelp": "Unspent income, counted toward Growth.",
         "chartCaption": "Each point represents the trailing {{days}} days.",
         "detailsHint": "Select a category to view transactions.",
-        "growthSpent": "Growth expenses",
+        "growthSpent": "Growth expenses & investments",
         "growthUnspent": "Unspent income",
         "targetsTitle": "Targets & category assignments",
         "targetsHelp": "Set your allocation and organize expenses.",
@@ -1998,7 +1998,7 @@
         "date": "Ending date",
         "deficit": "Deficit",
         "income": "Income",
-        "expenses": "Expenses",
+        "expenses": "Expenses & investments",
         "growthRemainder": "Remainder added to Growth",
         "noIncomeRow": "No positive income",
         "noIncome": "This window has no positive net income. Amounts are shown below; percentages cannot be calculated.",
@@ -2007,8 +2007,8 @@
         "allocationTitle": "Allocation of income",
         "openCategory": "View {{category}} transactions",
         "unallocatedHelp": "Expenses awaiting a spending-category assignment are included in the total.",
-        "growthDetail": "{{spent}} in Growth expenses + {{remainder}} remaining income.",
-        "accounting": "Completed transactions only. Refunds reduce expenses. Transfers, investment movements and duplicate card repayments are excluded. Growth includes its expenses plus remaining income; it does not mean a savings transfer was made."
+        "growthDetail": "{{spent}} in Growth expenses and investments + {{remainder}} remaining income.",
+        "accounting": "Completed transactions only. Refunds reduce expenses. Investment outflows count as spending and default to Growth unless assigned elsewhere. Investment withdrawals, other transfers and duplicate card repayments are excluded. Income remaining after expenses and investments is added to Growth as unspent income."
       }
     },
     "targets": {
