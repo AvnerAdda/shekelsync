@@ -69,7 +69,7 @@ const CHART_BREAKDOWN_METRICS = new Set([
   'cardRepayments', 'pairedCardExpenses', 'pairedCardRepayments',
 ]);
 
-function buildHistory(rows) {
+function buildHistory(rows, includeChartBreakdowns = true) {
   const dates = new Map();
   for (const row of rows) {
     const dateKey = row.date instanceof Date ? row.date.toISOString() : row.date;
@@ -77,7 +77,7 @@ function buildHistory(rows) {
       dates.set(dateKey, {
         date: row.date,
         ...Object.fromEntries(HISTORY_METRICS.map(([, field]) => [field, 0])),
-        chartBreakdown: new Map(),
+        ...(includeChartBreakdowns ? { chartBreakdown: new Map() } : {}),
       });
     }
     const date = dates.get(dateKey);
@@ -87,7 +87,7 @@ function buildHistory(rows) {
     // A category/vendor can occur in both regular activity and excluded bank
     // repayments. Merge their raw metrics so chart options apply consistently.
     const key = JSON.stringify([categoryId, vendor]);
-    if (!date.chartBreakdown.has(key)) {
+    if (includeChartBreakdowns && !date.chartBreakdown.has(key)) {
       date.chartBreakdown.set(key, {
         categoryId,
         categoryName,
@@ -95,16 +95,16 @@ function buildHistory(rows) {
         ...Object.fromEntries(Array.from(CHART_BREAKDOWN_METRICS, (field) => [field, 0])),
       });
     }
-    const segment = date.chartBreakdown.get(key);
+    const segment = date.chartBreakdown?.get(key);
     for (const [column, field] of HISTORY_METRICS) {
       const value = Number.parseFloat(row[column] || 0);
       date[field] += value;
-      if (CHART_BREAKDOWN_METRICS.has(field)) segment[field] += value;
+      if (segment && CHART_BREAKDOWN_METRICS.has(field)) segment[field] += value;
     }
   }
   return Array.from(dates.values(), (date) => ({
     ...date,
-    chartBreakdown: Array.from(date.chartBreakdown.values()),
+    ...(includeChartBreakdowns ? { chartBreakdown: Array.from(date.chartBreakdown.values()) } : {}),
   }));
 }
 
@@ -281,6 +281,7 @@ async function getDashboardAnalytics(query = {}) {
   const { startDate, endDate, months = 3, aggregation = 'daily' } = query;
   const includeBreakdowns = parseBooleanParam(query.includeBreakdowns, true);
   const includeSummary = parseBooleanParam(query.includeSummary, true);
+  const includeChartBreakdowns = parseBooleanParam(query.includeChartBreakdowns, true);
   const { start, end } = resolveDateRange({ startDate, endDate, months });
   const skipCache =
     process.env.NODE_ENV === 'test' ||
@@ -292,6 +293,7 @@ async function getDashboardAnalytics(query = {}) {
     months,
     includeBreakdowns,
     includeSummary,
+    includeChartBreakdowns,
   });
   if (!skipCache) {
     const cached = dashboardCache.get(cacheKey);
@@ -308,6 +310,12 @@ async function getDashboardAnalytics(query = {}) {
   `;
 
   const { groupBy: dateGroupBy, select: dateSelect } = resolveDateAggregation('t.date', aggregation);
+  // Rolling averages need daily totals only. Avoid grouping and serializing
+  // category/vendor segments a second time for that request.
+  const historyDimensions = includeChartBreakdowns
+    ? 'cd.id as category_id, cd.name as category_name, t.vendor'
+    : 'NULL as category_id, NULL as category_name, NULL as vendor';
+  const historyGroupBy = includeChartBreakdowns ? `${dateGroupBy}, cd.id, cd.name, t.vendor` : dateGroupBy;
   const pendingProcessedAtExpr = 'COALESCE(t.processed_datetime, t.processed_date)';
   const pendingProcessedDateExpr = dialect.useSqlite
     ? `DATE(${pendingProcessedAtExpr}, 'localtime')`
@@ -318,9 +326,7 @@ async function getDashboardAnalytics(query = {}) {
     `WITH base_history AS (
       SELECT
         ${dateSelect},
-        cd.id as category_id,
-        cd.name as category_name,
-        t.vendor,
+        ${historyDimensions},
         SUM(CASE
           WHEN ${COUNTED_INCOME_SQL} THEN t.price
           ELSE 0
@@ -397,14 +403,12 @@ async function getDashboardAnalytics(query = {}) {
       WHERE t.date >= $1 AND t.date <= $2
         AND tpe.transaction_identifier IS NULL
         AND ${dialect.excludePikadon('t')}
-      GROUP BY ${dateGroupBy}, cd.id, cd.name, t.vendor
+      GROUP BY ${historyGroupBy}
     ),
     paired_repayment_history AS (
       SELECT
         ${dateSelect},
-        cd.id as category_id,
-        cd.name as category_name,
-        t.vendor,
+        ${historyDimensions},
         SUM(CASE
           WHEN (${creditCardRepaymentCondition})
             AND t.price < 0
@@ -420,7 +424,7 @@ async function getDashboardAnalytics(query = {}) {
       WHERE t.date >= $1 AND t.date <= $2
         AND tpe.transaction_identifier IS NOT NULL
         AND ${dialect.excludePikadon('t')}
-      GROUP BY ${dateGroupBy}, cd.id, cd.name, t.vendor
+      GROUP BY ${historyGroupBy}
     )
     SELECT
       date, category_id, category_name, vendor,
@@ -440,7 +444,7 @@ async function getDashboardAnalytics(query = {}) {
     ORDER BY date ASC`,
     [start, end, BANK_CATEGORY_NAME],
   );
-  const history = buildHistory(historyResult.rows);
+  const history = buildHistory(historyResult.rows, includeChartBreakdowns);
 
   const monthExpr = dialect.toChar('t.date', 'YYYY-MM');
   let categoryDataResult = { rows: [] };

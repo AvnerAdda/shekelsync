@@ -1,16 +1,14 @@
+import EditTransactionCategoryButton from '@renderer/shared/components/EditTransactionCategoryButton';
 import React, { useEffect, useMemo, useState } from 'react';
 import {
   Alert,
   Box,
-  Checkbox,
   Chip,
   CircularProgress,
   Dialog,
-  DialogActions,
   DialogContent,
   DialogTitle,
   Divider,
-  FormControlLabel,
   IconButton,
   List,
   ListItem,
@@ -19,11 +17,9 @@ import {
   MenuItem,
   Select,
   Typography,
-  Button,
   alpha,
 } from '@mui/material';
 import CloseIcon from '@mui/icons-material/Close';
-import SwapHorizIcon from '@mui/icons-material/SwapHoriz';
 import { useTranslation } from 'react-i18next';
 import { apiClient } from '@renderer/lib/api-client';
 import { useFinancePrivacy } from '@app/contexts/FinancePrivacyContext';
@@ -45,19 +41,6 @@ interface Props {
   periodEnd: string;
   onDataChanged: () => void;
   incomeBasis?: boolean;
-}
-
-interface HierarchyCategory {
-  id: number;
-  name: string;
-  name_en?: string;
-  name_fr?: string;
-  parent_id: number | null;
-  category_type: string;
-}
-
-interface HierarchyResponse {
-  categories: HierarchyCategory[];
 }
 
 interface CategoryGroup {
@@ -87,13 +70,6 @@ const SpendingCategoryTransactionsModal: React.FC<Props> = ({
   const [meta, setMeta] = useState({ totalCount: 0, totalAmount: 0 });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
-  // Reassign transaction dialog state
-  const [reassignTxn, setReassignTxn] = useState<SpendingCategoryTransactionItem | null>(null);
-  const [allCategories, setAllCategories] = useState<HierarchyCategory[]>([]);
-  const [selectedCategoryId, setSelectedCategoryId] = useState<number | ''>('');
-  const [applyToAll, setApplyToAll] = useState(true);
-  const [reassigning, setReassigning] = useState(false);
 
   // Category move loading state
   const [movingCategoryId, setMovingCategoryId] = useState<number | null>(null);
@@ -138,6 +114,16 @@ const SpendingCategoryTransactionsModal: React.FC<Props> = ({
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, spendingCategory, periodStart, periodEnd, incomeBasis]);
+
+  useEffect(() => {
+    if (!open) return;
+    const refresh = () => {
+      void fetchTransactions();
+      onDataChanged();
+    };
+    window.addEventListener('transactionCategoryUpdated', refresh);
+    return () => window.removeEventListener('transactionCategoryUpdated', refresh);
+  });
 
   const categoryGroups = useMemo<CategoryGroup[]>(() => {
     const groupMap = new Map<number | 'uncategorized', CategoryGroup>();
@@ -208,91 +194,6 @@ const SpendingCategoryTransactionsModal: React.FC<Props> = ({
       setMovingCategoryId(null);
     }
   };
-
-  // Open reassign dialog
-  const openReassignDialog = async (txn: SpendingCategoryTransactionItem) => {
-    setReassignTxn(txn);
-    setSelectedCategoryId(txn.category_definition_id || '');
-    setApplyToAll(true);
-    setReassigning(false);
-
-    if (allCategories.length === 0) {
-      try {
-        const response = await apiClient.get('/api/categories/hierarchy');
-        if (response.ok) {
-          const data = response.data as HierarchyResponse;
-          setAllCategories(data.categories || []);
-        }
-      } catch (err) {
-        console.error('Failed to fetch categories:', err);
-      }
-    }
-  };
-
-  const closeReassignDialog = () => {
-    setReassignTxn(null);
-  };
-
-  const handleReassign = async () => {
-    if (!reassignTxn || !selectedCategoryId) return;
-
-    setReassigning(true);
-    try {
-      if (applyToAll) {
-        const response = await apiClient.post('/api/categorization_rules/auto-create', {
-          transactionName: reassignTxn.name || reassignTxn.vendor,
-          categoryDefinitionId: selectedCategoryId,
-          categoryType: reassignTxn.category_type || 'expense',
-        });
-        if (!response.ok) {
-          throw new Error('Failed to create rule');
-        }
-      } else {
-        const response = await apiClient.put(`/api/transactions/${reassignTxn.identifier}`, {
-          category_definition_id: selectedCategoryId,
-          category_type: reassignTxn.category_type || 'expense',
-        });
-        if (!response.ok) {
-          throw new Error('Failed to update transaction');
-        }
-      }
-
-      closeReassignDialog();
-      await fetchTransactions();
-      onDataChanged();
-    } catch (err) {
-      console.error('Failed to reassign transaction:', err);
-    } finally {
-      setReassigning(false);
-    }
-  };
-
-  // Build grouped category options for Select
-  const categoryOptions = useMemo(() => {
-    const parents = allCategories.filter(c => c.parent_id === null);
-    const children = allCategories.filter(c => c.parent_id !== null);
-
-    const groups: { parent: HierarchyCategory; children: HierarchyCategory[] }[] = [];
-    for (const parent of parents) {
-      const kids = children.filter(c => c.parent_id === parent.id);
-      if (kids.length > 0) {
-        groups.push({ parent, children: kids });
-      }
-    }
-
-    // Also include categories without children as top-level options
-    const childIds = new Set(children.map(c => c.id));
-    const parentIds = new Set(parents.filter(p => children.some(c => c.parent_id === p.id)).map(p => p.id));
-    const standalone = allCategories.filter(c => !childIds.has(c.id) && !parentIds.has(c.id));
-
-    return { groups, standalone };
-  }, [allCategories]);
-
-  const resolveCatName = (cat: HierarchyCategory) =>
-    resolveLocalizedCategoryName(
-      { name: cat.name, name_en: cat.name_en, name_fr: cat.name_fr },
-      locale,
-    ) || cat.name;
 
   return (
     <>
@@ -430,13 +331,7 @@ const SpendingCategoryTransactionsModal: React.FC<Props> = ({
                               }}>
                                 {formatCurrency(incomeBasis ? transaction.price : Math.abs(transaction.price), { absolute: !incomeBasis, maximumFractionDigits: 0 })}
                               </Typography>
-                              <IconButton
-                                size="small"
-                                onClick={() => void openReassignDialog(transaction)}
-                                title={t('transactionModal.reassignTransaction')}
-                              >
-                                <SwapHorizIcon fontSize="small" />
-                              </IconButton>
+                              <EditTransactionCategoryButton transaction={transaction} />
                             </Box>
                           }
                         >
@@ -480,100 +375,6 @@ const SpendingCategoryTransactionsModal: React.FC<Props> = ({
             </Box>
           )}
         </DialogContent>
-      </Dialog>
-      {/* Reassign transaction dialog */}
-      <Dialog
-        open={Boolean(reassignTxn)}
-        onClose={closeReassignDialog}
-        maxWidth="xs"
-        fullWidth
-      >
-        <DialogTitle>{t('transactionModal.reassignDialogTitle')}</DialogTitle>
-        <DialogContent>
-          {reassignTxn && (
-            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, pt: 1 }}>
-              <Typography variant="body2" sx={{
-                color: "text.secondary"
-              }}>
-                {reassignTxn.name || reassignTxn.vendor}
-              </Typography>
-
-              <Box>
-                <Typography
-                  variant="caption"
-                  sx={{
-                    color: "text.secondary",
-                    mb: 0.5,
-                    display: 'block'
-                  }}>
-                  {t('transactionModal.assignToCategory')}
-                </Typography>
-                <Select
-                  fullWidth
-                  size="small"
-                  value={selectedCategoryId}
-                  onChange={(e) => setSelectedCategoryId(e.target.value as number)}
-                  displayEmpty
-                  renderValue={(value) => {
-                    if (!value) return <em>{t('transactionModal.selectCategory')}</em>;
-                    const cat = allCategories.find(c => c.id === value);
-                    return cat ? resolveCatName(cat) : String(value);
-                  }}
-                >
-                  {categoryOptions.groups.map(({ parent, children }) => [
-                    <ListSubheader key={`header-${parent.id}`} sx={{ fontSize: '0.75rem', fontWeight: 700 }}>
-                      {resolveCatName(parent)}
-                    </ListSubheader>,
-                    ...children.map(child => (
-                      <MenuItem key={child.id} value={child.id} sx={{ pl: 4, fontSize: '0.85rem' }}>
-                        {resolveCatName(child)}
-                      </MenuItem>
-                    )),
-                  ])}
-                  {categoryOptions.standalone.map(cat => (
-                    <MenuItem key={cat.id} value={cat.id} sx={{ fontSize: '0.85rem' }}>
-                      {resolveCatName(cat)}
-                    </MenuItem>
-                  ))}
-                </Select>
-              </Box>
-
-              <FormControlLabel
-                control={
-                  <Checkbox
-                    checked={applyToAll}
-                    onChange={(e) => setApplyToAll(e.target.checked)}
-                    size="small"
-                  />
-                }
-                label={
-                  <Box>
-                    <Typography variant="body2">
-                      {t('transactionModal.applyToAll')}
-                    </Typography>
-                    <Typography variant="caption" sx={{
-                      color: "text.secondary"
-                    }}>
-                      {t('transactionModal.applyToAllHint')}
-                    </Typography>
-                  </Box>
-                }
-              />
-            </Box>
-          )}
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={closeReassignDialog} disabled={reassigning}>
-            {t('transactionModal.cancel')}
-          </Button>
-          <Button
-            variant="contained"
-            onClick={() => void handleReassign()}
-            disabled={reassigning || !selectedCategoryId}
-          >
-            {reassigning ? t('transactionModal.reassigning') : t('transactionModal.reassign')}
-          </Button>
-        </DialogActions>
       </Dialog>
     </>
   );

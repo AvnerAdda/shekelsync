@@ -19,6 +19,7 @@ import ViewListIcon from '@mui/icons-material/ViewList';
 import CalendarMonthIcon from '@mui/icons-material/CalendarMonth';
 import FilterListIcon from '@mui/icons-material/FilterList';
 import { useTranslation } from 'react-i18next';
+import { useDeleteConfirmation } from '@renderer/shared/hooks/useDeleteConfirmation';
 import { useSubscriptions } from '@renderer/features/analysis/hooks/useSubscriptions';
 import { useSubscriptionCategoryFilter } from '@renderer/features/analysis/hooks/useSubscriptionCategoryFilter';
 import SubscriptionSummaryCards from './SubscriptionSummaryCards';
@@ -40,6 +41,7 @@ import type { CorrectionTarget } from '@renderer/features/financial-truth/types'
 const SubscriptionsTab: React.FC = () => {
   const theme = useTheme();
   const { t } = useTranslation('translation', { keyPrefix: 'analysisPage.subscriptions' });
+  const { confirmDelete, deleteConfirmationDialog } = useDeleteConfirmation();
 
   const {
     subscriptions,
@@ -106,8 +108,10 @@ const SubscriptionsTab: React.FC = () => {
   }, [updateSubscription]);
 
   const handleDelete = useCallback(async (id: number) => {
+    const subscription = subscriptions.find(item => item.id === id);
+    if (!subscription || !await confirmDelete(subscription.display_name)) return;
     await deleteSubscription(id);
-  }, [deleteSubscription]);
+  }, [confirmDelete, deleteSubscription, subscriptions]);
 
   const handleDismissAlert = useCallback(async (alertId: number) => {
     await dismissAlert(alertId);
@@ -117,6 +121,7 @@ const SubscriptionsTab: React.FC = () => {
 
   return (
     <Box>
+      {deleteConfirmationDialog}
       {/* Header */}
       <Stack
         direction={{ xs: 'column', sm: 'row' }}

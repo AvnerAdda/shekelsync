@@ -1,3 +1,4 @@
+import EditTransactionCategoryButton from '@renderer/shared/components/EditTransactionCategoryButton';
 import React from 'react';
 import {
   Dialog,
@@ -365,6 +366,7 @@ const CategoryDetailsDialog: React.FC<CategoryDetailsDialogProps> = ({
                       primary={
                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                           <Typography variant="body2">{txn.transaction_name || txn.name || txn.vendor}</Typography>
+                          <EditTransactionCategoryButton transaction={txn} />
                           {pending && (
                             <Chip
                               icon={<HourglassEmptyIcon sx={{ fontSize: 14 }} />}

@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { focusDeleteCancel } from '@renderer/shared/hooks/useDeleteConfirmation';
 import {
   Alert, Box, Button, Card, CardContent, Chip, CircularProgress,
   Dialog, DialogActions, DialogContent, DialogContentText, DialogTitle,
@@ -155,14 +156,14 @@ export default function GoalsPanel() {
         </Box>
       </Dialog>
 
-      <Dialog open={Boolean(deleting)} onClose={() => { if (!saving) setDeleting(null); }} maxWidth="xs" fullWidth aria-labelledby="goal-delete-title">
+      <Dialog open={Boolean(deleting)} onClose={() => { if (!saving) setDeleting(null); }} maxWidth="xs" fullWidth aria-labelledby="goal-delete-title" slotProps={{ transition: { onEntered: focusDeleteCancel } }}>
         <DialogTitle id="goal-delete-title">{t('goals.deleteTitle')}</DialogTitle>
         <DialogContent>
           <DialogContentText>{t('goals.deleteBody', { name: deleting?.name })}</DialogContentText>
           {actionError && <Alert severity="error" sx={{ mt: 2 }}>{actionError}</Alert>}
         </DialogContent>
         <DialogActions>
-          <Button disabled={saving} onClick={() => setDeleting(null)}>{t('shared.cancel')}</Button>
+          <Button data-delete-cancel disabled={saving} onClick={() => setDeleting(null)}>{t('shared.cancel')}</Button>
           <Button disabled={saving} color="error" variant="contained" onClick={() => void confirmDelete()}>{t('shared.delete')}</Button>
         </DialogActions>
       </Dialog>

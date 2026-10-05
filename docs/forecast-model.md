@@ -67,6 +67,15 @@ simulation reconciliation. A read-only March–August replay of the local ledger
 to check that one-off property purchases no longer inflate subsequent months; it is an
 exploratory historical check, not evidence of prospective prediction accuracy.
 
+### Net Position investment forecast
+
+Only the Net Position chart adds an expected forecast line after investing, beside
+the existing forecast before investing. Both start at the same historical net
+position. Each future day's signed investment transfer is subtracted from its
+cash flow: contributions lower the new line and withdrawals raise it. Missing
+investment data stops the new cumulative line instead of assuming zero. Existing
+scenario lines and API cash-flow fields remain on the before-investing basis.
+
 ### Earlier income and expense evaluation
 
 Development compared calendar averages, medians, exponentially weighted estimates, payment

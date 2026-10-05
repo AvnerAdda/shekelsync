@@ -1,3 +1,4 @@
+import EditTransactionCategoryButton, { CATEGORY_UPDATED_EVENT } from '@renderer/shared/components/EditTransactionCategoryButton';
 import React, { useState, useEffect, useCallback } from 'react';
 import {
   Dialog,
@@ -59,6 +60,7 @@ const TransactionDetailModal: React.FC<TransactionDetailModalProps> = ({
   const theme = useTheme();
   const { t } = useTranslation();
 
+  const [categoryUpdate, setCategoryUpdate] = useState<TransactionForModal | null>(null);
   const [memo, setMemo] = useState('');
   const [tags, setTags] = useState<string[]>([]);
   const [tagInput, setTagInput] = useState('');
@@ -69,11 +71,23 @@ const TransactionDetailModal: React.FC<TransactionDetailModalProps> = ({
   // Load transaction data and all tags when modal opens
   useEffect(() => {
     if (open && transaction) {
+      setCategoryUpdate(null);
       setMemo(transaction.memo || '');
       setTags(transaction.tags || []);
       fetchAllTags();
     }
   }, [open, transaction]);
+
+  useEffect(() => {
+    const updateCategory = (event: Event) => {
+      const updated = (event as CustomEvent<TransactionForModal>).detail;
+      if (updated.identifier === transaction?.identifier && updated.vendor === transaction?.vendor) {
+        setCategoryUpdate(updated);
+      }
+    };
+    window.addEventListener(CATEGORY_UPDATED_EVENT, updateCategory);
+    return () => window.removeEventListener(CATEGORY_UPDATED_EVENT, updateCategory);
+  }, [transaction?.identifier, transaction?.vendor]);
 
   const fetchAllTags = async () => {
     setLoading(true);
@@ -114,6 +128,12 @@ const TransactionDetailModal: React.FC<TransactionDetailModalProps> = ({
       if (onSave) {
         onSave({
           ...transaction,
+          ...(categoryUpdate ? {
+            category_name: categoryUpdate.category_name,
+            parent_name: categoryUpdate.parent_name,
+            category_definition_id: categoryUpdate.category_definition_id,
+            category_type: categoryUpdate.category_type,
+          } : {}),
           memo: memo || null,
           tags,
         });
@@ -143,7 +163,7 @@ const TransactionDetailModal: React.FC<TransactionDetailModalProps> = ({
 
   const getTransactionIcon = () => {
     if (!transaction) return null;
-    const type = transaction.category_type || (transaction.price > 0 ? 'income' : 'expense');
+    const type = categoryUpdate?.category_type || transaction.category_type || (transaction.price > 0 ? 'income' : 'expense');
     switch (type) {
       case 'income':
         return <IncomeIcon sx={{ color: theme.palette.success.main }} />;
@@ -164,10 +184,10 @@ const TransactionDetailModal: React.FC<TransactionDetailModalProps> = ({
 
   if (!transaction) return null;
 
-  const categoryLabel =
-    transaction.category_name && transaction.parent_name
-      ? `${transaction.parent_name} › ${transaction.category_name}`
-      : transaction.category_name || transaction.parent_name;
+  const categorySource = categoryUpdate || transaction;
+  const categoryLabel = categorySource.category_name && categorySource.parent_name
+    ? `${categorySource.parent_name} › ${categorySource.category_name}`
+    : categorySource.category_name || categorySource.parent_name;
 
   return (
     <>
@@ -235,6 +255,7 @@ const TransactionDetailModal: React.FC<TransactionDetailModalProps> = ({
                 {formatDate(transaction.date)}
               </Typography>
             </Box>
+            <EditTransactionCategoryButton transaction={transaction} />
             {categoryLabel && (
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                 <CategoryIcon sx={{ fontSize: 18, color: 'text.secondary' }} />

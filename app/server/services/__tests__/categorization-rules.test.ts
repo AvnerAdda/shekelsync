@@ -196,6 +196,59 @@ describe('categorization rules service', () => {
   });
 
   describe('createAutoRule', () => {
+    it('replaces an existing rule target without unique-key conflicts and refreshes cached analytics', async () => {
+      const Database = require('better-sqlite3');
+      const { createTtlCache } = require('../../../lib/server/ttl-cache.js');
+      const sqlite = new Database(':memory:');
+      try {
+        sqlite.exec(`
+          CREATE TABLE category_definitions (id INTEGER PRIMARY KEY, name TEXT, category_type TEXT, parent_id INTEGER);
+          CREATE TABLE categorization_rules (
+            id INTEGER PRIMARY KEY, name_pattern TEXT, target_category TEXT, category_path TEXT,
+            category_definition_id INTEGER, category_type TEXT, is_active INTEGER, priority INTEGER,
+            updated_at TEXT, UNIQUE(name_pattern, target_category)
+          );
+          CREATE TABLE transactions (
+            name TEXT, price REAL, category_definition_id INTEGER, category_type TEXT,
+            auto_categorized INTEGER, confidence_score REAL
+          );
+          INSERT INTO category_definitions VALUES (1, 'Food', 'expense', NULL), (2, 'Travel', 'expense', NULL);
+          INSERT INTO categorization_rules (name_pattern, target_category, category_definition_id, is_active)
+            VALUES ('SHOP', 'Food', 1, 1);
+          INSERT INTO transactions VALUES ('SHOP branch', -35, 1, 'expense', 0, 1), ('SHOP refund', 10, 1, 'expense', 0, 1);
+        `);
+        rulesService.__setDatabase({
+          query: async (sql: string, params: unknown[] = []) => {
+            const ordered: unknown[] = [];
+            const statement = sqlite.prepare(sql.replace(/\$(\d+)/g, (_match: string, index: string) => {
+              const value = params[Number(index) - 1];
+              ordered.push(typeof value === 'boolean' ? Number(value) : value);
+              return '?';
+            }));
+            if (statement.reader) {
+              const rows = statement.all(...ordered);
+              return { rows, rowCount: rows.length };
+            }
+            return { rows: [], rowCount: statement.run(...ordered).changes };
+          },
+        });
+        const cache = createTtlCache();
+        cache.set('analytics', 'old category totals');
+        const result = await rulesService.createAutoRule({ transactionName: 'SHOP', categoryDefinitionId: 2 });
+        expect(result.transactionsUpdated).toBe(1);
+        expect(cache.get('analytics')).toBeUndefined();
+        expect(sqlite.prepare('SELECT target_category FROM categorization_rules WHERE is_active = 1').all())
+          .toEqual([{ target_category: 'Travel' }]);
+        expect(sqlite.prepare('SELECT category_definition_id FROM transactions ORDER BY price').all())
+          .toEqual([{ category_definition_id: 2 }, { category_definition_id: 1 }]);
+        await rulesService.createAutoRule({ transactionName: 'SHOP', categoryDefinitionId: 1 });
+        expect(sqlite.prepare('SELECT target_category FROM categorization_rules WHERE is_active = 1').all())
+          .toEqual([{ target_category: 'Food' }]);
+      } finally {
+        sqlite.close();
+      }
+    });
+
     it('throws when required fields missing', async () => {
       await expect(rulesService.createAutoRule({})).rejects.toMatchObject({ status: 400 });
     });

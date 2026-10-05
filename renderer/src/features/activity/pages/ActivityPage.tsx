@@ -1,3 +1,4 @@
+import EditTransactionCategoryButton from '@renderer/shared/components/EditTransactionCategoryButton';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Alert,
@@ -352,7 +353,7 @@ const ActivityPage: React.FC = () => {
                     const category = transaction.category_name || transaction.parent_name;
 
                     return (
-                      <ListItem key={`${transaction.identifier}|${transaction.vendor}`} disablePadding>
+                      <ListItem key={`${transaction.identifier}|${transaction.vendor}`} disablePadding secondaryAction={<EditTransactionCategoryButton transaction={transaction} />}>
                         <ListItemButton
                           onClick={() => openTransaction(transaction)}
                           divider={index < items.length - 1}

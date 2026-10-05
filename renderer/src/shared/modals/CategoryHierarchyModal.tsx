@@ -97,6 +97,7 @@ import SortIcon from '@mui/icons-material/Sort';
 import SwapVertIcon from '@mui/icons-material/SwapVert';
 import HelpOutlineIcon from '@mui/icons-material/HelpOutlined';
 import { useTranslation } from 'react-i18next';
+import { useDeleteConfirmation } from '@renderer/shared/hooks/useDeleteConfirmation';
 import ModalHeader from './ModalHeader';
 import { apiClient } from '@/lib/api-client';
 import CategoryIconComponent from '@renderer/features/breakdown/components/CategoryIcon';
@@ -219,6 +220,7 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
   focusedTransaction,
 }) => {
   const { t, i18n } = useTranslation('translation', { keyPrefix: 'categoryHierarchy' });
+  const { confirmDelete, deleteConfirmationDialog } = useDeleteConfirmation(open);
   const theme = useTheme();
   const locale = useMemo(() => (i18n.language?.split('-')[0] || 'he') as 'he' | 'en' | 'fr', [i18n.language]);
   const [activeTab, setActiveTab] = useState(0);
@@ -531,6 +533,27 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
       setLoading(false);
     }
   }, [buildCategoryTree, t]);
+
+  useEffect(() => {
+    if (!open) return;
+    const refresh = async () => {
+      void fetchCategories();
+      void fetchRules();
+      setCategoryTransactionsMap(new Map());
+      if (expandedCategoryTransactions != null) {
+        try {
+          const response = await apiClient.get(`/api/categories/transactions?categoryId=${expandedCategoryTransactions}&limit=500`);
+          if (!response.ok) throw new Error('Failed to reload category transactions');
+          const data = response.data as { transactions?: TransactionMatch[] };
+          setCategoryTransactionsMap(new Map([[expandedCategoryTransactions, data.transactions || []]]));
+        } catch {
+          setError(t('errors.loadCategoryTransactions'));
+        }
+      }
+    };
+    window.addEventListener('transactionCategoryUpdated', refresh);
+    return () => window.removeEventListener('transactionCategoryUpdated', refresh);
+  }, [open, expandedCategoryTransactions, fetchCategories, fetchRules, t]);
 
   // Helper function to build category path from a category ID
   const buildCategoryPath = useCallback((categoryId: number | null | undefined): number[] => {
@@ -1100,8 +1123,8 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
     }
   };
 
-  const handleDeleteCategory = async (categoryId: number) => {
-    if (!confirm(t('confirm.deleteCategory'))) {
+  const handleDeleteCategory = async (category: CategoryDefinition) => {
+    if (loading || !await confirmDelete(getLocalizedCategoryName(category) || category.name, t('confirm.deleteCategory'))) {
       return;
     }
 
@@ -1109,7 +1132,7 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
       setLoading(true);
       setError(null);
 
-      const response = await apiClient.delete(`/api/categories/hierarchy?id=${categoryId}`, {
+      const response = await apiClient.delete(`/api/categories/hierarchy?id=${category.id}`, {
       });
 
       if (!response.ok) {
@@ -1201,7 +1224,8 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
   };
 
   const handleDeleteRule = async (ruleId: number) => {
-    if (!confirm(t('confirm.deleteRule'))) {
+    const rule = rules.find(item => item.id === ruleId);
+    if (loading || !rule || !await confirmDelete(rule.name_pattern)) {
       return;
     }
 
@@ -1843,7 +1867,7 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
                 <Tooltip title={t('actions.delete')}>
                   <IconButton
                     size="small"
-                    onClick={() => handleDeleteCategory(category.id)}
+                    onClick={() => handleDeleteCategory(category)}
                     sx={{ color: 'error.main', p: 0.5 }}
                   >
                     <DeleteIcon fontSize="small" />
@@ -4006,6 +4030,7 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
         </Button>
       </DialogActions>
       {/* Transaction Detail Modal */}
+      {deleteConfirmationDialog}
       <TransactionDetailModal
         open={transactionDetailModalOpen}
         onClose={() => setTransactionDetailModalOpen(false)}

@@ -33,6 +33,7 @@ const LONG_REQUEST_TIMEOUT_MS = 180_000;
 const forecastResponseCache = new Map<string, { response: ApiResponse<unknown>; expiresAt: number }>();
 const forecastInFlightRequests = new Map<string, Promise<ApiResponse<unknown>>>();
 const sharedGetInFlightRequests = new Map<string, Promise<ApiResponse<unknown>>>();
+let cacheVersion = 0;
 type SharedResponseCacheEntry = {
   response: ApiResponse<unknown>;
   expiresAt: number;
@@ -80,6 +81,11 @@ function hasNoCacheQuery(url: string): boolean {
 }
 
 export function invalidateApiCache(tags?: string[]): void {
+  // Pending reads may reflect data from before a successful mutation. Detach
+  // them so new readers fetch again, and prevent late responses from caching.
+  cacheVersion += 1;
+  forecastInFlightRequests.clear();
+  sharedGetInFlightRequests.clear();
   if (!tags || tags.length === 0) {
     sharedResponseCache.clear();
     forecastResponseCache.clear();
@@ -354,6 +360,7 @@ async function request<TResponse = unknown, TBody = unknown>(
     }
   };
 
+  const requestCacheVersion = cacheVersion;
   const forecastCacheKey = getForecastCacheKey(url);
   const canShareGetRequest = !signal
     && requestedTimeoutMs === undefined
@@ -380,6 +387,7 @@ async function request<TResponse = unknown, TBody = unknown>(
 
       const requestPromise = executeRequest()
         .then((response) => {
+          if (requestCacheVersion !== cacheVersion) return response;
           if (response.ok) {
             forecastResponseCache.set(forecastCacheKey, {
               response: response as ApiResponse<unknown>,
@@ -391,7 +399,9 @@ async function request<TResponse = unknown, TBody = unknown>(
           return response;
         })
         .finally(() => {
-          forecastInFlightRequests.delete(forecastCacheKey);
+          if (forecastInFlightRequests.get(forecastCacheKey) === requestPromise) {
+            forecastInFlightRequests.delete(forecastCacheKey);
+          }
         });
 
       forecastInFlightRequests.set(
@@ -433,6 +443,7 @@ async function request<TResponse = unknown, TBody = unknown>(
 
     const requestPromise = executeRequest()
       .then((response) => {
+        if (requestCacheVersion !== cacheVersion) return response;
         if (canStoreForecastResponse && forecastCacheKey) {
           if (response.ok) {
             forecastResponseCache.set(forecastCacheKey, {
@@ -454,7 +465,9 @@ async function request<TResponse = unknown, TBody = unknown>(
         return response;
       })
       .finally(() => {
-        if (sharedGetRequestKey) sharedGetInFlightRequests.delete(sharedGetRequestKey);
+        if (sharedGetRequestKey && sharedGetInFlightRequests.get(sharedGetRequestKey) === requestPromise) {
+          sharedGetInFlightRequests.delete(sharedGetRequestKey);
+        }
       });
 
     if (sharedGetRequestKey) {
