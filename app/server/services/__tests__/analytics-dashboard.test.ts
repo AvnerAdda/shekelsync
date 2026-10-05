@@ -592,6 +592,12 @@ describe('analytics dashboard service', () => {
       expect(result.history.reduce((total: number, row: { income: number }) => total + row.income, 0)).toBe(2000);
       expect(result.history.reduce((total: number, row: { expenses: number }) => total + row.expenses, 0)).toBe(100);
       expect(result.history.reduce((total: number, row: { capitalReturns: number }) => total + row.capitalReturns, 0)).toBe(300);
+      const compact = await getDashboardAnalytics({
+        startDate: '2025-02-01', endDate: '2025-02-28', aggregation,
+        includeBreakdowns: false, includeSummary: false, includeChartBreakdowns: false,
+      });
+      expect(compact.history).toEqual(result.history.map(({ chartBreakdown, ...totals }: any) => totals));
+      expect(JSON.stringify(compact).length).toBeLessThan(JSON.stringify(result).length);
       for (const row of result.history) {
         expect(row.chartBreakdown.length).toBeGreaterThan(0);
         for (const field of [

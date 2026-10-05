@@ -34,6 +34,7 @@ const useBreakdownDrilldown = ({
   categoryBreakdown,
   transactions,
 }: UseBreakdownDrilldownOptions) => {
+  const lastDetailsRequest = useRef<CategoryDetailsRequest | null>(null);
   const [view, setView] = useState<BreakdownView>('overview');
   const [drillStack, setDrillStack] = useState<DrillLevel[]>([]);
   const [categoryDetails, setCategoryDetails] = useState<CategoryDetails | null>(null);
@@ -133,6 +134,7 @@ const useBreakdownDrilldown = ({
 
   const loadCategoryDetails = useCallback(
     async ({ parentId, subcategoryId, categoryName }: CategoryDetailsRequest) => {
+      lastDetailsRequest.current = { parentId, subcategoryId, categoryName };
       startZoomAnimation();
       try {
         const params = new URLSearchParams({
@@ -166,6 +168,14 @@ const useBreakdownDrilldown = ({
     },
     [categoryType, endDate, locale, startDate, startZoomAnimation]
   );
+
+  useEffect(() => {
+    const refresh = () => {
+      if (detailsModalOpen && lastDetailsRequest.current) void loadCategoryDetails(lastDetailsRequest.current);
+    };
+    window.addEventListener('dataRefresh', refresh);
+    return () => window.removeEventListener('dataRefresh', refresh);
+  }, [detailsModalOpen, loadCategoryDetails]);
 
   const handleDrillDown = useCallback(
     (parentId: number, parentName: string) => {

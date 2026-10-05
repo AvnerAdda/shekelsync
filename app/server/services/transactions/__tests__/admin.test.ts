@@ -1,6 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as transactionsAdmin from '../admin.js';
 
+const { createTtlCache } = require('../../../../lib/server/ttl-cache.js');
+
 const client = { query: vi.fn(), release: vi.fn() };
 const db = { getClient: vi.fn(), query: vi.fn() };
 
@@ -15,7 +17,34 @@ describe('transactions admin service', () => {
     transactionsAdmin.__resetDatabase();
   });
 
+  it('invalidates cached analytics after a category change, while retaining unrelated transaction fields', async () => {
+    const dashboard = createTtlCache();
+    const details = createTtlCache();
+    dashboard.set('summary', { expenses: 35 });
+    details.set('day', { category_name: 'Food' });
+    db.query.mockResolvedValueOnce({ rowCount: 1 });
+
+    await transactionsAdmin.updateTransaction('shared-id|bank-b', {
+      category_definition_id: 4, category_type: 'investment', auto_categorized: false,
+    });
+
+    expect(db.query.mock.calls[0][1]).toEqual(['shared-id', 'bank-b', 4, 'investment', false]);
+    expect(String(db.query.mock.calls[0][0])).not.toMatch(/memo\s*=/);
+    expect(dashboard.get('summary')).toBeUndefined();
+    expect(details.get('day')).toBeUndefined();
+  });
+
+  it('does not invalidate analytics when the category write fails', async () => {
+    const cache = createTtlCache();
+    cache.set('summary', 'unchanged');
+    db.query.mockRejectedValueOnce(new Error('Write failed'));
+    await expect(transactionsAdmin.updateTransaction('id|bank', { category_definition_id: 4 })).rejects.toThrow('Write failed');
+    expect(cache.get('summary')).toBe('unchanged');
+  });
+
   it('creates a manual income transaction with provided category', async () => {
+    const cache = createTtlCache();
+    cache.set('summary', { income: 0 });
     client.query
       .mockResolvedValueOnce({
         rows: [
@@ -46,6 +75,7 @@ describe('transactions admin service', () => {
     expect(insertSql).toContain('INSERT INTO transactions');
     expect(insertArgs[1][4]).toBe(1500); // price positive for income
     expect(client.release).toHaveBeenCalledTimes(1);
+    expect(cache.get('summary')).toBeUndefined();
   });
 
   it('creates a manual expense transaction with negative price and manual vendor', async () => {
@@ -181,6 +211,8 @@ describe('transactions admin service', () => {
   });
 
   it('deletes a transaction when identifier is valid', async () => {
+    const cache = createTtlCache();
+    cache.set('summary', { expenses: 25 });
     db.query.mockResolvedValueOnce({ rows: [] });
 
     const result = await transactionsAdmin.deleteTransaction('abc|vendor');
@@ -190,5 +222,15 @@ describe('transactions admin service', () => {
     const [sql, params] = db.query.mock.calls[0];
     expect(String(sql)).toContain('DELETE FROM transactions');
     expect(params).toEqual(['abc', 'vendor']);
+    expect(cache.get('summary')).toBeUndefined();
+  });
+
+  it('retains cached analytics when a deletion fails', async () => {
+    const cache = createTtlCache();
+    cache.set('summary', { expenses: 25 });
+    db.query.mockRejectedValueOnce(new Error('Delete failed'));
+
+    await expect(transactionsAdmin.deleteTransaction('abc|vendor')).rejects.toThrow('Delete failed');
+    expect(cache.get('summary')).toEqual({ expenses: 25 });
   });
 });

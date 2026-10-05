@@ -1,4 +1,24 @@
 {
+  "deleteConfirmation": {
+    "title": "Supprimer « {{name}} » ?",
+    "message": "Veuillez confirmer la suppression de cet élément. Cette action est irréversible.",
+    "cancel": "Annuler",
+    "delete": "Supprimer"
+  },
+  "transactionCategoryEditor": {
+    "title": "Modifier la catégorie",
+    "category": "Catégorie",
+    "singleHint": "Seule cette transaction sera modifiée, sauf si vous activez la règle ci-dessous.",
+    "applyRule": "Créer ou mettre à jour aussi une règle pour les noms de transactions correspondants",
+    "ruleHint": "La règle s’applique aux transactions existantes et futures dont le nom contient celui de cette transaction. Les règles de revenus concernent les montants positifs ; celles de dépenses, les montants négatifs.",
+    "loadError": "Impossible de charger la transaction et les catégories. Veuillez réessayer.",
+    "saveError": "Impossible de modifier la catégorie. Veuillez réessayer.",
+    "ruleError": "La transaction a été modifiée, mais la règle n’a pas pu être enregistrée. Réessayez pour enregistrer la règle.",
+    "retry": "Réessayer",
+    "cancel": "Annuler",
+    "saving": "Enregistrement…",
+    "save": "Enregistrer"
+  },
   "common": {
     "language": "Langue",
     "languages": {
@@ -1058,10 +1078,19 @@
       "unknownVendor": "Fournisseur inconnu",
       "cardRepayments": "Inclure les remboursements de carte",
       "capitalReturns": "Inclure les retours de capital",
-      "avgGuides": "Afficher les guides de moyenne",
+      "rollingAverages": "Afficher les moyennes quotidiennes sur 30 jours",
       "showForecast": "Afficher les prévisions",
       "on": "Activé",
       "off": "Désactivé"
+    },
+    "rolling": {
+      "title": "Moyenne par jour sur 30 jours",
+      "caption": "Lignes pointillées : moyenne quotidienne des revenus, dépenses et investissements sur les 30 derniers jours, jour indiqué et jours sans activité inclus. Les points hebdomadaires et mensuels utilisent la fin de période.",
+      "legend": "Pointillés : moyennes quotidiennes sur 30 jours",
+      "series": "{{flow}} · moyenne quotidienne sur 30 jours",
+      "loading": "Chargement des moyennes glissantes…",
+      "retry": "Réessayer",
+      "error": "Impossible de charger les moyennes glissantes."
     },
     "tabs": {
       "history": "Revenus et dépenses quotidiens",
@@ -1083,6 +1112,8 @@
       "nextMonth": "Mois suivant"
     },
     "forecast": {
+      "beforeInvesting": "Prévision avant investissements",
+      "afterInvesting": "Prévision après investissements",
       "loading": "Chargement des prévisions...",
       "error": "Échec du chargement des prévisions",
       "noData": "Aucune donnée de prévision disponible",
@@ -3229,7 +3260,7 @@
       "complete": "{{count}} terminées"
     },
     "confirm": {
-      "deleteCategory": "Êtes-vous sûr de vouloir supprimer cette catégorie ? Cela affectera aussi toutes ses sous-catégories.",
+      "deleteCategory": "La suppression efface aussi les budgets et paramètres liés à cette catégorie et dissocie les règles de catégorisation. Cette action est irréversible. Les catégories contenant des transactions ou des sous-catégories ne peuvent pas être supprimées.",
       "deleteRule": "Êtes-vous sûr de vouloir supprimer cette règle ?"
     },
     "errors": {

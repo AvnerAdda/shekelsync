@@ -1,3 +1,4 @@
+import EditTransactionCategoryButton from '@renderer/shared/components/EditTransactionCategoryButton';
 import React, { useState, useCallback, useEffect } from 'react';
 import {
   Paper,
@@ -32,6 +33,8 @@ import InstitutionBadge from '@renderer/shared/components/InstitutionBadge';
 import CategoryIcon from '@renderer/features/breakdown/components/CategoryIcon';
 import IncomeExpenseCalendar from './IncomeExpenseCalendar';
 import RollingAllocationPanel from './RollingAllocationPanel';
+import { useRollingCashflow } from '../hooks/useRollingCashflow';
+import { buildRollingCashflow } from './rolling-cashflow';
 import ForecastDayDetails from './ForecastDayDetails';
 import { useDashboardFilters } from '../DashboardFiltersContext';
 import { useTranslation } from 'react-i18next';
@@ -137,7 +140,7 @@ const TransactionHistorySection: React.FC<TransactionHistorySectionProps> = ({
   const [settingsAnchorEl, setSettingsAnchorEl] = useState<HTMLElement | null>(null);
   const [includeCardRepayments, setIncludeCardRepayments] = useState(false);
   const [includeCapitalReturns, setIncludeCapitalReturns] = useState(false);
-  const [showAverageGuides, setShowAverageGuides] = useState(true);
+  const [showRollingAverages, setShowRollingAverages] = useState(true);
   const [showForecast, setShowForecast] = useState(true);
   const [incomeExpenseChartType, setIncomeExpenseChartType] = useState<IncomeExpenseChartType>('bar');
   const [barSplitBy, setBarSplitBy] = useState<BarSplitBy>('none');
@@ -153,6 +156,15 @@ const TransactionHistorySection: React.FC<TransactionHistorySectionProps> = ({
     setHiddenPredictionIds(new Set());
     setHiddenPatternIds(new Set());
   }, [forecastData?.truthRevision]);
+
+  useEffect(() => {
+    const refreshTransactions = () => {
+      if (transactionPeriod) fetchTransactionsByDate(transactionPeriod.startDate, transactionPeriod.endDate);
+      else if (hoveredDate) fetchTransactionsByDate(hoveredDate);
+    };
+    window.addEventListener('transactionCategoryUpdated', refreshTransactions);
+    return () => window.removeEventListener('transactionCategoryUpdated', refreshTransactions);
+  }, [transactionPeriod, hoveredDate, fetchTransactionsByDate]);
 
   const settingsOpen = Boolean(settingsAnchorEl);
 
@@ -549,7 +561,27 @@ const TransactionHistorySection: React.FC<TransactionHistorySectionProps> = ({
   ]);
 
   const splitBars = incomeExpenseChartType === 'bar' && barSplitBy !== 'none';
-  const dailyChartData = React.useMemo(() => getDailyIncomeExpenseData(), [getDailyIncomeExpenseData]);
+  const rollingStart = format(startDate, 'yyyy-MM-dd');
+  const rolling = useRollingCashflow(rollingStart, format(endDate, 'yyyy-MM-dd'), activeTab === TAB_HISTORY && showRollingAverages);
+  const rollingPoints = React.useMemo(() => rolling.history.length
+    ? buildRollingCashflow(rolling.history, rollingStart, rolling.end, { includeCardRepayments, includeCapitalReturns }) : [],
+  [rolling.history, rollingStart, rolling.end, includeCardRepayments, includeCapitalReturns]);
+  const hasRollingAverages = showRollingAverages && rollingPoints.length > 0;
+  const dailyChartData = React.useMemo(() => {
+    const points = new Map(rollingPoints.map(point => [point.date, point]));
+    return getDailyIncomeExpenseData().map((item: any) => {
+      const period = getTransactionPeriod(item.date, aggregationPeriod, startDate, endDate);
+      const windowEnd = period ? [period.endDate, rolling.end].sort()[0] : '';
+      const point = hasRollingAverages && !item.isForecast && period && period.startDate <= rolling.end
+        ? points.get(windowEnd) : undefined;
+      if (!point) return item;
+      const transform = (value: number) => yAxisScale === 'log'
+        ? Math.sign(value) * Math.log10(Math.max(1, Math.abs(value))) : value;
+      return { ...item, rolling: point, rollingIncome: transform(point.income),
+        rollingExpenses: transform(point.expenses), rollingInvestments: transform(point.investments) };
+    });
+  }, [getDailyIncomeExpenseData, rollingPoints, hasRollingAverages, aggregationPeriod, startDate, endDate, rolling.end, yAxisScale]);
+  const hasSingleRollingPoint = dailyChartData.filter((point: any) => point.rolling).length === 1;
   const splitChart = React.useMemo(() => splitBars ? buildSplitBarData(dailyChartData, barSplitBy as 'subcategory' | 'vendor', {
     includeCapitalReturns,
     includeCardRepayments,
@@ -559,6 +591,7 @@ const TransactionHistorySection: React.FC<TransactionHistorySectionProps> = ({
     unknownVendorLabel: t('settings.unknownVendor', { defaultValue: 'Unknown vendor' }),
   }) : null, [barSplitBy, dailyChartData, includeCapitalReturns, includeCardRepayments, showForecast, splitBars, t, yAxisScale]);
   const incomeExpenseYAxisConfig = getIncomeExpenseYAxisConfig(yAxisScale, hasInvestmentWithdrawals
+    || (hasRollingAverages && rollingPoints.some(point => point.income < 0 || point.expenses < 0 || point.investments < 0))
     || Boolean(splitChart?.data.some(row => row.splitDetails.some(detail => detail.amount < 0))));
   const flowColor = (flow: BarFlow) => flow === 'income' ? theme.palette.success.main
     : flow === 'expenses' ? theme.palette.error.main : theme.palette.info.main;
@@ -597,6 +630,7 @@ const TransactionHistorySection: React.FC<TransactionHistorySectionProps> = ({
       return baseHistoricalData.map((item: any) => ({
         ...item,
         forecastCumulative: undefined,
+        forecastAfterInvesting: undefined,
         p10Cumulative: undefined,
         p50Cumulative: undefined,
         p90Cumulative: undefined,
@@ -614,6 +648,7 @@ const TransactionHistorySection: React.FC<TransactionHistorySectionProps> = ({
       return baseHistoricalData.map((item: any) => ({
         ...item,
         forecastCumulative: undefined,
+        forecastAfterInvesting: undefined,
         p10Cumulative: undefined,
         p50Cumulative: undefined,
         p90Cumulative: undefined,
@@ -638,6 +673,7 @@ const TransactionHistorySection: React.FC<TransactionHistorySectionProps> = ({
         ...item,
         historicalCumulative: item.cumulative,
         forecastCumulative: undefined,
+        forecastAfterInvesting: undefined,
         p10Cumulative: undefined,
         p50Cumulative: undefined,
         p90Cumulative: undefined,
@@ -651,6 +687,7 @@ const TransactionHistorySection: React.FC<TransactionHistorySectionProps> = ({
       historicalData[historicalData.length - 1] = {
         ...historicalData[historicalData.length - 1],
         forecastCumulative: startingCumulative,
+        forecastAfterInvesting: startingCumulative,
         p10Cumulative: startingCumulative,
         p50Cumulative: startingCumulative,
         p90Cumulative: startingCumulative,
@@ -659,6 +696,7 @@ const TransactionHistorySection: React.FC<TransactionHistorySectionProps> = ({
     
     // Build forecast entries with scenario cumulative values
     let expectedCumulative = startingCumulative;
+    let afterInvesting: number | undefined = startingCumulative;
     let p10Cumulative = startingCumulative;
     let p50Cumulative = startingCumulative;
     let p90Cumulative = startingCumulative;
@@ -668,6 +706,12 @@ const TransactionHistorySection: React.FC<TransactionHistorySectionProps> = ({
       .map((d: any, idx: number) => {
         const expectedCashFlow = getCashFlowForForecast(d, useOperatingBasis);
         expectedCumulative += expectedCashFlow;
+        const investments = getForecastInvestments(d);
+        // Both forecast lines share the historical anchor. Missing investment
+        // data breaks the cumulative projection; later days cannot fill that gap.
+        afterInvesting = afterInvesting !== undefined && investments !== undefined
+          ? afterInvesting + expectedCashFlow - investments
+          : undefined;
 
         // Find matching scenario data for this date
         const p10Day = p10Daily.find((s: any) => s.date === d.date);
@@ -683,6 +727,7 @@ const TransactionHistorySection: React.FC<TransactionHistorySectionProps> = ({
           historicalCumulative: undefined,
           cumulative: expectedCumulative,
           forecastCumulative: expectedCumulative,
+          forecastAfterInvesting: afterInvesting,
           p10Cumulative,
           p50Cumulative,
           p90Cumulative,
@@ -693,6 +738,8 @@ const TransactionHistorySection: React.FC<TransactionHistorySectionProps> = ({
 
     return [...historicalData, ...forecastEntries];
   }, [getNetPositionData, forecastData, aggregationPeriod, gapPeriodInfo, rangeEndsToday, useOperatingBasis]);
+
+  const netPositionData = activeTab === TAB_NET_POSITION ? getCombinedNetPositionData() : [];
 
   return (
     <Paper
@@ -1015,11 +1062,11 @@ const TransactionHistorySection: React.FC<TransactionHistorySectionProps> = ({
             control={
               <Switch
                 size="small"
-                checked={showAverageGuides}
-                onChange={(_, checked) => setShowAverageGuides(checked)}
+                checked={showRollingAverages}
+                onChange={(_, checked) => setShowRollingAverages(checked)}
               />
             }
-            label={t('settings.avgGuides', { defaultValue: 'Show average guides' })}
+            label={t('settings.rollingAverages', { defaultValue: 'Show 30-day daily averages' })}
           />
           <FormControlLabel
             control={
@@ -1037,6 +1084,12 @@ const TransactionHistorySection: React.FC<TransactionHistorySectionProps> = ({
       {/* Tab 0: Daily Income vs Expenses with Forecast */}
       {activeTab === TAB_HISTORY && (
         <>
+          {showRollingAverages && <Typography variant="caption" color="text.secondary" sx={{ display: 'block', textAlign: 'center', mb: 1 }}>
+            {t('rolling.caption')}
+          </Typography>}
+          {showRollingAverages && rolling.loading && <Typography variant="caption" role="status">{t('rolling.loading')}</Typography>}
+          {showRollingAverages && rolling.error && <Alert severity="warning" sx={{ mb: 1 }}
+            action={<Button color="inherit" onClick={() => void rolling.refresh()}>{t('rolling.retry')}</Button>}>{t('rolling.error')}</Alert>}
           {hasForecastSeries && (
             <Typography
               variant="body2"
@@ -1148,6 +1201,15 @@ const TransactionHistorySection: React.FC<TransactionHistorySectionProps> = ({
                     </Typography>
                   )}
                   {renderSplitDetails(data, 'investments')}
+                  {hasRollingAverages && data.rolling && <Box sx={{ mt: 1, pt: 1, borderTop: 1, borderColor: 'divider' }}>
+                    <Typography variant="caption" sx={{ fontWeight: 600 }}>{t('rolling.title')}</Typography>
+                    <Typography variant="caption" sx={{ display: 'block' }}>
+                      {format(parseLocalDate(data.rolling.windowStart), 'MMM dd, yyyy')} – {format(parseLocalDate(data.rolling.date), 'MMM dd, yyyy')}
+                    </Typography>
+                    {(['income', 'expenses', 'investments'] as BarFlow[]).map(flow => <Typography key={flow} variant="body2" color={flowColor(flow)}>
+                      {t(`legend.${flow}`)}: {data.rolling[flow] < 0 ? '-' : ''}{formatCurrency(Math.abs(data.rolling[flow]), { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    </Typography>)}
+                  </Box>}
                 </Paper>
               );
             }}
@@ -1166,47 +1228,9 @@ const TransactionHistorySection: React.FC<TransactionHistorySectionProps> = ({
                   <Typography variant="caption" color="text.secondary">{t('forecast.expected')}</Typography>
                 </Box>
               )}
+              {hasRollingAverages && <Typography variant="caption" color="text.secondary">{t('rolling.legend')}</Typography>}
             </Box>
           ) : undefined} />
-
-          {showAverageGuides && chartHistory.length > 0 && (() => {
-            const avgExpenses = chartTotalExpenses / chartHistory.length;
-            const yValue = yAxisScale === 'log' && avgExpenses > 0 ? Math.log10(avgExpenses) : avgExpenses;
-            return (
-              <ReferenceLine
-                y={yValue}
-                stroke={theme.palette.error.light}
-                strokeDasharray="5 5"
-                strokeOpacity={0.6}
-                label={{
-                  value: t('avgLabel', { amount: formatCurrencyValue(avgExpenses) }),
-                  position: 'right',
-                  fill: theme.palette.error.main,
-                  fontSize: 11,
-                }}
-              />
-            );
-          })()}
-
-          {showAverageGuides && chartHistory.length > 0 && chartHistory.some((h: any) => h.income > 0) && (() => {
-            const positiveIncomeDays = chartHistory.filter((h: any) => h.income > 0).length;
-            const avgIncome = positiveIncomeDays > 0 ? (chartTotalIncome / positiveIncomeDays) : 0;
-            const yValue = yAxisScale === 'log' && avgIncome > 0 ? Math.log10(avgIncome) : avgIncome;
-            return (
-              <ReferenceLine
-                y={yValue}
-                stroke={theme.palette.success.light}
-                strokeDasharray="5 5"
-                strokeOpacity={0.6}
-                label={{
-                  value: t('avgLabel', { amount: formatCurrencyValue(avgIncome) }),
-                  position: 'right',
-                  fill: theme.palette.success.main,
-                  fontSize: 11,
-                }}
-              />
-            );
-          })()}
 
           {splitChart ? (
             splitChart.series.map(series => (
@@ -1225,7 +1249,7 @@ const TransactionHistorySection: React.FC<TransactionHistorySectionProps> = ({
             ))
           ) : incomeExpenseChartType === 'bar' ? (
             <>
-              <Bar
+              <Bar isAnimationActive={false}
                 dataKey="income"
                 stackId="income"
                 fill={theme.palette.success.main}
@@ -1233,7 +1257,7 @@ const TransactionHistorySection: React.FC<TransactionHistorySectionProps> = ({
                 maxBarSize={36}
                 name={t('legend.income')}
               />
-              <Bar
+              <Bar isAnimationActive={false}
                 dataKey="expenses"
                 stackId="expenses"
                 fill={theme.palette.error.main}
@@ -1241,7 +1265,7 @@ const TransactionHistorySection: React.FC<TransactionHistorySectionProps> = ({
                 maxBarSize={36}
                 name={t('legend.expenses')}
               />
-              <Bar
+              <Bar isAnimationActive={false}
                 dataKey="investments"
                 stackId="investments"
                 fill={theme.palette.info.main}
@@ -1250,7 +1274,7 @@ const TransactionHistorySection: React.FC<TransactionHistorySectionProps> = ({
                 name={t('legend.investments')}
               />
               {showForecast && hasForecastSeries && (
-                <Bar
+                <Bar isAnimationActive={false}
                   dataKey="forecastIncome"
                   stackId="income"
                   fill={alpha(theme.palette.success.main, 0.38)}
@@ -1262,7 +1286,7 @@ const TransactionHistorySection: React.FC<TransactionHistorySectionProps> = ({
                 />
               )}
               {showForecast && hasForecastSeries && (
-                <Bar
+                <Bar isAnimationActive={false}
                   dataKey="forecastExpenses"
                   stackId="expenses"
                   fill={alpha(theme.palette.error.main, 0.38)}
@@ -1274,7 +1298,7 @@ const TransactionHistorySection: React.FC<TransactionHistorySectionProps> = ({
                 />
               )}
               {showForecast && hasInvestmentForecastSeries && (
-                <Bar
+                <Bar isAnimationActive={false}
                   dataKey="forecastInvestments"
                   stackId="investments"
                   fill={alpha(theme.palette.info.main, 0.38)}
@@ -1288,7 +1312,7 @@ const TransactionHistorySection: React.FC<TransactionHistorySectionProps> = ({
             </>
           ) : (
             <>
-              <Line
+              <Line isAnimationActive={false}
                 type="monotone"
                 dataKey="income"
                 stroke={theme.palette.success.main}
@@ -1297,7 +1321,7 @@ const TransactionHistorySection: React.FC<TransactionHistorySectionProps> = ({
                 activeDot={{ r: 6, strokeWidth: 0 }}
                 name={t('legend.income')}
               />
-              <Line
+              <Line isAnimationActive={false}
                 type="monotone"
                 dataKey="expenses"
                 stroke={theme.palette.error.main}
@@ -1306,7 +1330,7 @@ const TransactionHistorySection: React.FC<TransactionHistorySectionProps> = ({
                 activeDot={{ r: 6, strokeWidth: 0 }}
                 name={t('legend.expenses')}
               />
-              <Line
+              <Line isAnimationActive={false}
                 type="monotone"
                 dataKey="investments"
                 stroke={theme.palette.info.main}
@@ -1316,7 +1340,7 @@ const TransactionHistorySection: React.FC<TransactionHistorySectionProps> = ({
                 name={t('legend.investments')}
               />
               {showForecast && hasForecastSeries && (
-                <Line
+                <Line isAnimationActive={false}
                   type="monotone"
                   dataKey="forecastIncome"
                   stroke={theme.palette.success.light}
@@ -1327,7 +1351,7 @@ const TransactionHistorySection: React.FC<TransactionHistorySectionProps> = ({
                 />
               )}
               {showForecast && hasForecastSeries && (
-                <Line
+                <Line isAnimationActive={false}
                   type="monotone"
                   dataKey="forecastExpenses"
                   stroke={theme.palette.error.light}
@@ -1338,7 +1362,7 @@ const TransactionHistorySection: React.FC<TransactionHistorySectionProps> = ({
                 />
               )}
               {showForecast && hasInvestmentForecastSeries && (
-                <Line
+                <Line isAnimationActive={false}
                   type="monotone"
                   dataKey="forecastInvestments"
                   stroke={theme.palette.info.light}
@@ -1350,6 +1374,11 @@ const TransactionHistorySection: React.FC<TransactionHistorySectionProps> = ({
               )}
             </>
           )}
+          {hasRollingAverages && (['income', 'expenses', 'investments'] as BarFlow[]).map(flow => <Line
+            key={`rolling-${flow}`} type="linear"
+            dataKey={`rolling${flow[0].toUpperCase()}${flow.slice(1)}`}
+            stroke={flowColor(flow)} strokeWidth={2} strokeDasharray="3 3" dot={hasSingleRollingPoint}
+            name={t('rolling.series', { flow: t(`legend.${flow}`) })} isAnimationActive={false} />)}
           {/* No data zone - grey shaded area for gap period where we don't have scraped data */}
           {gapPeriodInfo.hasGap && gapPeriodInfo.gapStartDate && (
             <ReferenceArea
@@ -1713,7 +1742,7 @@ const TransactionHistorySection: React.FC<TransactionHistorySectionProps> = ({
                     mb: 2,
                     textAlign: 'center'
                   }}>
-                  {selectedPeriodLabel} + {t('forecast.next30Days', { defaultValue: '30 day forecast' })} • {t('forecast.forecastData')} shown in orange
+                  {selectedPeriodLabel} + {t('forecast.next30Days', { defaultValue: '30 day forecast' })} • {t('forecast.forecastData')}
                 </Typography>
               )}
               {aggregationPeriod !== 'daily' && (
@@ -1729,7 +1758,7 @@ const TransactionHistorySection: React.FC<TransactionHistorySectionProps> = ({
               )}
               <ResponsiveContainer width="100%" height={350} minHeight={350}>
                 <ComposedChart 
-                  data={getCombinedNetPositionData()}
+                  data={netPositionData}
                   margin={{ top: 10, right: 10, left: 0, bottom: 0 }}
                 >
                   <defs>
@@ -1812,9 +1841,21 @@ const TransactionHistorySection: React.FC<TransactionHistorySectionProps> = ({
                       if (props.value === null || props.value === undefined || !Number.isFinite(props.cx) || !Number.isFinite(props.cy)) return null;
                       return <circle cx={props.cx} cy={props.cy} r={2} fill={theme.palette.warning.main} />;
                     }}
-                    name={t('forecast.expected')}
+                    name={t('forecast.beforeInvesting', { defaultValue: 'Forecast before investing' })}
                     connectNulls={true}
                   />
+                  {netPositionData.some(item => item.isForecast && item.forecastAfterInvesting !== undefined) && (
+                    <Line
+                      type="monotone"
+                      dataKey="forecastAfterInvesting"
+                      stroke={theme.palette.secondary.main}
+                      strokeWidth={2.5}
+                      strokeDasharray="5 5"
+                      dot={false}
+                      name={t('forecast.afterInvesting', { defaultValue: 'Forecast after investing' })}
+                      connectNulls={false}
+                    />
+                  )}
                   {/* P90 Best Case - green dashed */}
                   <Line 
                     type="monotone" 
@@ -1969,6 +2010,7 @@ const TransactionHistorySection: React.FC<TransactionHistorySectionProps> = ({
                           }}>
                             {format(parseLocalDate(txn.date), transactionPeriod ? 'MMM dd, yyyy · HH:mm' : 'HH:mm')}
                           </Typography>
+                          <EditTransactionCategoryButton transaction={txn} />
                           {(txn.parent_name || txn.category_name) && (
                             <>
                               <Typography variant="caption" sx={{

@@ -106,6 +106,12 @@ test('child add/edit/delete flows update payload', async ({ page }) => {
   expect(latest?.children?.some((child: any) => child.name === 'Omer')).toBe(true);
 
   await page.getByRole('button', { name: 'Delete Child' }).first().click();
+  const deleteDialog = page.getByRole('dialog', { name: 'Delete “Noa Updated”?' });
+  await expect(deleteDialog.getByRole('button', { name: 'Cancel', exact: true })).toBeFocused();
+  await deleteDialog.getByRole('button', { name: 'Cancel', exact: true }).click();
+  await expect(page.getByText('Noa Updated', { exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'Delete Child' }).first().click();
+  await deleteDialog.getByRole('button', { name: 'Delete', exact: true }).click();
   await page.getByRole('button', { name: 'Save Profile' }).click();
   await expect(page.getByText(/updated successfully/i)).toBeVisible();
 

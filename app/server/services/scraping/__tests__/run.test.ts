@@ -399,7 +399,7 @@ describe('scraping run service', () => {
       expect(result.message).toContain('portfolio history updated');
     });
 
-    it('rolls back and marks scrape as failed when scraper returns a hard failure', async () => {
+    it('marks a hard scraper failure without opening or rolling back a save transaction', async () => {
       const logger = buildLogger();
 
       mockClient.query.mockImplementation(async (sql: string) => {
@@ -427,11 +427,48 @@ describe('scraping run service', () => {
         } as any),
       ).rejects.toMatchObject({ statusCode: 400, errorType: 'AuthFailed' });
 
-      expect(mockClient.query).toHaveBeenCalledWith('ROLLBACK');
+      expect(mockClient.query).not.toHaveBeenCalledWith('ROLLBACK');
+      expect(mockClient.query).not.toHaveBeenCalledWith('BEGIN IMMEDIATE');
       expect(queryMock).toHaveBeenCalledWith(
         expect.stringContaining('UPDATE scrape_events'),
         expect.arrayContaining(['failed']),
       );
+    });
+
+    it('preserves a lock acquisition error without rolling back a transaction it did not start', async () => {
+      const lockError = Object.assign(new Error('database is locked'), { code: 'SQLITE_BUSY' });
+      mockClient.query.mockRejectedValue(lockError);
+
+      await expect(runService.runScrape({
+        options: { companyId: 'max' },
+        credentials: { dbId: 7, username: 'test', password: 'test' },
+        execute: async () => ({ success: true, accounts: [] }),
+        logger: buildLogger(),
+      } as any)).rejects.toBe(lockError);
+
+      expect(mockClient.query).toHaveBeenCalledWith('BEGIN IMMEDIATE');
+      expect(mockClient.query).not.toHaveBeenCalledWith('ROLLBACK');
+      expect(mockClient.release).toHaveBeenCalledOnce();
+    });
+
+    it('rolls back a failed save and preserves its error when rollback also fails', async () => {
+      const saveError = new Error('save failed');
+      mockClient.query.mockImplementation(async (sql: string) => {
+        if (sql === 'ROLLBACK') throw new Error('rollback failed');
+        if (sql.includes('FROM categorization_rules')) throw saveError;
+        return { rows: [], rowCount: 0 };
+      });
+
+      await expect(runService.runScrape({
+        options: { companyId: 'max' },
+        credentials: { username: 'test', password: 'test' },
+        execute: async () => ({ success: true, accounts: [] }),
+        logger: buildLogger(),
+      } as any)).rejects.toBe(saveError);
+
+      expect(mockClient.query).toHaveBeenCalledWith('ROLLBACK');
+      expect(mockClient.query).not.toHaveBeenCalledWith('COMMIT');
+      expect(mockClient.release).toHaveBeenCalledOnce();
     });
 
     it('completes a successful non-simulated scrape and commits transaction updates', async () => {
@@ -630,6 +667,9 @@ describe('scraping run service', () => {
           logger,
         } as any),
       ).rejects.toThrow('executor exploded');
+
+      expect(mockClient.query).not.toHaveBeenCalledWith('ROLLBACK');
+      expect(mockClient.query).not.toHaveBeenCalledWith('BEGIN IMMEDIATE');
 
       const failedAuditUpdateCall = queryMock.mock.calls.find(
         ([sql, params]) =>

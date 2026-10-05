@@ -49,6 +49,7 @@ import {
 import { apiClient } from '@/lib/api-client';
 import { useOnboarding } from '@app/contexts/OnboardingContext';
 import { useTranslation } from 'react-i18next';
+import { useDeleteConfirmation } from '@renderer/shared/hooks/useDeleteConfirmation';
 import {
   buildChildProfileDelete,
   buildChildProfileUpdate,
@@ -74,6 +75,7 @@ interface IncomeSuggestionResponse {
 
 const EnhancedProfileSection: React.FC = () => {
   const { t } = useTranslation('translation', { keyPrefix: 'settings.profile' });
+  const { confirmDelete, deleteConfirmationDialog } = useDeleteConfirmation();
   const { refetch: refetchOnboarding } = useOnboarding();
   const MARITAL_OPTIONS = [
     { value: 'Single', label: t('options.marital.single') },
@@ -315,8 +317,10 @@ const EnhancedProfileSection: React.FC = () => {
     setChildDialogOpen(false);
   };
 
-  const handleDeleteChild = (childId: number | undefined) => {
+  const handleDeleteChild = async (childId: number | undefined) => {
     if (!childId) return;
+    const child = profileData.children.find(item => item.id === childId);
+    if (!child || !await confirmDelete(child.name)) return;
     const { updatedChildren, childrenCount, householdSize } = buildChildProfileDelete({
       existingChildren: profileData.children,
       childId,
@@ -994,6 +998,7 @@ const EnhancedProfileSection: React.FC = () => {
           </Button>
         </DialogActions>
       </Dialog>
+      {deleteConfirmationDialog}
     </Paper>
   );
 };

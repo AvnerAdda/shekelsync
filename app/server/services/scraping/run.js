@@ -1917,6 +1917,18 @@ async function _runScrapeInternal({
   const client = await databaseRef.getClient();
   let auditId = null;
   let failureMessage = null;
+  let transactionActive = false;
+
+  const beginSave = async () => {
+    // Keep browser/network waits outside the transaction. Reserve the writer
+    // before reading so another connection cannot invalidate our WAL snapshot.
+    await client.query('BEGIN IMMEDIATE');
+    transactionActive = true;
+  };
+  const commitSave = async () => {
+    await client.query('COMMIT');
+    transactionActive = false;
+  };
 
   // Log the determined scrape date range for transparency
   const endDate = new Date();
@@ -1941,8 +1953,6 @@ async function _runScrapeInternal({
       logger?.warn?.(`[Scrape:${options.companyId}] Failed to write scrape_events start record: ${error?.message || 'Unknown error'}`);
     }
 
-    await client.query('BEGIN');
-
     const executablePath = await getPuppeteerExecutable(logger);
     if (!executablePath) {
       throw createHttpError(500,
@@ -1966,6 +1976,7 @@ async function _runScrapeInternal({
       );
 
       const simulatedResult = buildSimulatedDemoResult(options, credentials, isBank);
+      await beginSave();
       const summary = await processScrapeResult(client, {
         options,
         credentials,
@@ -1983,7 +1994,7 @@ async function _runScrapeInternal({
       const accountsCount = Array.isArray(simulatedResult.accounts) ? simulatedResult.accounts.length : 0;
       const message = `Demo sync simulated: accounts=${accountsCount}, bankTxns=${summary.bankTransactions}`;
 
-      await client.query('COMMIT');
+      await commitSave();
       await safeUpdateScrapeEventStatus(auditId, 'success', message, logger);
       await markRepairBackfillComplete(repairCompletionContext, repairStateProvider, logger);
 
@@ -2033,6 +2044,7 @@ async function _runScrapeInternal({
     if (!result?.success) {
       // Handle "no transactions" as a soft success - just means nothing new since last scrape
       if (isNoTransactionsError) {
+        await beginSave();
         logger?.info?.(`[Scrape:${options.companyId}] No new transactions found since last scrape - this is normal`);
         logger?.info?.(`[Scrape:${options.companyId}] Bank message: ${result?.errorMessage}`);
         
@@ -2052,7 +2064,7 @@ async function _runScrapeInternal({
             await markCredentialScrapeStatus(client, credentials.dbId, 'success');
           }
 
-          await client.query('COMMIT');
+          await commitSave();
           await safeUpdateScrapeEventStatus(auditId, 'success', successMessage, logger);
           await markRepairBackfillComplete(repairCompletionContext, repairStateProvider, logger);
           
@@ -2083,7 +2095,7 @@ async function _runScrapeInternal({
           await markCredentialScrapeStatus(client, credentials.dbId, 'success');
         }
 
-        await client.query('COMMIT');
+        await commitSave();
         await safeUpdateScrapeEventStatus(auditId, 'success', successMessage, logger);
         await markRepairBackfillComplete(repairCompletionContext, repairStateProvider, logger);
         
@@ -2128,6 +2140,7 @@ async function _runScrapeInternal({
       throw createHttpError(400, baseMessage, { errorType: result?.errorType });
     }
 
+    await beginSave();
     const summary = await processScrapeResult(client, {
       options,
       credentials,
@@ -2145,7 +2158,7 @@ async function _runScrapeInternal({
     const accountsCount = Array.isArray(result.accounts) ? result.accounts.length : 0;
     const message = `Success: accounts=${accountsCount}, bankTxns=${summary.bankTransactions}`;
 
-    await client.query('COMMIT');
+    await commitSave();
     await safeUpdateScrapeEventStatus(auditId, 'success', message, logger);
     await markRepairBackfillComplete(repairCompletionContext, repairStateProvider, logger);
 
@@ -2157,7 +2170,13 @@ async function _runScrapeInternal({
       scrapeAnchor,
     };
   } catch (error) {
-    await client.query('ROLLBACK');
+    if (transactionActive) {
+      try {
+        await client.query('ROLLBACK');
+      } catch (rollbackError) {
+        logger?.error?.(`[Scrape:${options.companyId}] Failed to roll back save: ${rollbackError.message}`);
+      }
+    }
     const failureDetails = failureMessage || buildScrapeFailureMessage({
       vendor: options.companyId,
       errorType: error?.errorType || error?.name,
@@ -2166,7 +2185,11 @@ async function _runScrapeInternal({
     });
     await safeUpdateScrapeEventStatus(auditId, 'failed', failureDetails, logger);
     if (credentials.dbId) {
-      await markCredentialScrapeStatus(client, credentials.dbId, 'failed');
+      try {
+        await markCredentialScrapeStatus(client, credentials.dbId, 'failed');
+      } catch (statusError) {
+        logger?.warn?.(`[Scrape:${options.companyId}] Failed to record failed scrape status: ${statusError.message}`);
+      }
     }
     throw error;
   } finally {
