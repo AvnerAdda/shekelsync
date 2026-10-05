@@ -16,9 +16,7 @@ vi.mock('@app/contexts/FinancePrivacyContext', () => ({
   }),
 }));
 
-vi.mock('@mui/material', async () => {
-  const React = await vi.importActual<typeof import('react')>('react');
-
+vi.mock('@mui/material', () => {
   return {
     Box: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
     Typography: ({ children }: { children: React.ReactNode }) => <span>{children}</span>,

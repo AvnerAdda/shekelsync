@@ -171,6 +171,12 @@ const COUNTED_INCOME_SQL = `
 `;
 
 const EXPENSE_SQL = `
+  (cd.category_type = 'expense' OR (cd.category_type IS NULL AND t.price < 0))
+`;
+
+// Pending payments retain their gross debit semantics; refunds net only the
+// historical expense metrics and budget usage.
+const PENDING_EXPENSE_SQL = `
   (
     (cd.category_type = 'expense' OR (cd.category_type IS NULL AND t.price < 0))
     AND t.price < 0
@@ -320,7 +326,7 @@ async function getDashboardAnalytics(query = {}) {
           ELSE 0
         END) as income,
         SUM(CASE
-          WHEN ${EXPENSE_SQL} THEN ABS(t.price)
+          WHEN ${EXPENSE_SQL} THEN -t.price
           ELSE 0
         END) as expenses,
         SUM(CASE
@@ -331,13 +337,13 @@ async function getDashboardAnalytics(query = {}) {
         SUM(CASE
           WHEN ${EXPENSE_SQL}
             AND NOT ${nonOperatingExpenseCondition}
-          THEN ABS(t.price)
+          THEN -t.price
           ELSE 0
         END) as operating_expenses,
         SUM(CASE
           WHEN ${EXPENSE_SQL}
             AND ${nonOperatingExpenseCondition}
-          THEN ABS(t.price)
+          THEN -t.price
           ELSE 0
         END) as non_operating_expenses,
         SUM(CASE
@@ -379,7 +385,7 @@ async function getDashboardAnalytics(query = {}) {
                   OR ap.credit_card_account_number = t.account_number
                 )
             )
-          THEN ABS(t.price)
+          THEN -t.price
           ELSE 0
         END) as paired_card_expenses
       FROM transactions t
@@ -453,7 +459,7 @@ async function getDashboardAnalytics(query = {}) {
           cd_child.id as subcategory_id,
           cd_child.name as subcategory_name,
           COUNT(t.identifier) as count,
-          SUM(ABS(t.price)) as total
+          SUM(-t.price) as total
         FROM transactions t
         JOIN category_definitions cd_child ON t.category_definition_id = cd_child.id
         JOIN category_definitions cd_parent ON cd_child.parent_id = cd_parent.id
@@ -461,7 +467,6 @@ async function getDashboardAnalytics(query = {}) {
           ON t.identifier = tpe.transaction_identifier
           AND t.vendor = tpe.transaction_vendor
         WHERE t.date >= $1 AND t.date <= $2
-          AND t.price < 0
           AND cd_parent.category_type = 'expense'
           AND tpe.transaction_identifier IS NULL
           AND ${dialect.excludePikadon('t')}
@@ -474,20 +479,26 @@ async function getDashboardAnalytics(query = {}) {
         `SELECT
           t.vendor,
           COUNT(*) as count,
-          SUM(ABS(price)) as total,
+          SUM(-t.price) as total,
           fi.id as institution_id,
           fi.display_name_he as institution_name_he,
           fi.display_name_en as institution_name_en,
           fi.logo_url as institution_logo,
           fi.institution_type as institution_type
         FROM transactions t
-        LEFT JOIN vendor_credentials vc ON t.vendor = vc.vendor
+        LEFT JOIN category_definitions cd ON t.category_definition_id = cd.id
+        LEFT JOIN (
+          SELECT vendor,
+            CASE WHEN COUNT(DISTINCT institution_id) = 1 THEN MIN(institution_id) END as institution_id
+          FROM vendor_credentials
+          GROUP BY vendor
+        ) vc ON t.vendor = vc.vendor
         LEFT JOIN institution_nodes fi ON vc.institution_id = fi.id AND fi.node_type = 'institution'
         LEFT JOIN (SELECT DISTINCT transaction_identifier, transaction_vendor FROM transaction_pairing_exclusions) tpe
           ON t.identifier = tpe.transaction_identifier
           AND t.vendor = tpe.transaction_vendor
         WHERE t.date >= $1 AND t.date <= $2
-          AND t.price < 0
+          AND ${EXPENSE_SQL}
           AND tpe.transaction_identifier IS NULL
           AND ${dialect.excludePikadon('t')}
         GROUP BY t.vendor, fi.id, fi.display_name_he, fi.display_name_en, fi.logo_url, fi.institution_type
@@ -503,7 +514,7 @@ async function getDashboardAnalytics(query = {}) {
             ELSE 0
           END) as income,
           SUM(CASE
-            WHEN ${EXPENSE_SQL} THEN ABS(t.price)
+            WHEN ${EXPENSE_SQL} THEN -t.price
             ELSE 0
           END) as expenses
         FROM transactions t
@@ -572,19 +583,19 @@ async function getDashboardAnalytics(query = {}) {
             ELSE 0
           END) as total_capital_returns,
           SUM(CASE
-            WHEN ${EXPENSE_SQL} THEN ABS(t.price)
+            WHEN ${EXPENSE_SQL} THEN -t.price
             ELSE 0
           END) as total_expenses,
           SUM(CASE
             WHEN ${EXPENSE_SQL}
               AND NOT ${nonOperatingExpenseCondition}
-            THEN ABS(t.price)
+            THEN -t.price
             ELSE 0
           END) as total_operating_expenses,
           SUM(CASE
             WHEN ${EXPENSE_SQL}
               AND ${nonOperatingExpenseCondition}
-            THEN ABS(t.price)
+            THEN -t.price
             ELSE 0
           END) as total_non_operating_expenses,
           SUM(CASE
@@ -613,11 +624,11 @@ async function getDashboardAnalytics(query = {}) {
         `SELECT
           ${pendingProcessedDateExpr} as processed_date,
           SUM(CASE
-            WHEN ${EXPENSE_SQL} THEN ABS(t.price)
+            WHEN ${PENDING_EXPENSE_SQL} THEN ABS(t.price)
             ELSE 0
           END) as pending_expenses,
           COUNT(CASE
-            WHEN ${EXPENSE_SQL} THEN 1
+            WHEN ${PENDING_EXPENSE_SQL} THEN 1
             ELSE NULL
           END) as pending_count
         FROM transactions t
@@ -632,7 +643,7 @@ async function getDashboardAnalytics(query = {}) {
           AND ${dialect.excludePikadon('t')}
         GROUP BY ${pendingProcessedDateExpr}
         HAVING SUM(CASE
-          WHEN ${EXPENSE_SQL} THEN ABS(t.price)
+          WHEN ${PENDING_EXPENSE_SQL} THEN ABS(t.price)
           ELSE 0
         END) > 0
         ORDER BY processed_date ASC`,

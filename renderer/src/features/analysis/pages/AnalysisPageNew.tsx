@@ -325,9 +325,9 @@ const computeBudgetPreview = (
   const p10 = Math.max(0, Number(item.scenarios?.p10 ?? projectedTotal) || 0);
   const p90 = Math.max(0, Number(item.scenarios?.p90 ?? projectedTotal) || 0);
 
-  let status: BudgetPreviewStatus = 'on_track';
-  let risk = 0;
-  let utilization = 0;
+  let status: BudgetPreviewStatus;
+  let risk: number;
+  let utilization: number;
 
   if (hasLimit) {
     const projectedUtilization = limit > 0 ? projectedTotal / limit : 0;

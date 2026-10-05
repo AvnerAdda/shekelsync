@@ -1,4 +1,5 @@
 import js from '@eslint/js';
+import { fixupConfigRules } from '@eslint/compat';
 import tsPlugin from '@typescript-eslint/eslint-plugin';
 import tsParser from '@typescript-eslint/parser';
 import react from 'eslint-plugin-react';
@@ -42,9 +43,10 @@ export default [
   },
   js.configs.recommended,
   ...tsPlugin.configs['flat/recommended'],
-  react.configs.flat.recommended,
+  // Bridge legacy plugin rule APIs while their ESLint 10 support is pending.
+  ...fixupConfigRules(react.configs.flat.recommended),
   reactHooks.configs.flat.recommended,
-  jsxA11y.flatConfigs.recommended,
+  ...fixupConfigRules(jsxA11y.flatConfigs.recommended),
   prettier,
   {
     files: ['**/*.{ts,tsx}'],

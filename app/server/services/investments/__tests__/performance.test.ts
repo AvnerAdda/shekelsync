@@ -137,12 +137,14 @@ describe('investment performance service', () => {
         rows: [
           {
             return_transaction_id: 'ret-1',
+            return_date: '2026-03-03',
             return_transaction_vendor: 'bank',
             cost_basis: '30',
             interest_amount: '6',
           },
           {
             return_transaction_id: 'ret-1',
+            return_date: '2026-03-03',
             return_transaction_vendor: 'bank',
             cost_basis: '20',
             interest_amount: '4',

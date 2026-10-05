@@ -47,6 +47,11 @@ function toDateStr(value) {
   return new Date(value).toISOString().split('T')[0];
 }
 
+function isInFlowPeriod(value, startDate, endDate) {
+  const date = toDateStr(value);
+  return date !== null && date >= startDate && date <= endDate;
+}
+
 async function normalizeMonetaryRows(rows, {
   baseCurrency,
   currencyFor,
@@ -550,6 +555,7 @@ async function loadPikadonReturnMap(accountIds = [], options = {}) {
   const result = await database.query(
     `
       SELECT
+        ih.account_id,
         ih.return_transaction_id,
         ih.return_transaction_vendor,
         ih.cost_basis,
@@ -566,7 +572,9 @@ async function loadPikadonReturnMap(accountIds = [], options = {}) {
     params,
   );
 
-  let rows = result.rows || [];
+  let rows = (result.rows || []).filter((row) =>
+    isInFlowPeriod(row.return_date, options.startDate, options.endDate)
+    && (!options.includeFlow || options.includeFlow(row.return_date, row.account_id)));
   let missing = [];
   if (options.normalizeCurrencies) {
     const conversion = await normalizeMonetaryRows(rows, {
@@ -800,32 +808,69 @@ async function getInvestmentPerformance(params = {}) {
   // the service has no opening valuation.
   const startDate = history[0]?.date;
   const endDate = history[history.length - 1]?.date || history[0]?.date;
-  const accountIds = Array.isArray(historyResult?.accounts)
-    ? historyResult.accounts
-      .map((account) => Number(account?.accountId))
-      .filter((id) => Number.isFinite(id))
-    : [];
+  const flowStartDate = toDateStr(startDate);
+  const flowEndDate = toDateStr(endDate);
+  // A same-day valuation incorporates opening-day activity. A carried-forward
+  // balance does not. Resolve this per account before deduplication or FX;
+  // the aggregate marker alone cannot distinguish a mixed portfolio.
+  const accounts = Array.isArray(historyResult.accounts) ? historyResult.accounts : [];
+  const aggregateOpeningMarker = getValuationMarker(history[0]);
+  const fallbackOpeningMarker = aggregateOpeningMarker === true ? true : null;
+  const openingValuations = new Map(accounts.map((account) => {
+    const points = Array.isArray(account.history) ? account.history : [];
+    const opening = points.find((point) => toDateStr(point.date) === flowStartDate);
+    const marker = opening ? getValuationMarker(opening)
+      : points.length > 0 ? false : fallbackOpeningMarker;
+    return [Number(account.accountId), marker];
+  }));
+  let uncertainOpeningFlow = false;
+  const includeFlow = (date, accountId) => {
+    if (toDateStr(date) !== flowStartDate) return true;
+    const marker = openingValuations.has(Number(accountId))
+      ? openingValuations.get(Number(accountId)) : fallbackOpeningMarker;
+    if (marker === null) uncertainOpeningFlow = true;
+    return marker === false;
+  };
+  const accountIds = accounts
+    .map((account) => Number(account?.accountId))
+    .filter((id) => Number.isFinite(id));
   const baseCurrency = normalizeCurrencies
     ? (historyResult?.fx?.baseCurrency || await fxService.getBaseCurrency())
     : null;
 
-  const [allTransactions, pikadonReturnResult, loadedPositionEvents] = accountIds.length > 0
+  const [fetchedTransactions, pikadonReturnResult, fetchedPositionEvents] = accountIds.length > 0 && flowStartDate < flowEndDate
     ? await Promise.all([
       fetchLinkedInvestmentTransactions(database, accountIds, {
-        startDate: toDateStr(startDate),
-        endDate: toDateStr(endDate),
+        startDate: flowStartDate,
+        endDate: flowEndDate,
       }),
       loadPikadonReturnMap(accountIds, {
         normalizeCurrencies,
         baseCurrency,
-        startDate: toDateStr(startDate),
-        endDate: toDateStr(endDate),
+        startDate: flowStartDate,
+        endDate: flowEndDate,
+        includeFlow,
       }),
       coerceBoolean(params.includePositionEvents)
-        ? loadPositionEvents(accountIds, toDateStr(startDate), toDateStr(endDate))
+        ? loadPositionEvents(accountIds, flowStartDate, flowEndDate)
         : [],
     ])
     : [[], { map: new Map(), missing: [] }, []];
+  const allTransactions = fetchedTransactions.filter((row) =>
+    isInFlowPeriod(row.date, flowStartDate, flowEndDate) && includeFlow(row.date, row.account_id));
+  const loadedPositionEvents = fetchedPositionEvents.filter((row) =>
+    isInFlowPeriod(row.effective_date, flowStartDate, flowEndDate) && includeFlow(row.effective_date, row.account_id));
+  // A link has no allocation amount. If the same opening transaction spans
+  // both observed and carried balances, its attributable amount is unknown.
+  const includedOpeningKeys = new Set(allTransactions
+    .filter((row) => toDateStr(row.date) === flowStartDate)
+    .map((row) => `${row.identifier}|${row.vendor}`));
+  if (fetchedTransactions.some((row) => toDateStr(row.date) === flowStartDate
+    && includedOpeningKeys.has(`${row.identifier}|${row.vendor}`)
+    && !includeFlow(row.date, row.account_id))) uncertainOpeningFlow = true;
+  if (uncertainOpeningFlow) {
+    return buildEmptyPerformanceResponse(range, historyResult?.startDate || null, 'opening_flow_valuation_unknown');
+  }
 
   // A transaction can be linked to more than one investment account, but the
   // link table does not carry an allocation amount. Count it once rather than

@@ -213,13 +213,12 @@ async function computeBudgetSpent(client, { categoryDefinitionId, categoryName }
           FROM category_definitions cd
           JOIN category_tree ct ON cd.parent_id = ct.id
         )
-       SELECT COALESCE(SUM(ABS(price)), 0) AS spent
+       SELECT COALESCE(-SUM(price), 0) AS spent
        FROM transactions t
        LEFT JOIN (SELECT DISTINCT transaction_identifier, transaction_vendor FROM transaction_pairing_exclusions) tpe
          ON t.identifier = tpe.transaction_identifier
          AND t.vendor = tpe.transaction_vendor
        WHERE t.category_definition_id IN (SELECT id FROM category_tree)
-         AND t.price < 0
          AND t.date >= $2
          AND t.date <= $3
          AND tpe.transaction_identifier IS NULL`,
@@ -243,13 +242,12 @@ async function computeBudgetSpent(client, { categoryDefinitionId, categoryName }
         FROM category_definitions cd
         JOIN category_tree ct ON cd.parent_id = ct.id
       )
-     SELECT COALESCE(SUM(ABS(price)), 0) AS spent
+     SELECT COALESCE(-SUM(price), 0) AS spent
      FROM transactions t
      LEFT JOIN (SELECT DISTINCT transaction_identifier, transaction_vendor FROM transaction_pairing_exclusions) tpe
        ON t.identifier = tpe.transaction_identifier
        AND t.vendor = tpe.transaction_vendor
      WHERE t.category_definition_id IN (SELECT id FROM category_tree)
-       AND t.price < 0
        AND t.date >= $2
        AND t.date <= $3
        AND tpe.transaction_identifier IS NULL`,
@@ -316,7 +314,7 @@ async function listBudgetUsage() {
         spent,
         budget_limit: limit,
         remaining: limit - spent,
-        percentage: Math.min(percentage, 100),
+        percentage: Math.max(0, Math.min(percentage, 100)),
         status: percentage >= 100 ? 'exceeded' : percentage >= 80 ? 'warning' : 'good',
       });
     }

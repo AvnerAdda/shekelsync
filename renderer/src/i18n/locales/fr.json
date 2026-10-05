@@ -1970,11 +1970,11 @@
         "inspectDate": "Date à examiner",
         "selectHelp": "Survolez le graphique pour voir une fenêtre. Cliquez ou choisissez une date pour examiner ses totaux ci-dessous.",
         "expenseShare": "{{value}} % des revenus",
-        "deficitHelp": "Les dépenses dépassent les revenus sur cette période.",
+        "deficitHelp": "Les dépenses et les versements vers les placements dépassent les revenus sur cette période.",
         "remainderHelp": "Revenus non dépensés, affectés à la Croissance.",
         "chartCaption": "Chaque point représente les {{days}} jours précédents.",
         "detailsHint": "Sélectionnez une catégorie pour voir les transactions.",
-        "growthSpent": "Dépenses de croissance",
+        "growthSpent": "Dépenses et placements de croissance",
         "growthUnspent": "Revenus non dépensés",
         "targetsTitle": "Objectifs et affectation des catégories",
         "targetsHelp": "Définissez votre répartition et organisez vos dépenses.",
@@ -1993,7 +1993,7 @@
         "date": "Date de fin",
         "deficit": "Déficit",
         "income": "Revenus",
-        "expenses": "Dépenses",
+        "expenses": "Dépenses et placements",
         "growthRemainder": "Solde ajouté à la Croissance",
         "noIncomeRow": "Aucun revenu positif",
         "noIncome": "Cette fenêtre ne comporte pas de revenu net positif. Les montants sont affichés ci-dessous ; les pourcentages ne peuvent pas être calculés.",
@@ -2002,8 +2002,8 @@
         "allocationTitle": "Répartition du revenu",
         "openCategory": "Voir les transactions : {{category}}",
         "unallocatedHelp": "Les dépenses sans affectation sont incluses dans le total.",
-        "growthDetail": "{{spent}} de dépenses de Croissance + {{remainder}} de revenu restant.",
-        "accounting": "Transactions terminées uniquement. Les remboursements réduisent les dépenses. Les virements, mouvements de placement et remboursements de carte comptés en double sont exclus. La Croissance inclut ses dépenses et le revenu restant, sans supposer un virement vers l’épargne."
+        "growthDetail": "{{spent}} de dépenses et placements de Croissance + {{remainder}} de revenu restant.",
+        "accounting": "Transactions terminées uniquement. Les remboursements réduisent les dépenses. Les versements vers les placements sont comptés comme des dépenses et affectés par défaut à la Croissance, sauf affectation différente. Les retraits de placements, les autres virements et les remboursements de carte comptés en double sont exclus. Le revenu restant après les dépenses et les placements est ajouté à la Croissance comme revenu non dépensé."
       }
     },
     "targets": {

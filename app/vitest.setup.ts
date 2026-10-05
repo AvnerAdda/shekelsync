@@ -1,5 +1,13 @@
-import '@testing-library/jest-dom';
+import '@testing-library/jest-dom/vitest';
+import type { TestingLibraryMatchers } from '@testing-library/jest-dom/matchers';
 import { vi } from 'vitest';
+
+// jest-dom 7 still augments Assertion; Vitest 5 reads custom matcher types here.
+declare module 'vitest' {
+  // Module augmentation requires an interface so Vitest's declarations can merge.
+  // eslint-disable-next-line @typescript-eslint/no-empty-object-type
+  interface Matchers<R, T> extends TestingLibraryMatchers<T, R> {}
+}
 
 declare global {
   // Optional test hook to provide a custom in-memory DB implementation for better-sqlite3.
