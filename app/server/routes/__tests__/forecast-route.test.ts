@@ -202,7 +202,7 @@ describe('Shared /api/forecast routes', () => {
         ...baseResult.dailyForecasts[0],
         topPredictions: [
           { category: 'Legacy grocery label', categoryDefinitionId: 1, categoryType: 'expense', transactionName: 'שופרסל שלי', vendor: 'hapoalim', institution, expectedAmount: 150, probability: 0.9 },
-          { category: 'Salary', categoryDefinitionId: 2, categoryType: 'income', transactionName: 'חברת דוגמה בע״מ', vendor: 'leumi', expectedAmount: 1000, probability: 1 },
+          { category: 'Salary', categoryDefinitionId: 2, categoryType: 'income', transactionName: 'חברת דוגמה בע״מ', vendor: 'leumi', expectedAmount: 1000, probability: 1, awaitingReceipt: true, expectedPaymentDate: '2026-07-09' },
           { category: 'Securities', categoryDefinitionId: 3, categoryType: 'investment', transactionName: 'העברה לבית השקעות', vendor: 'hapoalim', expectedAmount: 500, probability: 0.8 },
         ],
       }],
@@ -237,6 +237,8 @@ describe('Shared /api/forecast routes', () => {
       }),
       expect.objectContaining({
         transactionName: 'חברת דוגמה בע״מ',
+        awaitingReceipt: true,
+        expectedPaymentDate: '2026-07-09',
         categoryType: 'income',
         category_name: 'משכורת',
         parent_name: 'הכנסות',
@@ -504,7 +506,7 @@ describe('Shared /api/forecast routes', () => {
     const sqliteDb = {
       prepare: vi.fn((sql: string) => ({
         all: vi.fn(() => {
-          if (sql.includes('SUM(ABS(t.price)) AS spent')) {
+          if (sql.includes('SUM(-t.price) AS spent')) {
             return [
               { category_definition_id: 1, category_name: 'Food', spent: 900 },
               { category_definition_id: 2, category_name: 'Travel', spent: 300 },
@@ -549,7 +551,7 @@ describe('Shared /api/forecast routes', () => {
     const { app } = buildApp(generateForecast, sqliteDb);
 
     const response = await request(app)
-      .get('/api/forecast/daily?days=30&budgetDays=30')
+      .get('/api/forecast/daily?days=30')
       .expect(200);
 
     expect(response.body.dailyForecasts[0].topCategory).toBe('Food');
@@ -640,5 +642,19 @@ describe('Shared /api/forecast routes', () => {
     await request(app).get('/api/forecast/accuracy?days=90&model=pattern-v1').expect(200);
     expect(evaluateForecast).toHaveBeenCalledWith({ days: 90, modelId: 'pattern-v1' });
     await request(app).get('/api/forecast/accuracy/compare').expect(404);
+  });
+
+  it('returns pointwise intervals and payment timing labels to the dashboard', async () => {
+    const result: any = buildForecastResult({ days: 1, totalIncome: 1000 });
+    result.predictionIntervals = { level: 0.8, daily: [{ date: '2026-07-10',
+      cashFlow: { p10: -100, p50: 900, p90: 1000 },
+      cumulativeCashFlow: { p10: -100, p50: 900, p90: 1000 },
+    }] };
+    result.dailyForecasts[0].predictions = [{ category: 'Groceries', categoryType: 'expense',
+      expectedAmount: 100, probabilityWeightedAmount: 25, probability: 0.25, timingBasis: 'daily_average' }];
+    const { app } = buildApp(vi.fn().mockResolvedValue(result));
+    const response = await request(app).get('/api/forecast/daily?days=1').expect(200);
+    expect(response.body.predictionIntervals).toEqual(result.predictionIntervals);
+    expect(response.body.dailyForecasts[0].predictions[0].timingBasis).toBe('daily_average');
   });
 });

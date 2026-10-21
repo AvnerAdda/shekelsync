@@ -1,4 +1,5 @@
 const actualDatabase = require('../database.js');
+const { clearAllTtlCaches } = require('../../../lib/server/ttl-cache.js');
 const { BANK_CATEGORY_NAME } = require('../../../lib/category-constants.js');
 const { dialect } = require('../../../lib/sql-dialect.js');
 
@@ -264,23 +265,17 @@ async function createAutoRule(payload = {}) {
     ],
   );
 
-  // Also check and update any existing rule with the same pattern but different target_category
+  // Keep only the chosen target active for this pattern. Retargeting older
+  // rows would collide with the UNIQUE(name_pattern, target_category) key of
+  // the rule we just upserted.
   await database.query(
     `UPDATE categorization_rules
-     SET target_category = $2,
-         category_path = $3,
-         category_definition_id = $4,
-         category_type = $5,
-         is_active = true,
+     SET is_active = false,
          updated_at = CURRENT_TIMESTAMP
      WHERE LOWER(name_pattern) = LOWER($1)
-       AND id != $6`,
+       AND id != $2`,
     [
       transactionName,
-      category.name,
-      categoryPath,
-      categoryDefinitionId,
-      categoryType || category.category_type,
       upsertResult.rows[0].id,
     ],
   );
@@ -318,6 +313,7 @@ async function createAutoRule(payload = {}) {
   );
 
   const transactionsUpdated = updateResult.rowCount || 0;
+  clearAllTtlCaches();
 
   return {
     success: true,

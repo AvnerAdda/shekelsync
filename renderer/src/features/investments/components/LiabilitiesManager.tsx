@@ -1,4 +1,5 @@
 import React from 'react';
+import { focusDeleteCancel } from '@renderer/shared/hooks/useDeleteConfirmation';
 import {
   Alert,
   Box,
@@ -285,7 +286,7 @@ const LiabilitiesManager: React.FC<LiabilitiesManagerProps> = ({ onChanged }) =>
         </DialogActions>
       </Dialog>
 
-      <Dialog open={Boolean(pendingDelete)} onClose={() => !saving && setPendingDelete(null)}>
+      <Dialog open={Boolean(pendingDelete)} onClose={() => !saving && setPendingDelete(null)} slotProps={{ transition: { onEntered: focusDeleteCancel } }}>
         <DialogTitle>{t('investmentsPage.liabilities.removeTitle', 'Stop tracking liability?')}</DialogTitle>
         <DialogContent>
           <DialogContentText>
@@ -293,7 +294,7 @@ const LiabilitiesManager: React.FC<LiabilitiesManagerProps> = ({ onChanged }) =>
           </DialogContentText>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setPendingDelete(null)} disabled={saving}>{t('common.cancel', 'Cancel')}</Button>
+          <Button data-delete-cancel onClick={() => setPendingDelete(null)} disabled={saving}>{t('common.cancel', 'Cancel')}</Button>
           <Button color="error" variant="contained" onClick={() => void deactivate()} disabled={saving}>{t('common.remove', 'Remove')}</Button>
         </DialogActions>
       </Dialog>

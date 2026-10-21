@@ -34,6 +34,7 @@ const routeServices = {
     createAccount: vi.fn(),
     updateAccount: vi.fn(),
     deactivateAccount: vi.fn(),
+    mergeRealEstateAccounts: vi.fn(),
   },
   checkExistingService: {
     getExistingInvestments: vi.fn(),
@@ -262,6 +263,17 @@ describe('Shared /api/investments routes', () => {
 
     expect(res.body).toEqual(payload);
     expect(spy).toHaveBeenCalledWith({ vendor: 'test' });
+  });
+
+  it('merges real estate accounts and returns validation errors', async () => {
+    const payload = { target_account_id: 9, source_account_ids: [10, 11] };
+    accountsService.mergeRealEstateAccounts.mockResolvedValueOnce({ success: true, accountId: 9 });
+    const response = await request(app).post('/api/investments/accounts/merge').send(payload).expect(200);
+    expect(response.body).toEqual({ success: true, accountId: 9 });
+    expect(accountsService.mergeRealEstateAccounts).toHaveBeenCalledWith(payload);
+    accountsService.mergeRealEstateAccounts.mockRejectedValueOnce({ status: 400, message: 'Different currencies' });
+    expect((await request(app).post('/api/investments/accounts/merge').send(payload).expect(400)).body.error)
+      .toBe('Different currencies');
   });
 
   it('lists investment accounts', async () => {

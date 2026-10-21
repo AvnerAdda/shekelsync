@@ -4,7 +4,7 @@ export const computeOverviewDelta = (current: number, previous?: number): number
   if (!previous || previous === 0) {
     return null;
   }
-  return ((current - previous) / previous) * 100;
+  return ((current - previous) / Math.abs(previous)) * 100;
 };
 
 export const resolveOverviewHeaderTitle = (

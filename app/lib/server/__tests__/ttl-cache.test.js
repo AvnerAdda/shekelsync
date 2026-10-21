@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-const { createTtlCache } = require('../ttl-cache.js');
+const { createTtlCache, clearAllTtlCaches } = require('../ttl-cache.js');
 
 describe('ttl-cache', () => {
   afterEach(() => {
@@ -72,6 +72,18 @@ describe('ttl-cache', () => {
 
     cache.set('negative', 'n', -100);
     expect(cache.get('negative')).toBeUndefined();
+  });
+
+  it('invalidates every live cache and permits fresh values afterwards', () => {
+    const first = createTtlCache();
+    const second = createTtlCache();
+    first.set('summary', 'old');
+    second.set('details', 'old');
+    clearAllTtlCaches();
+    expect(first.get('summary')).toBeUndefined();
+    expect(second.get('details')).toBeUndefined();
+    first.set('summary', 'new');
+    expect(first.get('summary')).toBe('new');
   });
 
   it('clears all entries', () => {

@@ -13,9 +13,10 @@ const VALID_TYPES = new Set(['expense', 'income', 'investment']);
 const TYPE_CONFIG = {
   expense: {
     categoryType: 'expense',
-    priceFilter: 't.price < 0',
-    amountExpression: 'ABS(t.price)',
-    amountFn: (price) => Math.abs(price),
+    priceFilter: '',
+    // Refunds retain their sign so every breakdown reports net spending.
+    amountExpression: '-t.price',
+    amountFn: (price) => -price,
   },
   income: {
     categoryType: 'income',
@@ -78,13 +79,16 @@ async function getBreakdownAnalytics(query = {}) {
       return cached;
     }
   }
-  const periodLengthMs = end.getTime() - start.getTime();
-  const prevEnd = new Date(start.getTime() - 1);
-  const prevStart = new Date(Math.max(start.getTime() - periodLengthMs, 0));
   const startStr = start.toISOString().split('T')[0];
-  const endStr = end.toISOString().split('T')[0];
+  const startDay = new Date(`${startStr}T00:00:00.000Z`);
+  const endExclusive = new Date(`${end.toISOString().split('T')[0]}T00:00:00.000Z`);
+  endExclusive.setUTCDate(endExclusive.getUTCDate() + 1);
+  // Calendar ranges include the entire final day, including timestamped rows.
+  const endStr = endExclusive.toISOString().split('T')[0];
+  const periodLengthMs = endExclusive.getTime() - startDay.getTime();
+  const prevStart = new Date(startDay.getTime() - periodLengthMs);
   const prevStartStr = prevStart.toISOString().split('T')[0];
-  const prevEndStr = prevEnd.toISOString().split('T')[0];
+  const prevEndStr = startStr;
 
   const priceFilterClause = config.priceFilter ? `AND ${config.priceFilter}` : '';
   const amountExpression = config.amountExpression.replace(/t\./g, 'd.');
@@ -129,7 +133,7 @@ async function getBreakdownAnalytics(query = {}) {
       LEFT JOIN (SELECT DISTINCT transaction_identifier, transaction_vendor FROM transaction_pairing_exclusions) tpe
         ON t.identifier = tpe.transaction_identifier
         AND t.vendor = tpe.transaction_vendor
-      WHERE t.date >= $1 AND t.date <= $2
+      WHERE t.date >= $1 AND t.date < $2
         AND cd.category_type = $3
         AND cd.depth_level >= 1
         ${priceFilterClause}
@@ -148,7 +152,7 @@ async function getBreakdownAnalytics(query = {}) {
       LEFT JOIN (SELECT DISTINCT transaction_identifier, transaction_vendor FROM transaction_pairing_exclusions) tpe
         ON t.identifier = tpe.transaction_identifier
         AND t.vendor = tpe.transaction_vendor
-      WHERE t.date >= $1 AND t.date <= $2
+      WHERE t.date >= $1 AND t.date < $2
         AND cd.category_type = $3
         ${priceFilterClause}
         AND tpe.transaction_identifier IS NULL
@@ -258,12 +262,17 @@ async function getBreakdownAnalytics(query = {}) {
         FROM transactions t
         JOIN category_definitions cd ON t.category_definition_id = cd.id
         JOIN category_tree ct ON cd.id = ct.category_id
-        LEFT JOIN vendor_credentials vc ON t.vendor = vc.vendor
+        LEFT JOIN (
+          SELECT vendor,
+            CASE WHEN COUNT(DISTINCT institution_id) = 1 THEN MIN(institution_id) END AS institution_id
+          FROM vendor_credentials
+          GROUP BY vendor
+        ) vc ON t.vendor = vc.vendor
         LEFT JOIN institution_nodes fi ON vc.institution_id = fi.id AND fi.node_type = 'institution'
         LEFT JOIN (SELECT DISTINCT transaction_identifier, transaction_vendor FROM transaction_pairing_exclusions) tpe
           ON t.identifier = tpe.transaction_identifier
           AND t.vendor = tpe.transaction_vendor
-        WHERE t.date >= $1 AND t.date <= $2
+        WHERE t.date >= $1 AND t.date < $2
           AND cd.category_type = $3
           AND cd.depth_level >= 1
           ${priceFilterClause}
@@ -295,20 +304,16 @@ async function getBreakdownAnalytics(query = {}) {
       };
     });
 
-    // Deduplicate transactions (recursive CTE can return duplicate rows for multi-level categories)
-    const identifiers = transactions.map(tx => tx.identifier);
-    const uniqueIdentifiers = new Set(identifiers);
-    if (identifiers.length !== uniqueIdentifiers.size) {
-      // Keep the first occurrence of each transaction ID
-      const seen = new Set();
-      transactions = transactions.filter(tx => {
-        if (seen.has(tx.identifier)) {
-          return false;
-        }
-        seen.add(tx.identifier);
-        return true;
-      });
-    }
+    // Identifiers are unique within a vendor, not across different banks/cards.
+    const seen = new Set();
+    transactions = transactions.filter((tx) => {
+      const key = JSON.stringify([tx.identifier, tx.vendor]);
+      if (seen.has(key)) {
+        return false;
+      }
+      seen.add(key);
+      return true;
+    });
 
     // Use all transactions (including pending) for summary and breakdown calculations
     const amounts = transactions.map((tx) => config.amountFn(tx.price));
@@ -489,7 +494,7 @@ async function getBreakdownAnalytics(query = {}) {
         LEFT JOIN (SELECT DISTINCT transaction_identifier, transaction_vendor FROM transaction_pairing_exclusions) tpe
           ON t.identifier = tpe.transaction_identifier
           AND t.vendor = tpe.transaction_vendor
-        WHERE t.date >= $1 AND t.date <= $2
+        WHERE t.date >= $1 AND t.date < $2
           AND cd.category_type = $3
           AND cd.depth_level >= 1
           ${priceFilterClause}
@@ -497,7 +502,7 @@ async function getBreakdownAnalytics(query = {}) {
       ),
       deduped AS (
         SELECT * FROM (
-          SELECT filtered.*, ROW_NUMBER() OVER (PARTITION BY identifier ORDER BY date ASC) as rn
+          SELECT filtered.*, ROW_NUMBER() OVER (PARTITION BY identifier, vendor ORDER BY date ASC) as rn
           FROM filtered
         ) WHERE rn = 1
       )`;
@@ -650,7 +655,7 @@ async function getBreakdownAnalytics(query = {}) {
         LEFT JOIN (SELECT DISTINCT transaction_identifier, transaction_vendor FROM transaction_pairing_exclusions) tpe
           ON t.identifier = tpe.transaction_identifier
           AND t.vendor = tpe.transaction_vendor
-        WHERE t.date >= $1 AND t.date <= $2
+        WHERE t.date >= $1 AND t.date < $2
           AND cd.category_type = $3
           AND cd.depth_level >= 1
           ${priceFilterClause}
@@ -658,7 +663,7 @@ async function getBreakdownAnalytics(query = {}) {
       ),
       deduped AS (
         SELECT * FROM (
-          SELECT filtered.*, ROW_NUMBER() OVER (PARTITION BY identifier ORDER BY date ASC) as rn
+          SELECT filtered.*, ROW_NUMBER() OVER (PARTITION BY identifier, vendor ORDER BY date ASC) as rn
           FROM filtered
         ) WHERE rn = 1
       )`;
@@ -675,7 +680,12 @@ async function getBreakdownAnalytics(query = {}) {
         MIN(fi.logo_url) as institution_logo,
         MIN(fi.institution_type) as institution_type
       FROM deduped d
-      LEFT JOIN vendor_credentials vc ON d.vendor = vc.vendor
+      LEFT JOIN (
+        SELECT vendor,
+          CASE WHEN COUNT(DISTINCT institution_id) = 1 THEN MIN(institution_id) END AS institution_id
+        FROM vendor_credentials
+        GROUP BY vendor
+      ) vc ON d.vendor = vc.vendor
       LEFT JOIN institution_nodes fi ON vc.institution_id = fi.id AND fi.node_type = 'institution'
       GROUP BY COALESCE(d.vendor, 'Unknown')`,
       [startStr, endStr, config.categoryType],

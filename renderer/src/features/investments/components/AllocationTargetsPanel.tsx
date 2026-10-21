@@ -25,6 +25,7 @@ import type {
   PortfolioSummary,
 } from '@renderer/types/investments';
 import { useTranslation } from 'react-i18next';
+import { useDeleteConfirmation } from '@renderer/shared/hooks/useDeleteConfirmation';
 import {
   getPortfolioCategoryBucketsForScope,
   getPortfolioScopeTotal,
@@ -55,6 +56,7 @@ const AllocationTargetsPanel: React.FC<AllocationTargetsPanelProps> = ({
 }) => {
   const theme = useTheme();
   const { t } = useTranslation('translation');
+  const { confirmDelete, deleteConfirmationDialog } = useDeleteConfirmation();
   const { formatCurrency, maskAmounts } = useFinancePrivacy();
   const [data, setData] = React.useState<InvestmentAllocationTargetsResponse | null>(null);
   const [loading, setLoading] = React.useState(true);
@@ -147,6 +149,7 @@ const AllocationTargetsPanel: React.FC<AllocationTargetsPanelProps> = ({
   };
 
   const clearTargets = async () => {
+    if (saving || !await confirmDelete(t('investmentsPage.allocationTargets.title', 'Target category mix'))) return;
     setSaving(true);
     setError(null);
     try {
@@ -306,6 +309,7 @@ const AllocationTargetsPanel: React.FC<AllocationTargetsPanelProps> = ({
           </Button>
         </DialogActions>
       </Dialog>
+      {deleteConfirmationDialog}
     </Paper>
   );
 };

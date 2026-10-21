@@ -1,4 +1,5 @@
 const actualDatabase = require('../database.js');
+const { clearAllTtlCaches } = require('../../../lib/server/ttl-cache.js');
 const { INCOME_ROOT_NAME } = require('../../../lib/category-constants.js');
 
 let database = actualDatabase;
@@ -129,6 +130,7 @@ async function createManualTransaction(payload = {}) {
       ],
     );
 
+    clearAllTtlCaches();
     return { success: true };
   } finally {
     client.release();
@@ -178,6 +180,11 @@ async function updateTransaction(id, updates = {}) {
     params,
   );
 
+  if (['price', 'category_definition_id', 'category_type'].some(field =>
+    Object.prototype.hasOwnProperty.call(updates, field))) {
+    clearAllTtlCaches();
+  }
+
   return { success: true };
 }
 
@@ -192,6 +199,7 @@ async function deleteTransaction(id) {
     [identifier, vendor],
   );
 
+  clearAllTtlCaches();
   return { success: true };
 }
 

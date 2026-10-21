@@ -84,7 +84,7 @@ async function main() {
     db.prepare('INSERT INTO investment_holdings (account_id, current_value, as_of_date) VALUES (?, ?, ?)').run(bankId, 12000, today);
     db.prepare('INSERT INTO investment_holdings (account_id, current_value, as_of_date) VALUES (?, ?, ?)').run(bank2Id, 1000, today);
     db.prepare("INSERT INTO investment_holdings (account_id, current_value, as_of_date, holding_type) VALUES (?, ?, ?, 'pikadon')").run(savingId, 2000, today);
-    db.prepare("INSERT INTO vendor_credentials (vendor) VALUES ('max')").run();
+    db.prepare("INSERT INTO vendor_credentials (vendor, last_scrape_success) VALUES ('max', ?)").run(today);
     db.prepare("INSERT INTO transactions (identifier, vendor, date, processed_date, name, price, type, status, charged_currency) VALUES ('card-bill', 'max', '2026-08-20', '2026-09-10', 'Purchase', -700, 'normal', 'completed', 'ILS')").run();
     const dailyOnlyForecast = await realForecast.generateDailyForecast(forecastOptions);
     assert.equal(dailyOnlyForecast.dailyForecasts.length, 30, 'the real model supports the planning card without simulations');
@@ -95,6 +95,42 @@ async function main() {
     assert.equal(automatic.next_income_source, 'detected');
     assert.equal(automatic.card_commitments, 700);
     assert.equal(automatic.card_commitments_source, 'imported');
+    // Exercise credential discovery through SQLite: a fresh login cannot hide a
+    // stale or never-synced second login at the same provider.
+    db.exec('SAVEPOINT card_credential_freshness');
+    await service.updateSettings({ card_commitments_amount: 0 });
+    assert.equal((await service.getProjection()).card_commitments_source, 'manual');
+    const secondCardCredential = db.prepare("INSERT INTO vendor_credentials (vendor, last_scrape_success) VALUES ('max', ?)").run(today).lastInsertRowid;
+    let cardProjection = await service.getProjection();
+    assert.equal(cardProjection.status, 'ready');
+    assert.equal(cardProjection.card_commitments, 700, 'adding a credential invalidates the old manual confirmation, even with an unchanged latest sync date');
+    assert.equal(cardProjection.card_commitments_source, 'imported');
+    for (const [lastSuccess, code] of [
+      ['2026-08-01', 'STALE_CARD_DATA'],
+      [null, 'CARD_DATA_MISSING'],
+      ['invalid', 'CARD_DATA_MISSING'],
+      ['2026-09-09', 'CARD_DATA_MISSING'],
+    ]) {
+      db.prepare('UPDATE vendor_credentials SET last_scrape_success = ? WHERE id = ?').run(lastSuccess, secondCardCredential);
+      cardProjection = await service.getProjection();
+      assert.equal(cardProjection.available_spend, null, `a secondary login with sync ${lastSuccess} must block the estimate`);
+      assert.equal(cardProjection.card_commitments, null);
+      assert.ok(cardProjection.reasons.some((reason) => reason.code === code));
+    }
+    db.prepare('UPDATE vendor_credentials SET last_scrape_success = ? WHERE id = ?').run(today, secondCardCredential);
+    db.prepare("INSERT INTO transactions (identifier, vendor, date, processed_date, account_number, name, price, type, status) VALUES ('second-card-bill', 'max', '2026-09-01', '2026-09-10', '2222', 'Second card', -300, 'normal', 'completed')").run();
+    cardProjection = await service.getProjection();
+    assert.equal(cardProjection.status, 'ready');
+    assert.equal(cardProjection.card_commitments, 1000, 'both card accounts contribute after both logins sync');
+    db.prepare("DELETE FROM vendor_credentials WHERE vendor = 'max'").run();
+    assert.equal((await service.getProjection()).card_commitments, 1000, 'transaction-only vendors remain discoverable without credentials');
+    db.prepare("INSERT INTO account_pairings (credit_card_vendor, bank_vendor, is_active) VALUES ('other-card-provider', 'bank-test', 1)").run();
+    assert.ok((await service.getProjection()).reasons.some((reason) => reason.code === 'CARD_DATA_MISSING'), 'a pairing-only vendor without imports remains incomplete');
+    const pairedCredential = db.prepare("INSERT INTO vendor_credentials (vendor, last_scrape_success) VALUES ('other-card-provider', ?)").run(today).lastInsertRowid;
+    assert.equal((await service.getProjection()).status, 'ready', 'pairings also discover providers outside the built-in card list');
+    db.prepare('UPDATE vendor_credentials SET last_scrape_success = ? WHERE id = ?').run('2026-08-01', pairedCredential);
+    assert.ok((await service.getProjection()).reasons.some((reason) => reason.code === 'STALE_CARD_DATA'));
+    db.exec('ROLLBACK TO card_credential_freshness; RELEASE card_credential_freshness');
     for (const label of ['₪', 'NIS', 'ש"ח', 'ש״ח']) {
       db.prepare("UPDATE transactions SET charged_currency = ? WHERE identifier = 'card-bill'").run(label);
       const importedCurrency = await service.getProjection();

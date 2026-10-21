@@ -113,7 +113,7 @@ included in database backups.
 
 ## Requirements
 
-- Node.js >= 22.12.0 (see `app/package.json`)
+- Node.js 22.22.2+ on 22.x, 24.15.0+ on 24.x, or 26+ (see `.nvmrc`)
 
 ## Setup
 
@@ -122,6 +122,16 @@ npm install
 npm --prefix app install
 npm --prefix renderer install
 ```
+
+Type checking uses TypeScript 7 through the `@typescript/native` npm alias.
+The `typescript` alias points to `@typescript/typescript6` so ESLint and
+`ts-node` can still access the compiler API, following the
+[TypeScript migration guidance](https://devblogs.microsoft.com/typescript/announcing-typescript-7-0/#running-side-by-side-with-typescript-6.0).
+
+ESLint 10 uses `@eslint/compat` for the React and JSX accessibility plugins.
+Their scoped peer overrides can be removed once both plugins declare ESLint 10
+support. Bank scraper fixes in `app/patches` are applied during installation;
+rebase and verify those patches when upgrading the scraper package.
 
 ## Development
 

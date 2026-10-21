@@ -66,22 +66,24 @@ function buildTimeline(rows, period) {
 }
 
 // Shared selection for chart totals and transaction details. Signed refunds reduce
-// spending. Transfers, investment movements and duplicate card repayments do not
-// consume income; income left after expenses is allocated to Growth.
+// spending. Investment outflows consume income and default to Growth; withdrawals,
+// transfers and duplicate card repayments are excluded. Only the remaining income
+// is added to Growth, so invested money is not counted again as unspent income.
+const kindSql = "COALESCE(cd.category_type, t.category_type, CASE WHEN t.price < 0 THEN 'expense' END)";
+const allocationFor = (kind) => `COALESCE(NULLIF(scm.spending_category, 'other'), CASE WHEN ${kind} = 'investment' THEN 'growth' ELSE 'unallocated' END)`;
+const allocationSql = allocationFor(kindSql);
 const selection = `
   FROM transactions t
   LEFT JOIN category_definitions cd ON cd.id = t.category_definition_id
   LEFT JOIN spending_category_mappings scm ON scm.category_definition_id = cd.id
   WHERE t.date >= $1 AND t.date < $2 AND t.status = 'completed'
-    AND COALESCE(cd.category_type, t.category_type, CASE WHEN t.price < 0 THEN 'expense' END) IN ('income', 'expense')
+    AND (${kindSql} IN ('income', 'expense') OR (${kindSql} = 'investment' AND t.price < 0))
     AND (COALESCE(cd.category_type, t.category_type, 'expense') <> 'income' OR COALESCE(cd.is_counted_as_income, 1) = 1)
     AND COALESCE(cd.name, '') <> 'החזר קרן' AND COALESCE(cd.name_en, '') <> 'Capital Returns'
     AND NOT ${getCreditCardRepaymentCategoryCondition('cd')}
     AND NOT EXISTS (SELECT 1 FROM transaction_pairing_exclusions tpe
       WHERE tpe.transaction_identifier = t.identifier AND tpe.transaction_vendor = t.vendor)
 `;
-const kindSql = "COALESCE(cd.category_type, t.category_type, CASE WHEN t.price < 0 THEN 'expense' END)";
-const allocationSql = "COALESCE(NULLIF(scm.spending_category, 'other'), 'unallocated')";
 
 async function getTimeline(client, params) {
   const period = timelinePeriod(params);
@@ -91,9 +93,9 @@ async function getTimeline(client, params) {
     ORDER BY date`, [period.history_start, shiftDays(period.end, 1)]);
   const targets = await client.query("SELECT spending_category, target_percentage FROM spending_category_targets WHERE is_active = 1");
   const categories = await client.query(`SELECT cd.id AS category_definition_id, cd.name AS category_name,
-    cd.name_en AS category_name_en, cd.name_fr AS category_name_fr, cd.icon, scm.spending_category
+    cd.name_en AS category_name_en, cd.name_fr AS category_name_fr, cd.icon, ${allocationFor('cd.category_type')} AS spending_category
     FROM category_definitions cd LEFT JOIN spending_category_mappings scm ON scm.category_definition_id = cd.id
-    WHERE cd.category_type = 'expense' AND cd.is_active = 1 ORDER BY cd.name`);
+    WHERE cd.category_type IN ('expense', 'investment') AND cd.is_active = 1 ORDER BY cd.name`);
   const categoriesByAllocation = Object.fromEntries(ALLOCATIONS.map((key) => [key, []]));
   for (const row of categories.rows) {
     const key = ALLOCATIONS.includes(row.spending_category) ? row.spending_category : 'unallocated';
@@ -112,7 +114,7 @@ async function getTimelineTransactions(client, params) {
   const limit = Math.min(2000, Math.max(1, Number(params.limit) || 500));
   const offset = Math.max(0, Number(params.offset) || 0);
   if (!Number.isInteger(limit) || !Number.isInteger(offset)) throw invalid('Invalid pagination');
-  const filter = `${selection} AND ${kindSql} = 'expense' AND ${allocationSql} = $3`;
+  const filter = `${selection} AND ${kindSql} IN ('expense', 'investment') AND ${allocationSql} = $3`;
   const args = [start, shiftDays(end, 1), params.spendingCategory];
   const transactions = await client.query(`SELECT t.identifier, t.vendor, t.name, t.date, t.price,
     t.account_number, t.category_definition_id, ${kindSql} AS category_type, t.status,

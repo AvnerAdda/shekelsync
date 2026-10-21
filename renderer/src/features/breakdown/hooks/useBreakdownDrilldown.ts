@@ -34,6 +34,7 @@ const useBreakdownDrilldown = ({
   categoryBreakdown,
   transactions,
 }: UseBreakdownDrilldownOptions) => {
+  const lastDetailsRequest = useRef<CategoryDetailsRequest | null>(null);
   const [view, setView] = useState<BreakdownView>('overview');
   const [drillStack, setDrillStack] = useState<DrillLevel[]>([]);
   const [categoryDetails, setCategoryDetails] = useState<CategoryDetails | null>(null);
@@ -68,9 +69,9 @@ const useBreakdownDrilldown = ({
         color: item.color,
         icon: item.icon,
         description: item.description,
-        value: Math.abs(item.total),
+        value: item.total,
         count: item.count,
-        previousValue: item.previousTotal ? Math.abs(item.previousTotal) : undefined,
+        previousValue: item.previousTotal,
         history: item.history,
         subcategories: item.subcategories,
       }));
@@ -88,7 +89,7 @@ const useBreakdownDrilldown = ({
         color: sub.color,
         icon: sub.icon,
         description: sub.description,
-        value: Math.abs(sub.total),
+        value: sub.total,
         count: sub.count,
       }));
     }
@@ -133,6 +134,7 @@ const useBreakdownDrilldown = ({
 
   const loadCategoryDetails = useCallback(
     async ({ parentId, subcategoryId, categoryName }: CategoryDetailsRequest) => {
+      lastDetailsRequest.current = { parentId, subcategoryId, categoryName };
       startZoomAnimation();
       try {
         const params = new URLSearchParams({
@@ -166,6 +168,14 @@ const useBreakdownDrilldown = ({
     },
     [categoryType, endDate, locale, startDate, startZoomAnimation]
   );
+
+  useEffect(() => {
+    const refresh = () => {
+      if (detailsModalOpen && lastDetailsRequest.current) void loadCategoryDetails(lastDetailsRequest.current);
+    };
+    window.addEventListener('dataRefresh', refresh);
+    return () => window.removeEventListener('dataRefresh', refresh);
+  }, [detailsModalOpen, loadCategoryDetails]);
 
   const handleDrillDown = useCallback(
     (parentId: number, parentName: string) => {

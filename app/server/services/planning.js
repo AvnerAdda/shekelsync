@@ -123,8 +123,7 @@ function createPlanningService(dependencies = {}) {
             AND COALESCE(h.holding_type, 'standard') <> 'pikadon'
           ORDER BY h.as_of_date DESC, h.id DESC LIMIT 1)
         WHERE ia.is_active = 1 AND ia.account_type = 'bank_balance' ORDER BY ia.id`),
-      database.query(`SELECT vendors.vendor, (SELECT MAX(vc.last_scrape_success) FROM vendor_credentials vc
-          WHERE vc.vendor = vendors.vendor) AS last_scrape_success FROM (
+      database.query(`SELECT vendors.vendor, vc.id AS credential_id, vc.last_scrape_success FROM (
           SELECT vc.vendor FROM vendor_credentials vc
           LEFT JOIN institution_nodes fi ON fi.id = vc.institution_id OR (fi.vendor_code = vc.vendor AND fi.node_type = 'institution')
           WHERE fi.institution_type = 'credit_card' OR vc.vendor IN ('max', 'visaCal', 'isracard', 'amex')
@@ -132,7 +131,9 @@ function createPlanningService(dependencies = {}) {
           LEFT JOIN institution_nodes fi ON fi.vendor_code = t.vendor AND fi.node_type = 'institution'
           WHERE fi.institution_type = 'credit_card' OR t.vendor IN ('max', 'visaCal', 'isracard', 'amex')
           UNION SELECT credit_card_vendor AS vendor FROM account_pairings WHERE is_active = 1
-        ) vendors ORDER BY vendor`),
+        ) vendors
+        LEFT JOIN vendor_credentials vc ON vc.vendor = vendors.vendor
+        ORDER BY vendors.vendor, vc.id`),
       database.query(`SELECT DISTINCT UPPER(TRIM(charged_currency)) AS currency FROM transactions
         WHERE date >= $1 AND status = 'completed' AND charged_currency IS NOT NULL
           AND TRIM(charged_currency) <> '' AND UPPER(TRIM(charged_currency)) <> 'ILS'`, [math.shiftDays(today, -180)]),

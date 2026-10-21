@@ -10,6 +10,8 @@ describe('OverviewView helpers', () => {
   it('computes deltas and guards against missing previous totals', () => {
     expect(computeOverviewDelta(120, 100)).toBe(20);
     expect(computeOverviewDelta(80, 100)).toBe(-20);
+    expect(computeOverviewDelta(100, -100)).toBe(200);
+    expect(computeOverviewDelta(-150, -100)).toBe(-50);
     expect(computeOverviewDelta(80, 0)).toBeNull();
     expect(computeOverviewDelta(80, undefined)).toBeNull();
   });

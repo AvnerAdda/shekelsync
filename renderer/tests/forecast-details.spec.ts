@@ -15,6 +15,53 @@ const predictions = [
   category_name: 'Expenses',
 }));
 
+for (const mode of ['light', 'dark'] as const) {
+  test(`net position renders a readable estimated range in ${mode} mode`, async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 1100 });
+    await page.clock.setFixedTime(new Date('2026-09-23T12:00:00+03:00'));
+    const pageErrors: string[] = [];
+    page.on('pageerror', error => pageErrors.push(error.message));
+    await setupRendererTest(page, {
+      'GET /api/analytics/dashboard': async ({ route }) => route.fulfill({ json: {
+        summary: { totalIncome: 1000, totalExpenses: 250, netBalance: 750, netInvestments: 0 },
+        history: [{ date: '2026-09-23', income: 1000, expenses: 250, investments: 0 }],
+        breakdowns: { byCategory: [], byVendor: [], byMonth: [] },
+      } }),
+      'GET /api/forecast/daily': async ({ route }) => route.fulfill({ json: {
+        dailyForecasts: [
+          { date: '2026-09-24', income: 0, expenses: 50, investments: 0, cashFlow: -50 },
+          { date: '2026-09-25', income: 0, expenses: 100, investments: 0, cashFlow: -100 },
+        ],
+        predictionIntervals: { level: 0.8, daily: [
+          { date: '2026-09-24', cumulativeCashFlow: { p10: -100, p50: -50, p90: 50 } },
+          { date: '2026-09-25', cumulativeCashFlow: { p10: -250, p50: -150, p90: 100 } },
+        ] },
+      } }),
+    });
+    await goHome(page);
+    if (mode === 'dark') await page.getByRole('button', { name: 'Switch to Dark Mode' }).click();
+    await page.getByRole('button', { name: 'Net Position', exact: true }).click();
+    const rangeLegend = page.getByText('Estimated range (P10–P90)', { exact: true });
+    await expect(rangeLegend).toBeVisible();
+    // Visibility alone allows transparent text. Check the actual paint colour.
+    expect(await rangeLegend.evaluate(element => getComputedStyle(element).color)).not.toBe('rgba(0, 0, 0, 0)');
+    const swatch = rangeLegend.locator('..').locator('svg [fill]').first();
+    await expect(swatch).toBeVisible();
+    await expect(swatch).not.toHaveAttribute('fill', 'transparent');
+    const band = page.locator('.forecast-range-band path.recharts-area-area');
+    await expect(band).toBeVisible();
+    await expect(band).toHaveAttribute('d', /^M/);
+    await expect(band).toHaveAttribute('fill-opacity', mode === 'dark' ? '0.24' : '0.16');
+    await expect(band).not.toHaveAttribute('fill', 'transparent');
+    expect(await band.getAttribute('d')).not.toContain('NaN');
+    // A degenerate bridge point alone must not satisfy the visible range check.
+    await expect.poll(async () => (await band.boundingBox())?.height || 0).toBeGreaterThan(50);
+    await expect(page.getByText(/experimental/i)).toHaveCount(0);
+    await page.screenshot({ path: `/tmp/shekelsync-forecast-range-${mode}.png`, fullPage: true });
+    expect(pageErrors).toEqual([]);
+  });
+}
+
 test('forecast bar tooltip reconciles with every probability-weighted transaction', async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 1100 });
   await page.clock.setFixedTime(new Date('2026-09-23T12:00:00+03:00'));
@@ -51,7 +98,7 @@ test('forecast bar tooltip reconciles with every probability-weighted transactio
   const expenses = page.getByRole('region', { name: 'Expenses', exact: true });
   await expect(expenses.getByText('₪1,439.00', { exact: true })).toBeVisible();
   await expect(expenses.getByText('Included in forecast', { exact: true })).toHaveCount(6);
-  await expect(page.getByText('Each amount below is its contribution to the chart total, weighted by probability. Estimated transaction amounts are shown separately.', { exact: true })).toBeVisible();
+  await expect(page.getByText('Each amount below contributes to the chart total. Payment dates are estimates; everyday spending is shown as a daily average.', { exact: true })).toBeVisible();
 
   const contributionAmounts = await expenses.getByText('Included in forecast', { exact: true })
     .evaluateAll(labels => labels.map(label => Number(label.previousElementSibling?.textContent?.replace(/[^\d.-]/g, ''))));
@@ -63,7 +110,7 @@ test('forecast bar tooltip reconciles with every probability-weighted transactio
   await page.screenshot({ path: '/tmp/shekelsync-forecast-details.png', fullPage: true });
   await expenses.getByText('Additional forecast purchase', { exact: true }).scrollIntoViewIfNeeded();
   await expect(expenses.getByText('Additional forecast purchase', { exact: true })).toBeVisible();
-  await expect(expenses.getByText('40% probability', { exact: true })).toBeVisible();
+  await expect(expenses.getByText('Estimated date', { exact: true })).toHaveCount(6);
   await expect(expenses.getByText('Estimated transaction: ₪2,261.15', { exact: true })).toBeVisible();
   await expect(expenses.getByText('₪904.46', { exact: true })).toBeVisible();
   await expect(expenses.getByText('Other forecast contributions', { exact: true })).toHaveCount(0);

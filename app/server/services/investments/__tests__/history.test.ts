@@ -55,6 +55,8 @@ describe('investment history service', () => {
     expect(queryMock).toHaveBeenCalledTimes(2);
     expect(isStandardHistoryQuery(String(queryMock.mock.calls[0][0]))).toBe(true);
     expect(isPikadonHistoryQuery(String(queryMock.mock.calls[1][0]))).toBe(true);
+    expect(String(queryMock.mock.calls[0][0])).toContain('ia.is_active = true');
+    expect(String(queryMock.mock.calls[1][0])).toContain('ia.is_active = true');
     expect(result).toEqual({
       success: true,
       timeRange: 'all',

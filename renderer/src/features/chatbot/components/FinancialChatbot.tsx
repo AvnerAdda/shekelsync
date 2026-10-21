@@ -38,6 +38,7 @@ import ExpandLess from '@mui/icons-material/ExpandLess';
 import ExpandMore from '@mui/icons-material/ExpandMore';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import { useTranslation } from 'react-i18next';
+import { useDeleteConfirmation } from '@renderer/shared/hooks/useDeleteConfirmation';
 import { apiClient } from '@/lib/api-client';
 import { useChatbotPermissions, MODEL_TIERS } from '@app/contexts/ChatbotPermissionsContext';
 import { useAuth } from '@app/contexts/AuthContext';
@@ -171,6 +172,7 @@ const FinancialChatbot: React.FC<FinancialChatbotProps> = ({ showLauncher = true
   const { session } = useAuth();
 
   const [isOpen, setIsOpen] = useState(false);
+  const { confirmDelete, deleteConfirmationDialog } = useDeleteConfirmation(isOpen && chatbotEnabled);
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputValue, setInputValue] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -380,8 +382,11 @@ const FinancialChatbot: React.FC<FinancialChatbotProps> = ({ showLauncher = true
   // Delete a conversation
   const deleteConversation = async (convId: string, e: React.MouseEvent) => {
     e.stopPropagation();
+    const conversation = conversations.find(item => item.externalId === convId);
+    if (!conversation || !await confirmDelete(conversation.title)) return;
     try {
-      await apiClient.delete(`/api/chat/conversations/${convId}`);
+      const response = await apiClient.delete(`/api/chat/conversations/${convId}`);
+      if (!response.ok) throw new Error('Failed to delete conversation');
       setConversations((prev) => prev.filter((c) => c.externalId !== convId));
       if (conversationId === convId) {
         startNewChat();
@@ -589,6 +594,7 @@ const FinancialChatbot: React.FC<FinancialChatbotProps> = ({ showLauncher = true
 
   return (
     <>
+      {deleteConfirmationDialog}
       {/* The v0.2 shell can provide a shared launcher for financial tools. */}
       {showLauncher && <Fab
         color="primary"

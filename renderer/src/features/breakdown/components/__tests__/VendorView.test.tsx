@@ -8,6 +8,8 @@ describe('VendorView helpers', () => {
   it('calculates vendor delta percentages and handles missing baselines', () => {
     expect(calculateVendorDelta(120, 100)).toBe(20);
     expect(calculateVendorDelta(80, 100)).toBe(-20);
+    expect(calculateVendorDelta(100, -100)).toBe(200);
+    expect(calculateVendorDelta(-150, -100)).toBe(-50);
     expect(calculateVendorDelta(100, 0)).toBeNull();
     expect(calculateVendorDelta(100, undefined)).toBeNull();
   });

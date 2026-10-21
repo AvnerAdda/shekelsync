@@ -44,7 +44,7 @@ describe('balance sync service', () => {
   describe('getOrCreateBankBalanceAccount', () => {
     it('returns account matched by credential_id notes (strategy 1)', async () => {
       const client = createClient(async (sql) => {
-        if (sql.includes('ia.notes LIKE $1')) {
+        if (sql.includes('CAST($1 AS BIGINT)')) {
           return { rows: [{ id: 11, account_name: 'Existing Account' }] };
         }
         throw new Error(`Unexpected query: ${sql}`);
@@ -59,13 +59,13 @@ describe('balance sync service', () => {
 
       expect(result).toMatchObject({ id: 11, account_name: 'Existing Account' });
       expect(client.calls).toHaveLength(1);
-      expect(client.calls[0].params).toEqual(['%credential_id:42%']);
+      expect(client.calls[0].params).toEqual([42]);
     });
 
     it('returns account matched by institution + account number and updates notes (strategy 2)', async () => {
       const client = createClient(async (sql, params) => {
-        if (sql.includes('ia.notes LIKE $1')) return { rows: [] };
-        if (sql.includes('ia.institution_id = $1') && sql.includes('ia.account_number = $2')) {
+        if (sql.includes('CAST($1 AS BIGINT)')) return { rows: [] };
+        if (sql.includes('ia.institution_id = $1') && sql.includes('ia.account_number = $2') && !sql.includes('COUNT(*) OVER()')) {
           return { rows: [{ id: 22, account_name: 'Institution Match' }] };
         }
         if (sql.includes('UPDATE investment_accounts') && sql.includes('credential_id')) {
@@ -88,8 +88,8 @@ describe('balance sync service', () => {
 
     it('returns single institution account and updates notes (strategy 3)', async () => {
       const client = createClient(async (sql, params) => {
-        if (sql.includes('ia.notes LIKE $1')) return { rows: [] };
-        if (sql.includes('ia.institution_id = $1') && sql.includes('ia.account_number = $2')) {
+        if (sql.includes('CAST($1 AS BIGINT)')) return { rows: [] };
+        if (sql.includes('ia.institution_id = $1') && sql.includes('ia.account_number = $2') && !sql.includes('COUNT(*) OVER()')) {
           return { rows: [] };
         }
         if (sql.includes('COUNT(*) OVER() as total_count')) {
@@ -114,8 +114,8 @@ describe('balance sync service', () => {
 
     it('creates a new account when no strategy match exists', async () => {
       const client = createClient(async (sql, params) => {
-        if (sql.includes('ia.notes LIKE $1')) return { rows: [] };
-        if (sql.includes('ia.institution_id = $1') && sql.includes('ia.account_number = $2')) {
+        if (sql.includes('CAST($1 AS BIGINT)')) return { rows: [] };
+        if (sql.includes('ia.institution_id = $1') && sql.includes('ia.account_number = $2') && !sql.includes('COUNT(*) OVER()')) {
           return { rows: [] };
         }
         if (sql.includes('COUNT(*) OVER() as total_count')) {
@@ -151,7 +151,7 @@ describe('balance sync service', () => {
     it('uses nickname in new account name and supports null institution id', async () => {
       let vendorLookupQueryCount = 0;
       const client = createClient(async (sql, params) => {
-        if (sql.includes('ia.notes LIKE $1')) return { rows: [] };
+        if (sql.includes('CAST($1 AS BIGINT)')) return { rows: [] };
         if (sql.includes('FROM institution_nodes') && sql.includes('ORDER BY category, display_order')) {
           vendorLookupQueryCount += 1;
           return { rows: [] };
@@ -303,7 +303,7 @@ describe('balance sync service', () => {
       vi.setSystemTime(new Date('2026-02-20T10:00:00Z'));
 
       const client = createClient(async (sql, params) => {
-        if (sql.includes('ia.notes LIKE $1')) {
+        if (sql.includes('CAST($1 AS BIGINT)')) {
           return { rows: [{ id: 7, account_name: 'Existing Balance Account' }] };
         }
         if (sql.includes('FROM institution_nodes') && sql.includes('ORDER BY category, display_order')) {
@@ -368,7 +368,7 @@ describe('balance sync service', () => {
       vi.setSystemTime(new Date('2026-02-20T10:00:00Z'));
 
       const client = createClient(async (sql) => {
-        if (sql.includes('ia.notes LIKE $1')) {
+        if (sql.includes('CAST($1 AS BIGINT)')) {
           return { rows: [{ id: 18, account_name: 'Existing' }] };
         }
         if (sql.includes('FROM institution_nodes') && sql.includes('ORDER BY category, display_order')) {
@@ -412,7 +412,7 @@ describe('balance sync service', () => {
     it('returns a safe error object when sync throws internally', async () => {
       const logger = createLogger();
       const client = createClient(async (sql) => {
-        if (sql.includes('ia.notes LIKE $1')) {
+        if (sql.includes('CAST($1 AS BIGINT)')) {
           return { rows: [{ id: 3, account_name: 'Existing' }] };
         }
         if (sql.includes('FROM institution_nodes') && sql.includes('ORDER BY category, display_order')) {

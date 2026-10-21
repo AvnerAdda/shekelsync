@@ -117,6 +117,25 @@ describe('useDashboardData', () => {
     expect(mockGet.mock.calls.map(([url]) => url)).toEqual([requestedUrl, requestedUrl]);
   });
 
+  it('preserves negative expense totals and history when refunds exceed purchases', async () => {
+    mockGet.mockResolvedValueOnce({
+      ok: true,
+      data: {
+        dateRange: { start: START, end: END },
+        summary: { totalIncome: 0, totalExpenses: -50, netBalance: 50 },
+        history: [{ date: '2024-03-10', income: 0, expenses: -50, operatingExpenses: -50 }],
+        breakdowns: { byCategory: [], byVendor: [], byMonth: [] },
+      },
+    });
+    const { result } = renderHook(() =>
+      useDashboardData({ startDate: START, endDate: END, aggregation: 'daily' }),
+    );
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    expect(result.current.data?.summary).toMatchObject({ totalExpenses: -50, netBalance: 50 });
+    expect(result.current.data?.history.find((day) => day.date === '2024-03-10'))
+      .toMatchObject({ expenses: -50, operatingExpenses: -50 });
+  });
+
   it('sets error state when request fails', async () => {
     mockGet.mockResolvedValueOnce({ ok: false, status: 500 });
 

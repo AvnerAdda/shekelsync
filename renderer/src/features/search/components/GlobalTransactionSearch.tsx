@@ -1,3 +1,4 @@
+import TransactionActions from '@renderer/shared/components/TransactionActions';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Dialog,
@@ -196,6 +197,13 @@ const GlobalTransactionSearch: React.FC<GlobalTransactionSearchProps> = ({
     )
   ), [categoryFilter, endDate, searchQuery, startDate, tagFilter, vendorFilter]);
 
+  const [categoryRevision, setCategoryRevision] = useState(0);
+  useEffect(() => {
+    const refresh = () => setCategoryRevision(value => value + 1);
+    window.addEventListener('dataRefresh', refresh);
+    return () => window.removeEventListener('dataRefresh', refresh);
+  }, []);
+
   useEffect(() => {
     if (!open) {
       return;
@@ -245,6 +253,7 @@ const GlobalTransactionSearch: React.FC<GlobalTransactionSearchProps> = ({
       window.clearTimeout(debounceTimer);
     };
   }, [
+    categoryRevision,
     categoryFilter,
     endDate,
     hasSearchCriteria,
@@ -554,7 +563,7 @@ const GlobalTransactionSearch: React.FC<GlobalTransactionSearchProps> = ({
           <List sx={{ py: 0 }}>
             {results.map((transaction, index) => (
               <React.Fragment key={`${transaction.identifier}-${transaction.vendor}`}>
-                <ListItem disablePadding>
+                <ListItem disablePadding sx={{ '& .MuiListItemButton-root': { pr: 10 } }} secondaryAction={<TransactionActions transaction={transaction} />}>
                   <ListItemButton
                     selected={index === selectedIndex}
                     onClick={() => handleSelectTransaction(transaction)}

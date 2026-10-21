@@ -4,6 +4,7 @@
     "init:sqlite": "node scripts/init_sqlite_db.js",
     "scrape:last2m": "node scripts/scrape-last-2-months.js",
     "evaluate:forecast": "ELECTRON_RUN_AS_NODE=1 app/node_modules/electron/cli.js scripts/evaluate-forecast-models.js",
+    "replay:forecast": "ELECTRON_RUN_AS_NODE=1 app/node_modules/electron/cli.js scripts/replay-forecast-estimators.js",
     "dev:electron": "SHEKELSYNC_KEY_SCOPE=production node scripts/dev-electron.js",
     "dev:api": "ELECTRON_API_PORT=44373 SQLITE_DB_PATH=$(pwd)/dist/shekelsync.sqlite USE_SQLITE=true node electron/dev-api-server.js",
     "dev:electron:anonymized": "SQLITE_DB_PATH=$(pwd)/dist/shekelsync-anonymized.sqlite USE_SQLITE=true node scripts/dev-electron.js",
@@ -31,7 +32,7 @@
     "http-proxy-middleware": "^4.2.0"
   },
   "overrides": {
-    "follow-redirects": "^1.15.12",
-    "picomatch": "^2.3.2"
+    "follow-redirects": "^1.16.0",
+    "picomatch": "^4.0.7"
   }
 }

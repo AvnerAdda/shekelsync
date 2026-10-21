@@ -20,6 +20,7 @@ function buildIncomeSchedule(transactions, dates, now, engine, truthSnapshot = {
   const groups = new Map();
   for (const row of transactions) {
     if (row.category_type !== 'income' || !Number.isFinite(Number(row.price)) || Number(row.price) <= 0
+      || (row.status && row.status !== 'completed')
       || !/^\d{4}-\d{2}-\d{2}/.test(String(row.date)) || !Number.isFinite(parse(row.date).getTime())
       || dateOnly(row.date) > engine.formatDate(now)) continue;
     const descriptor = { categoryType: 'income', category: row.category_name, categoryNameEn: row.category_name_en,
@@ -107,10 +108,18 @@ function buildIncomeSchedule(transactions, dates, now, engine, truthSnapshot = {
       const occurrenceDate = engine.formatDate(occurrence);
       const tolerance = Math.min(10, period * 0.35);
       if (historyDates.some(date => Math.abs(distance(date, occurrenceDate)) <= tolerance)) continue;
+      const overdueDays = distance(engine.formatDate(now), occurrenceDate);
+      const startOffset = distance(dates[0], engine.formatDate(now));
+      const canCarry = startOffset >= 0 && startOffset <= 1
+        && overdueDays >= 0 && overdueDays <= tolerance && !dateSet.has(occurrenceDate);
+      // A due payment is not an actual receipt. When today's outlook starts
+      // tomorrow, retain a recently due unpaid occurrence as awaiting receipt
+      // instead of silently dropping this cycle. Never accumulate old arrears.
+      const allocationDate = canCarry ? first : occurrence;
       const allocations = [];
       const normalizer = (radius + 1) ** 2;
       for (let offset = -radius; offset <= radius; offset++) {
-        const d = new Date(occurrence);
+        const d = new Date(allocationDate);
         d.setDate(d.getDate() + offset);
         const date = engine.formatDate(d);
         if (!dateSet.has(date)) continue;
@@ -119,6 +128,7 @@ function buildIncomeSchedule(transactions, dates, now, engine, truthSnapshot = {
         allocations.push({ date, probability });
       }
       if (allocations.length) output.events.push({ key: `${sourceKey}:${occurrenceDate}`, amount, stdDev, allocations,
+        expectedPaymentDate: occurrenceDate, awaitingReceipt: canCarry,
         transactionName: rows.at(-1).name, vendor: rows.at(-1).vendor || null });
     }
   }
@@ -149,6 +159,8 @@ function applyIncomeSchedule(dailyForecasts, simulationEntriesByDay, schedule, e
       day.predictions.push({ patternKey: `income_schedule:${event.key}`, category: model.category,
         categoryDefinitionId: model.categoryDefinitionId, categoryType: 'income', incomeType: 'operating',
         transactionName: event.transactionName || null, vendor: event.vendor || null,
+        expectedPaymentDate: event.expectedPaymentDate, awaitingReceipt: Boolean(event.awaitingReceipt),
+        timingBasis: 'estimated',
         probability, expectedAmount: event.amount, probabilityWeightedAmount: event.amount * probability,
         amountRange: { low: Math.max(0, event.amount - event.stdDev), high: event.amount + event.stdDev },
         predictionKind: 'recurring_income', isCalibrated: true });

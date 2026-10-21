@@ -1,3 +1,4 @@
+import TransactionActions from '@renderer/shared/components/TransactionActions';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Alert,
@@ -352,7 +353,7 @@ const ActivityPage: React.FC = () => {
                     const category = transaction.category_name || transaction.parent_name;
 
                     return (
-                      <ListItem key={`${transaction.identifier}|${transaction.vendor}`} disablePadding>
+                      <ListItem key={`${transaction.identifier}|${transaction.vendor}`} disablePadding sx={{ '& .MuiListItemButton-root': { pr: 10 } }} secondaryAction={<TransactionActions transaction={transaction} />}>
                         <ListItemButton
                           onClick={() => openTransaction(transaction)}
                           divider={index < items.length - 1}
