@@ -2,6 +2,7 @@ const actualDatabase = require('./database.js');
 const encryptionUtils = require('../../lib/server/encryption.js');
 const institutionsModule = require('./institutions.js');
 const timeUtils = require('../../lib/server/time-utils.js');
+const { credentialIdMatchSql } = require('./investments/credential-link.js');
 
 let database = actualDatabase;
 let encryptRef = encryptionUtils.encrypt;
@@ -125,12 +126,11 @@ async function listCredentials(params = {}) {
              ) as lastUpdate
       FROM vendor_credentials vc
       ${INSTITUTION_JOIN_VENDOR_CRED}
-      LEFT JOIN (
-        SELECT MIN(id) as id, notes
-        FROM investment_accounts
-        WHERE account_type = 'bank_balance'
-        GROUP BY notes
-      ) bank_acc ON bank_acc.notes LIKE '%credential_id:' || vc.id || '%'
+      LEFT JOIN investment_accounts bank_acc ON bank_acc.id = (
+        SELECT MIN(ia.id) FROM investment_accounts ia
+        WHERE ia.account_type = 'bank_balance'
+          AND ${credentialIdMatchSql('ia.notes', 'vc.id')}
+      )
       WHERE vc.vendor = $1
       ORDER BY vc.created_at DESC
     `;
@@ -182,12 +182,11 @@ async function listCredentials(params = {}) {
              ) as lastUpdate
       FROM vendor_credentials vc
       ${INSTITUTION_JOIN_VENDOR_CRED}
-      LEFT JOIN (
-        SELECT MIN(id) as id, notes
-        FROM investment_accounts
-        WHERE account_type = 'bank_balance'
-        GROUP BY notes
-      ) bank_acc ON bank_acc.notes LIKE '%credential_id:' || vc.id || '%'
+      LEFT JOIN investment_accounts bank_acc ON bank_acc.id = (
+        SELECT MIN(ia.id) FROM investment_accounts ia
+        WHERE ia.account_type = 'bank_balance'
+          AND ${credentialIdMatchSql('ia.notes', 'vc.id')}
+      )
       ORDER BY vc.vendor
     `;
     legacySql = `
@@ -484,10 +483,11 @@ async function deleteCredential(params = {}) {
 
     // Delete related investment_accounts (bank_balance type) that reference this credential
     // investment_holdings will cascade delete due to FK constraint
-    const escapedId = String(id).replace(/%/g, '\\%').replace(/_/g, '\\_');
     await client.query(
-      `DELETE FROM investment_accounts WHERE notes LIKE $1 ESCAPE '\\'`,
-      [`%credential_id:${escapedId}%`],
+      `DELETE FROM investment_accounts
+       WHERE account_type = 'bank_balance'
+         AND ${credentialIdMatchSql('notes', '$1')}`,
+      [id],
     );
 
     // Delete related transactions

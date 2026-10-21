@@ -228,7 +228,8 @@ function applyContributionRollforward(
       return left.effectiveDate.localeCompare(right.effectiveDate);
     });
 
-    let lastAppliedDate = normalizeDateOnly(account[dateField]);
+    const snapshotDate = normalizeDateOnly(account[dateField]);
+    let lastAppliedDate = snapshotDate;
     let currentValue = toNumber(account[currentValueField]) ?? 0;
     let costBasis = toNumber(account[costBasisField]);
     if (costBasis === null) {
@@ -239,7 +240,9 @@ function applyContributionRollforward(
     let adjustmentTotal = 0;
 
     transactions.forEach((transaction) => {
-      if (lastAppliedDate && transaction.effectiveDate <= lastAppliedDate) {
+      // Every contribution after the original snapshot belongs in the balance,
+      // including several contributions sharing the same effective date.
+      if (snapshotDate && transaction.effectiveDate <= snapshotDate) {
         return;
       }
 

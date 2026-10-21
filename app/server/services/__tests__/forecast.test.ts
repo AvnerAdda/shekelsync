@@ -735,7 +735,7 @@ describe('forecast service internals', () => {
 
     const randomSpy = vi.spyOn(Math, 'random');
     randomSpy.mockReturnValueOnce(0.5).mockReturnValueOnce(0.5);
-    expect(sampleAmount(5, 10)).toBe(0);
+    expect(sampleAmount(5, 10)).toBeGreaterThan(0);
     randomSpy.mockReturnValueOnce(0.2);
     expect(willOccur(0.3)).toBe(true);
 
@@ -1147,7 +1147,7 @@ describe('forecast service internals', () => {
     expect(baselines['category:1']).toBeUndefined();
   });
 
-  it('reconciles current-month variable expenses to remaining monthly baseline', () => {
+  it('reconciles explicit monthly expectations to their remaining amount', () => {
     const { reconcileVariableExpenseForecasts } = forecastModule._internal;
     const now = new Date('2026-06-15T12:00:00.000Z');
     const patterns = {
@@ -1167,6 +1167,7 @@ describe('forecast service internals', () => {
         categoryDefinitionId: 2,
         categoryType: 'expense',
         monthlyBaseline: 1200,
+        isUserExpectation: true,
       },
     };
 
@@ -1275,18 +1276,18 @@ describe('forecast service internals', () => {
     const totalForecasted = monthForecasts.reduce((sum, day) => sum + day.expectedExpenses, 0);
     expect(totalForecasted).toBeCloseTo(target, 6);
     // Injected baselines carry the pattern's real frequency as probability
-    // (8 occurrences/month over 10 covered days = 0.8), never a fabricated 1.
+    // Frequency stays the same for short and full-month forecast windows.
     const injected = monthForecasts[0].predictions[0];
     expect(injected).toMatchObject({
       category: 'Groceries',
-      probability: 0.8,
+      probability: 8 / 31,
       isBaselineForecast: true,
       isCalibrated: true,
     });
     expect(injected.probability * injected.expectedAmount).toBeCloseTo(target / 10, 6);
     expect(simulationEntries[0].entries[0]).toMatchObject({
       categoryType: 'expense',
-      probability: 0.8,
+      probability: 8 / 31,
       isBaselineForecast: true,
     });
   });
@@ -1374,6 +1375,7 @@ describe('forecast service internals', () => {
       sampleCount: 2,
       expenseMae: 35,
       expenseMape: 37.5,
+      expenseWape: 38.89,
       cashFlowMae: 15,
       cashFlowBias: 15,
       intervalCoverage: 50,
@@ -1416,6 +1418,66 @@ describe('forecast service internals', () => {
       readiness: 'established',
       observedDays: 30,
     });
+  });
+
+  it('continues automatic spending after the monthly baseline is exceeded', () => {
+    const { calculateVariableExpenseBaselineTarget } = forecastModule._internal;
+    const baseline = { patternKey: 'category:2', monthlyBaseline: 3000 };
+    const days = Array.from({ length: 15 }, (_, i) => ({ date: `2026-10-${17 + i}` }));
+    const transactions = [{ date: '2026-10-15', category_type: 'expense', category_definition_id: 2, price: -3300 }];
+    expect(calculateVariableExpenseBaselineTarget(baseline, days, transactions, new Date(2026, 9, 16), {}))
+      .toBeCloseTo(3000 * 15 / 31);
+    expect(calculateVariableExpenseBaselineTarget({ ...baseline, isUserExpectation: true }, days, transactions, new Date(2026, 9, 16), {}))
+      .toBe(0);
+  });
+
+  it('uses the selected daily rate consistently across months and honors user expectations', () => {
+    const { calculateVariableExpenseBaselineTarget, applyCategoryExpectations } = forecastModule._internal;
+    const baseline = { patternKey: 'category:2', categoryDefinitionId: 2, monthlyBaseline: 3000, dailyRate: 200 };
+    const june = Array.from({ length: 15 }, (_, i) => ({ date: `2026-06-${16 + i}` }));
+    const july = Array.from({ length: 10 }, (_, i) => ({ date: `2026-07-${String(1 + i).padStart(2, '0')}` }));
+    expect(calculateVariableExpenseBaselineTarget(baseline, june, [], new Date(2026, 5, 15), {})).toBe(3000);
+    expect(calculateVariableExpenseBaselineTarget(baseline, july, [], new Date(2026, 5, 15), {})).toBe(2000);
+    const resolved = applyCategoryExpectations({ 'category:2': baseline }, [{ scope: 'ongoing',
+      categoryDefinitionId: 2, overrides: { monthlyAmount: 900 } }], '2026-07');
+    expect(calculateVariableExpenseBaselineTarget(resolved['category:2'], july, [], new Date(2026, 5, 15), {}))
+      .toBeCloseTo(900 * 10 / 31);
+  });
+
+  it('records actual daily quantiles and preserves the first issued snapshot', () => {
+    const { recordForecastPredictionSnapshots } = forecastModule._internal;
+    const run = vi.fn();
+    const prepare = vi.fn(() => ({ run }));
+    const db = { prepare, transaction: (fn: () => void) => fn };
+    recordForecastPredictionSnapshots(db, {
+      dailyForecasts: [{ date: '2026-10-06', expectedExpenses: 100, expectedIncome: 0, expectedCashFlow: -100 }],
+      predictionIntervals: { daily: [{ date: '2026-10-06', cashFlow: { p10: -250, p50: -80, p90: 0 } }] },
+      scenarios: { p10: { dailyResults: [{ date: '2026-10-06', cashFlow: 999 }] } },
+    }, new Date(2026, 9, 5));
+    expect(prepare.mock.calls[0][0]).toContain('DO NOTHING');
+    expect(run.mock.calls[0].slice(8)).toEqual([-250, -80, 0]);
+  });
+
+  it('preserves the expected amount for highly variable positive samples', () => {
+    let seed = 17;
+    const random = vi.spyOn(Math, 'random').mockImplementation(() => {
+      seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0;
+      return (seed + 0.5) / 4294967296;
+    });
+    try {
+      const samples = Array.from({ length: 20000 }, () => forecastModule._internal.sampleAmount(5, 10));
+      expect(samples.every(amount => Number.isFinite(amount) && amount >= 0)).toBe(true);
+      expect(samples.reduce((sum, amount) => sum + amount, 0) / samples.length).toBeCloseTo(5, 0);
+    } finally {
+      random.mockRestore();
+    }
+  });
+
+  it('does not score reversed bounds as valid prediction intervals', () => {
+    expect(forecastModule._internal.summarizeAccuracyRows([{
+      expected_expenses: 100, actual_expenses: 0,
+      p10_cash_flow: 100, p90_cash_flow: -100, actual_cash_flow: 0,
+    }])).toMatchObject({ expenseWape: null, intervalCoverage: null });
   });
 
 

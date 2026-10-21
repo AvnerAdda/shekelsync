@@ -46,7 +46,11 @@ async function main() {
     insert('unassigned', end, -50, null, 'completed', 'expense');
     insert('pending', end, -999, food, 'pending');
     insert('repayment', end, -999, repayment);
-    insert('investment', end, -999, investment);
+    insert('investment', end, -200, investment);
+    insert('investment-without-category', end, -50, null, 'completed', 'investment');
+    insert('investment-withdrawal', end, 999, investment);
+    insert('investment-pending', end, -999, investment, 'pending');
+    insert('investment-outside', shiftDays(end, -30), -999, investment);
     insert('capital', end, 999, gift);
     insert('paired-bank-charge', end, -999, food);
     const pairing = db.prepare("INSERT INTO account_pairings (credit_card_vendor, bank_vendor, is_active) VALUES ('card-test', 'bank-test', 0)").run().lastInsertRowid;
@@ -58,9 +62,12 @@ async function main() {
     assert.equal(response.headers['cache-control'], 'no-store');
     const point = response.body.points.at(-1);
     assert.equal(point.income, 1000);
-    assert.equal(point.expenses, 600);
-    assert.equal(point.surplus, 400);
+    assert.equal(point.expenses, 850);
+    assert.equal(point.surplus, 150);
+    assert.equal(point.expense_amounts.growth, 350);
+    assert.equal(point.transaction_counts.growth, 3);
     assert.equal(point.allocation_amounts.growth, 500);
+    assert.ok(response.body.categories_by_allocation.growth.some((entry) => entry.category_definition_id === investment));
     assert.equal(point.percentages.essential, 45);
     assert.equal(point.percentages.unallocated, 5);
     assert.equal(Object.values(point.percentages).reduce((sum, value) => sum + value, 0), 100);
@@ -69,8 +76,10 @@ async function main() {
     assert.equal(response.body.total_amount, 450);
     assert.deepEqual(response.body.transactions.map((row) => row.identifier).sort(), ['food', 'refund']);
     response = await request(app).get(`/api/spending-categories/timeline/transactions?spendingCategory=growth&startDate=${shiftDays(end, -29)}&endDate=${end}`);
-    assert.equal(response.body.total_amount, 100, 'surplus is not a fabricated transaction');
-    assert.equal(response.body.total_count, 1);
+    assert.equal(response.body.total_amount, 350, 'investments count as spending; surplus is not a fabricated transaction');
+    assert.equal(response.body.total_count, 3);
+    assert.deepEqual(response.body.transactions.map((row) => row.identifier).sort(), ['investment', 'investment-without-category', 'learning']);
+    assert.equal(response.body.transactions.find((row) => row.identifier === 'investment').category_type, 'investment');
     assert.equal((await request(app).put('/api/spending-categories/targets').send({ essential: 40, growth: 30, stability: 15, reward: 15 })).status, 200);
     assert.equal((await request(app).get('/api/spending-categories/timeline')).body.targets.essential, 40);
     assert.equal((await request(app).put(`/api/spending-categories/mapping/${food}`).send({ spendingCategory: 'reward' })).status, 200);
@@ -79,11 +88,26 @@ async function main() {
     insert('small-charge-a', end, -0.1, food);
     insert('small-charge-b', end, -0.2, food);
     const withCents = (await request(app).get('/api/spending-categories/timeline')).body.points.at(-1);
-    assert.equal(withCents.expenses, 600.3);
+    assert.equal(withCents.expenses, 850.3);
     assert.equal(withCents.allocation_amounts.growth, 499.7);
     response = await request(app).get(`/api/spending-categories/timeline/transactions?spendingCategory=reward&startDate=${shiftDays(end, -29)}&endDate=${end}`);
     assert.equal(response.body.total_amount, 450.3);
     assert.equal(response.body.total_amount, withCents.expense_amounts.reward);
+    // Investment categories remain assignable, with matching totals and drilldowns.
+    assert.equal((await request(app).put(`/api/spending-categories/mapping/${investment}`).send({ spendingCategory: 'stability' })).status, 200);
+    response = await request(app).get('/api/spending-categories/timeline');
+    assert.equal(response.body.points.at(-1).expense_amounts.stability, 200);
+    assert.equal(response.body.points.at(-1).expense_amounts.growth, 150);
+    assert.ok(response.body.categories_by_allocation.stability.some((entry) => entry.category_definition_id === investment));
+    response = await request(app).get(`/api/spending-categories/timeline/transactions?spendingCategory=stability&startDate=${shiftDays(end, -29)}&endDate=${end}`);
+    assert.equal(response.body.total_amount, 200);
+    assert.deepEqual(response.body.transactions.map((row) => row.identifier), ['investment']);
+    // Investing beyond the remaining income produces a deficit instead of a second surplus allocation.
+    insert('large-investment', end, -2000, investment);
+    const deficit = (await request(app).get('/api/spending-categories/timeline')).body.points.at(-1);
+    assert.equal(deficit.expenses, 2850.3);
+    assert.equal(deficit.surplus, 0);
+    assert.equal(deficit.deficit, 1850.3);
     assert.equal((await request(app).get('/api/spending-categories/timeline?rollingDays=0')).status, 400);
     assert.equal((await request(app).get('/api/spending-categories/timeline?endDate=invalid')).status, 400);
     service.__resetDatabase();

@@ -1,4 +1,5 @@
 import React from 'react';
+import { focusDeleteCancel } from '@renderer/shared/hooks/useDeleteConfirmation';
 import {
   Alert,
   Button,
@@ -55,7 +56,7 @@ const PositionCloseDialog: React.FC<PositionCloseDialogProps> = ({
   };
 
   return (
-    <Dialog open={Boolean(position)} onClose={() => !saving && onClose()} maxWidth="xs" fullWidth>
+    <Dialog open={Boolean(position)} onClose={() => !saving && onClose()} maxWidth="xs" fullWidth slotProps={{ transition: { onEntered: focusDeleteCancel } }}>
       <DialogTitle>{t('investmentsPage.holdings.closeDialog.title', 'Close holding?')}</DialogTitle>
       <DialogContent>
         {error && <Alert severity="error" sx={{ mb: 1.5 }}>{error}</Alert>}
@@ -68,7 +69,7 @@ const PositionCloseDialog: React.FC<PositionCloseDialogProps> = ({
         </DialogContentText>
       </DialogContent>
       <DialogActions>
-        <Button onClick={onClose} disabled={saving}>{t('common.cancel', 'Cancel')}</Button>
+        <Button data-delete-cancel onClick={onClose} disabled={saving}>{t('common.cancel', 'Cancel')}</Button>
         <Button color="error" variant="contained" onClick={() => void closePosition()} disabled={saving || !position}>
           {t('investmentsPage.holdings.actions.close', 'Close holding')}
         </Button>

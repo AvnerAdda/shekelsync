@@ -54,15 +54,6 @@ function formatLocalDate(date) {
   return `${year}-${month}-${day}`;
 }
 
-function parseLocalDate(dateStr) {
-  if (typeof dateStr !== 'string') return new Date(dateStr);
-  if (dateStr.includes('T')) return new Date(dateStr);
-  const parts = dateStr.split('-').map(Number);
-  if (parts.length !== 3 || parts.some(Number.isNaN)) return new Date(dateStr);
-  const [year, month, day] = parts;
-  return new Date(year, month - 1, day);
-}
-
 function readSingleQueryParam(value) {
   if (value === undefined || value === null) return undefined;
   if (Array.isArray(value)) return value[0];
@@ -126,9 +117,10 @@ function createForecastRouter({
       const { months, days, includeToday, verbose, noCache, budgetDays: budgetDaysParam } = req.query;
       const skipCache = parseBooleanQueryParam(noCache);
 
-      // Budget lookback period (default 30 days)
-      const budgetDays = parseIntegerQueryParam(budgetDaysParam, 'budgetDays', { min: 1, max: 365 }) || 30;
-      const budgetMultiplier = budgetDays / 30; // Pro-rate monthly budgets
+      // Default outlook covers this calendar month. An explicit lookback is
+      // historical only: adding future days would exceed its prorated budget period.
+      const budgetDays = parseIntegerQueryParam(budgetDaysParam, 'budgetDays', { min: 1, max: 365 });
+      const budgetMultiplier = budgetDays === undefined ? 1 : budgetDays / 30;
 
       // Default to 30 days forecast (not end of month)
       const now = new Date();
@@ -168,21 +160,29 @@ function createForecastRouter({
       console.log('[Forecast] Generating daily forecast with options:', opts);
       const result = await generateForecast(opts);
       console.log('[Forecast] Successfully generated forecast with', result.dailyForecasts?.length || 0, 'days');
+      const budgetResult = budgetDays === undefined
+        ? await forecastService.ensureMonthlyBudgetForecast(result, opts, generateForecast, now)
+        : result;
 
-      // Date calculations for budget period (last X days based on budgetDays)
+      // Actuals cover month-to-date, or exactly the requested number of days.
       const today = now;
       const budgetStartDate = new Date(today);
-      budgetStartDate.setDate(budgetStartDate.getDate() - budgetDays);
+      budgetStartDate.setDate(budgetDays === undefined ? 1 : budgetStartDate.getDate() - budgetDays + 1);
       const budgetStartStr = formatLocalDate(budgetStartDate);
+      const budgetEndDate = new Date(today);
+      budgetEndDate.setDate(budgetEndDate.getDate() + 1);
+      const budgetEndExclusiveStr = formatLocalDate(budgetEndDate);
       
       // End of the current month for forecast filtering.
       const monthEnd = new Date(today.getFullYear(), today.getMonth() + 1, 0);
       const monthEndStr = formatLocalDate(monthEnd);
+      const isBudgetForecastDay = day => budgetDays === undefined
+        && day.date > todayStr && day.date <= monthEndStr;
 
       // Use SQLite directly for actuals/budgets/category lookups
       const db = getDbInstance();
 
-      // Load actual spending (real transactions) for the last X days (budgetDays)
+      // Use the same actual period as the budget comparison.
       let actualSpendingRows = [];
       try {
         const actualSpendingQuery = `
@@ -194,7 +194,7 @@ function createForecastRouter({
             cd.icon AS category_icon,
             cd.color AS category_color,
             cd.parent_id AS parent_category_id,
-            SUM(ABS(t.price)) AS spent
+            SUM(-t.price) AS spent
           FROM transactions t
           LEFT JOIN category_definitions cd ON t.category_definition_id = cd.id
           LEFT JOIN (SELECT DISTINCT transaction_identifier, transaction_vendor FROM transaction_pairing_exclusions) tpe
@@ -203,10 +203,10 @@ function createForecastRouter({
           WHERE t.status = 'completed'
             AND t.category_type = 'expense'
             AND tpe.transaction_identifier IS NULL
-            AND t.date >= ? AND t.date <= ?
+            AND t.date >= ? AND t.date < ?
           GROUP BY cd.id, cd.name, cd.name_en, cd.name_fr, cd.icon, cd.color, cd.parent_id
         `;
-        actualSpendingRows = db.prepare(actualSpendingQuery).all(budgetStartStr, todayStr);
+        actualSpendingRows = db.prepare(actualSpendingQuery).all(budgetStartStr, budgetEndExclusiveStr);
       } catch (err) {
         console.warn('[Forecast] Could not load actual spending:', err.message);
       }
@@ -263,6 +263,9 @@ function createForecastRouter({
           expenseType: prediction.expenseType || null,
           amount: prediction.expectedAmount,
           probability: prediction.probability,
+          timingBasis: prediction.timingBasis || 'estimated',
+          awaitingReceipt: Boolean(prediction.awaitingReceipt),
+          expectedPaymentDate: prediction.expectedPaymentDate || null,
           probabilityWeightedAmount: resolvePredictionWeightedAmount(prediction),
           explanation: prediction.explanation || 'Based on historical spending patterns',
           correctionCapabilities: prediction.correctionCapabilities || (
@@ -405,11 +408,6 @@ function createForecastRouter({
         optimistic: buildScenarioSummary(result.scenarios?.p90)
       };
 
-      // Calculate actual end date (day before forecast starts)
-      const forecastStart = parseLocalDate(result.forecastPeriod?.start);
-      forecastStart.setDate(forecastStart.getDate() - 1);
-      const actualEndDate = formatLocalDate(forecastStart);
-
       // Calculate total forecasted expenses by scenario for remaining month
       const forecastExpensesByScenario = {
         p10: 0,
@@ -417,20 +415,20 @@ function createForecastRouter({
         p90: 0
       };
 
-      (result.scenarios?.p10?.dailyResults || [])
-        .filter(d => d.date >= todayStr && d.date <= monthEndStr)
+      (budgetResult.scenarios?.p10?.dailyResults || [])
+        .filter(isBudgetForecastDay)
         .forEach(day => {
           forecastExpensesByScenario.p10 += day.expenses || 0;
         });
 
-      (result.scenarios?.p50?.dailyResults || [])
-        .filter(d => d.date >= todayStr && d.date <= monthEndStr)
+      (budgetResult.scenarios?.p50?.dailyResults || [])
+        .filter(isBudgetForecastDay)
         .forEach(day => {
           forecastExpensesByScenario.p50 += day.expenses || 0;
         });
 
-      (result.scenarios?.p90?.dailyResults || [])
-        .filter(d => d.date >= todayStr && d.date <= monthEndStr)
+      (budgetResult.scenarios?.p90?.dailyResults || [])
+        .filter(isBudgetForecastDay)
         .forEach(day => {
           forecastExpensesByScenario.p90 += day.expenses || 0;
         });
@@ -470,8 +468,8 @@ function createForecastRouter({
       const makeCategoryKey = (categoryDefinitionId, categoryName) =>
         categoryDefinitionId ? `id:${categoryDefinitionId}` : `name:${categoryName || 'unknown'}`;
 
-      (result.dailyForecasts || [])
-        .filter(d => d.date >= todayStr && d.date <= monthEndStr)
+      (budgetResult.dailyForecasts || [])
+        .filter(isBudgetForecastDay)
         .forEach(day => {
           (day.predictions || [])
             .filter(p => p.categoryType === 'expense')
@@ -537,7 +535,7 @@ function createForecastRouter({
         entry.categoryColor = entry.categoryColor || row.category_color || null;
       });
 
-      // Apply budgets (pro-rated based on budgetDays)
+      // Apply full monthly budgets, or prorate an explicit historical lookback.
       budgetRows.forEach(row => {
         const monthlyLimit = Number.parseFloat(row.budget_limit);
         if (!Number.isFinite(monthlyLimit) || monthlyLimit <= 0) return;
@@ -618,7 +616,7 @@ function createForecastRouter({
       });
 
       const budgetOutlook = Array.from(categoryData.values()).filter(entry =>
-        entry.limit > 0 || entry.actualSpent > 0 || entry.forecasted > 0
+        entry.limit > 0 || entry.actualSpent !== 0 || entry.forecasted !== 0
       );
 
       const budgetSummary = {
@@ -631,7 +629,7 @@ function createForecastRouter({
           }
           return sum;
         }, 0),
-        budgetDays, // Include the period used for budget calculations
+        budgetDays: budgetDays ?? null,
         budgetMultiplier, // Include the pro-rate multiplier
       };
 
@@ -640,6 +638,7 @@ function createForecastRouter({
         refreshState: 'ready',
         forecastPeriod: result.forecastPeriod,
         dailyForecasts: dailyMinimal,
+        predictionIntervals: result.predictionIntervals || { level: 0.8, daily: [] },
         scenarios: {
           p10: mapScenario(result.scenarios?.p10 || {}),
           p50: mapScenario(result.scenarios?.p50 || {}),
@@ -647,8 +646,14 @@ function createForecastRouter({
         },
         summaries,
         actual: {
-          endDate: actualEndDate,
+          endDate: todayStr,
           startDate: budgetStartStr, // Budget period start
+        },
+        budgetPeriod: {
+          type: budgetDays === undefined ? 'calendar_month' : 'rolling_history',
+          start: budgetStartStr,
+          end: budgetDays === undefined ? monthEndStr : todayStr,
+          actualThrough: todayStr,
         },
         budgetOutlook,
         budgetSummary

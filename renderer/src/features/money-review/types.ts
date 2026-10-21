@@ -48,6 +48,7 @@ export interface ForecastAccuracySummary {
   sampleCount: number;
   expenseMae: number | null;
   expenseMape: number | null;
+  expenseWape?: number | null;
   cashFlowMae: number | null;
   cashFlowBias: number | null;
   intervalCoverage: number | null;

@@ -1,7 +1,8 @@
-const MODEL_ID = 'pattern-v2';
+const MODEL_ID = 'pattern-v5';
 const { loadProjectionCategories, prepareProjectionPolicy } = require('./projection-policy.js');
 const { buildIncomeSchedule, applyIncomeSchedule } = require('./income-schedule.js');
 const { buildInvestmentSchedule, applyInvestmentSchedule } = require('./investment-schedule.js');
+const { buildInfrequentExpenseEstimates, applyInfrequentExpenseEstimates } = require('./infrequent-expenses.js');
 
 function withCumulative(scenario) {
   if (!scenario) return null; // Daily-only callers intentionally skip simulations.
@@ -40,6 +41,9 @@ function generateForecast({
   historicalTransactionSummary,
   config,
 }) {
+  // Enforce the evidence cutoff for direct/replay callers as well as the service.
+  const today = engine.formatDate(now);
+  historicalTransactions = historicalTransactions.filter(row => String(row.date).slice(0, 10) <= today);
   const {
     analyzeCategoryPatterns,
     buildPatternCaches,
@@ -91,6 +95,9 @@ function generateForecast({
     variableExpenseBaselines,
     truthSnapshot.categoryExpectations,
   );
+  const infrequentExpenses = (engine.buildInfrequentExpenseEstimates || buildInfrequentExpenseEstimates)(allTransactions, patterns,
+    dailyForecasts.map(day => day.date), now, engine, originalTruthSnapshot);
+  applyInfrequentExpenseEstimates(dailyForecasts, simulationEntriesByDay, infrequentExpenses, engine);
   injectResolvedRecurringPredictions(dailyForecasts, simulationEntriesByDay, truthSnapshot);
   const incomeSchedule = buildIncomeSchedule(historicalTransactions, dailyForecasts.map(day => day.date), now, engine, originalTruthSnapshot);
   applyIncomeSchedule(dailyForecasts, simulationEntriesByDay, incomeSchedule, engine);
@@ -131,6 +138,11 @@ function generateForecast({
       lastTransaction: historicalTransactionSummary.last,
       totalCategories: categoryCount,
       variableExpenseBaselines: Object.keys(variableExpenseBaselines).length,
+      expenseEstimatorCounts: Object.values(variableExpenseBaselines).reduce((counts, baseline) => {
+        const estimator = baseline.estimator || 'robust_monthly';
+        counts[estimator] = (counts[estimator] || 0) + 1;
+        return counts;
+      }, {}),
       currentMonth,
       currentDay,
       historySince: historicalTransactionSummary.historySince ?? null,
@@ -142,6 +154,7 @@ function generateForecast({
       days: dailyForecasts.length,
     },
     dailyForecasts,
+    predictionIntervals: monteCarloResults.predictionIntervals,
     monteCarloResults: {
       worstCase: monteCarloResults.worst,
       baseCase: monteCarloResults.base,

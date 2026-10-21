@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
+import { focusDeleteCancel } from '@renderer/shared/hooks/useDeleteConfirmation';
 import { startOfMonth, subMonths } from 'date-fns';
 import {
   Dialog,
@@ -60,6 +61,7 @@ import InvestmentAccountSuggestionsCard from '@renderer/features/investments/com
 import CreditCardSuggestionsCard from '@renderer/features/investments/components/CreditCardSuggestionsCard';
 import SmartInvestmentAccountForm from '@renderer/features/investments/components/SmartInvestmentAccountForm';
 import RealEstateSimulatorDialog from '@renderer/features/investments/components/RealEstateSimulatorDialog';
+import RealEstateAccountMergeDialog from '@renderer/features/investments/components/RealEstateAccountMergeDialog';
 import RealEstateSimulatorFields, {
   createEmptyRealEstateProfile,
   hasRealEstateProfileInput,
@@ -580,6 +582,7 @@ const AccountSection = styled(Box)(({ theme }) => ({
 export default function AccountsModal({ isOpen, onClose, openRequest }: AccountsModalProps) {
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [investmentAccounts, setInvestmentAccounts] = useState<InvestmentAccount[]>([]);
+  const [mergingRealEstateAccount, setMergingRealEstateAccount] = useState<InvestmentAccount | null>(null);
   const [institutions, setInstitutions] = useState<InstitutionMetadata[]>([]);
   const [institutionNodes, setInstitutionNodes] = useState<InstitutionTreeNode[]>([]);
   const institutionMap = useMemo(() => {
@@ -1003,6 +1006,8 @@ export default function AccountsModal({ isOpen, onClose, openRequest }: Accounts
 
   // Confirmation dialog state
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
+  const [deletingAccount, setDeletingAccount] = useState(false);
+  const deletingAccountRef = useRef(false);
   const [accountToDelete, setAccountToDelete] = useState<{
     id: number;
     type: 'banking' | 'investment';
@@ -1542,6 +1547,7 @@ export default function AccountsModal({ isOpen, onClose, openRequest }: Accounts
 
   // Show confirmation dialog before deleting
   const confirmDelete = (account: Account | InvestmentAccount, type: 'banking' | 'investment') => {
+    setError(null);
     const accountName = type === 'banking'
       ? (account as Account).nickname || 'Unnamed Account'
       : (account as InvestmentAccount).account_name || 'Unnamed Investment';
@@ -1564,8 +1570,10 @@ export default function AccountsModal({ isOpen, onClose, openRequest }: Accounts
       } else {
         throw new Error('Failed to delete account');
       }
+      return true;
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An error occurred');
+      return false;
     }
   };
 
@@ -1578,23 +1586,31 @@ export default function AccountsModal({ isOpen, onClose, openRequest }: Accounts
       } else {
         throw new Error('Failed to delete investment account');
       }
+      return true;
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An error occurred');
+      return false;
     }
   };
 
   // Handle confirmed deletion
   const handleConfirmDelete = async () => {
-    if (!accountToDelete) return;
-
-    if (accountToDelete.type === 'banking') {
-      await handleDelete(accountToDelete.id);
-    } else {
-      await handleDeleteInvestmentAccount(accountToDelete.id);
+    if (!accountToDelete || deletingAccountRef.current) return;
+    deletingAccountRef.current = true;
+    setDeletingAccount(true);
+    setError(null);
+    try {
+      const deleted = accountToDelete.type === 'banking'
+        ? await handleDelete(accountToDelete.id)
+        : await handleDeleteInvestmentAccount(accountToDelete.id);
+      if (deleted) {
+        setConfirmDeleteOpen(false);
+        setAccountToDelete(null);
+      }
+    } finally {
+      deletingAccountRef.current = false;
+      setDeletingAccount(false);
     }
-
-    setConfirmDeleteOpen(false);
-    setAccountToDelete(null);
   };
 
   // Existing investments matching functionality
@@ -2295,6 +2311,18 @@ export default function AccountsModal({ isOpen, onClose, openRequest }: Accounts
                           }}
                         >
                           <BusinessIcon fontSize="small" />
+                        </IconButton>
+                      </Tooltip>
+                    )}
+                    {account.account_type === 'real_estate' && investmentAccounts.some((other) => (
+                      other.id !== account.id && other.account_type === 'real_estate' && other.currency === account.currency
+                    )) && (
+                      <Tooltip title={t('realEstateMerge.title')}>
+                        <IconButton
+                          aria-label={t('realEstateMerge.title')}
+                          onClick={() => setMergingRealEstateAccount(account)} color="primary" size="small"
+                        >
+                          <LinkIcon fontSize="small" />
                         </IconButton>
                       </Tooltip>
                     )}
@@ -3692,6 +3720,18 @@ export default function AccountsModal({ isOpen, onClose, openRequest }: Accounts
         </DialogContent>
       </Dialog>
       {/* Investment Account Details Modal */}
+      {mergingRealEstateAccount && (
+        <RealEstateAccountMergeDialog
+          account={mergingRealEstateAccount} accounts={investmentAccounts}
+          onClose={() => setMergingRealEstateAccount(null)}
+          onMerged={() => {
+            setMergingRealEstateAccount(null);
+            void fetchInvestmentAccounts();
+            window.dispatchEvent(new CustomEvent('dataRefresh'));
+            showNotification(t('realEstateMerge.success'), 'success');
+          }}
+        />
+      )}
       <Dialog
         open={Boolean(editingInvestmentAccount)}
         onClose={closeInvestmentAccountEditor}
@@ -4418,10 +4458,11 @@ export default function AccountsModal({ isOpen, onClose, openRequest }: Accounts
       {/* Confirmation Dialog for Delete Operations */}
       <Dialog 
         open={confirmDeleteOpen} 
-        onClose={() => setConfirmDeleteOpen(false)} 
+        onClose={() => { if (!deletingAccount) setConfirmDeleteOpen(false); }}
         maxWidth="sm" 
         fullWidth
         slotProps={{
+          transition: { onEntered: focusDeleteCancel },
           paper: {
             sx: {
               borderRadius: '16px',
@@ -4435,6 +4476,7 @@ export default function AccountsModal({ isOpen, onClose, openRequest }: Accounts
         <DialogTitle>
           {t('confirmDelete.title')}
           <IconButton
+            disabled={deletingAccount}
             onClick={() => setConfirmDeleteOpen(false)}
             sx={{ position: 'absolute', right: 8, top: 8 }}
           >
@@ -4443,6 +4485,7 @@ export default function AccountsModal({ isOpen, onClose, openRequest }: Accounts
         </DialogTitle>
         <DialogContent>
           <Box sx={{ pt: 2 }}>
+            {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
             <Typography variant="body1" gutterBottom>
               {t('confirmDelete.message')}
             </Typography>
@@ -4471,11 +4514,12 @@ export default function AccountsModal({ isOpen, onClose, openRequest }: Accounts
           </Box>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setConfirmDeleteOpen(false)} variant="outlined">
+          <Button autoFocus data-delete-cancel disabled={deletingAccount} onClick={() => setConfirmDeleteOpen(false)} variant="outlined">
             {t('actions.cancel')}
           </Button>
           <Button
             onClick={handleConfirmDelete}
+            disabled={deletingAccount}
             variant="contained"
             color="error"
             startIcon={<DeleteIcon />}

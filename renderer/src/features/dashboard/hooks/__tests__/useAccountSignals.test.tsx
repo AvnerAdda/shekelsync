@@ -64,4 +64,13 @@ describe('useAccountSignals', () => {
       expect(result.current.hasBankAccounts).toBeNull();
     });
   });
+
+  it('keeps a net-refund budget at zero utilization', async () => {
+    mockGet.mockResolvedValueOnce({
+      ok: true, data: [{ spent: -50, remaining: 250, percentage: 0, status: 'good' }],
+    });
+    mockGet.mockResolvedValueOnce({ ok: true, data: [] });
+    const { result } = renderHook(() => useAccountSignals());
+    await waitFor(() => expect(result.current.budgetUsage).toBe(0));
+  });
 });

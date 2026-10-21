@@ -360,7 +360,9 @@ const SummaryCards: React.FC<SummaryCardsProps> = ({
                 ? t('summary.cards.finance.expensesIncludingPending')
                 : t('summary.cards.finance.expenses')}
             </Typography>
-            <CurrencyTypography variant="body2" color="error.main">-{formatCurrencyValue(totalExpenses)}</CurrencyTypography>
+            <CurrencyTypography variant="body2" color={totalExpenses < 0 ? 'success.main' : 'error.main'}>
+              {totalExpenses < 0 ? '+' : '-'}{formatCurrencyValue(totalExpenses)}
+            </CurrencyTypography>
           </Box>
           {netInvestments > 0 && (
             <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.6 }}>

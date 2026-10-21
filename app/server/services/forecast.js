@@ -9,6 +9,9 @@ const Database = require('better-sqlite3');
 const { Worker } = require('worker_threads');
 const financialTruthService = require('./financial-truth.js');
 const forecastModelRegistry = require('./forecast-models/registry.js');
+const { buildPredictionIntervals } = require('./forecast-models/prediction-intervals.js');
+const { selectExpenseEstimator, capMonthlyTotals } = require('./forecast-models/expense-estimator.js');
+const { buildInfrequentExpenseEstimates } = require('./forecast-models/infrequent-expenses.js');
 const { loadProjectionCategories, prepareProjectionPolicy } = require('./forecast-models/projection-policy.js');
 let databaseCtor = Database;
 
@@ -81,6 +84,7 @@ const log = (...args) => {
 
 // ==================== DATABASE QUERIES ====================
 function getAllTransactions(db, sinceDate = null) {
+  // Match Activity's category classification so stale imported types cannot hide receipts.
   const filter = sinceDate ? 'AND t.date >= ?' : '';
   const query = `
     SELECT
@@ -91,7 +95,7 @@ function getAllTransactions(db, sinceDate = null) {
       t.price,
       t.account_number,
       t.is_pikadon_related,
-      t.category_type,
+      COALESCE(cd.category_type, t.category_type) AS category_type,
       t.category_definition_id,
       cd.name as category_name,
       cd.name_en as category_name_en,
@@ -123,7 +127,7 @@ function getCurrentMonthTransactions(db, currentMonth) {
       t.date,
       t.name,
       t.price,
-      t.category_type,
+      COALESCE(cd.category_type, t.category_type) AS category_type,
       t.category_definition_id,
       cd.name as category_name,
       cd.name_en as category_name_en,
@@ -972,18 +976,6 @@ function isVariableExpensePattern(pattern) {
   return pattern.patternType === 'daily' || pattern.patternType === 'weekly';
 }
 
-function capMonthlyTotals(monthlyTotals) {
-  const positiveTotals = monthlyTotals.filter(total => total > 0);
-  if (positiveTotals.length < 2) return monthlyTotals;
-
-  const center = median(positiveTotals);
-  const deviations = positiveTotals.map(total => Math.abs(total - center));
-  const mad = median(deviations);
-  const cap = center + Math.max(center * 0.75, mad * 3);
-
-  return monthlyTotals.map(total => Math.min(total, cap));
-}
-
 function buildVariableExpenseMonthlyBaselines(transactions, patterns, now = new Date()) {
   const currentMonth = getMonthKeyFromDate(now);
   const completedMonths = Array.from(new Set(
@@ -997,15 +989,19 @@ function buildVariableExpenseMonthlyBaselines(transactions, patterns, now = new 
 
   const recentMonthSet = new Set(recentMonths);
   const totalsByPattern = new Map();
+  const historyByPattern = new Map();
 
   transactions.forEach((txn) => {
     if (txn?.category_type !== 'expense') return;
     const month = getTransactionMonthKey(txn);
-    if (!month || !recentMonthSet.has(month)) return;
+    if (!month) return;
 
     const patternKey = resolvePatternKeyForTransaction(patterns, txn);
     const pattern = patterns[patternKey];
     if (!isVariableExpensePattern(pattern)) return;
+    if (!historyByPattern.has(patternKey)) historyByPattern.set(patternKey, []);
+    historyByPattern.get(patternKey).push(txn);
+    if (!recentMonthSet.has(month)) return;
 
     // Net refunds (positive price on an expense category) against spend
     // instead of adding their absolute value as more spending.
@@ -1040,6 +1036,11 @@ function buildVariableExpenseMonthlyBaselines(transactions, patterns, now = new 
     const monthlyBaseline = median(cappedTotals);
     if (!Number.isFinite(monthlyBaseline) || monthlyBaseline <= 0) return;
 
+    const selection = selectExpenseEstimator(historyByPattern.get(patternKey) || [], now, {
+      completedMonths,
+      baselineMonths: VARIABLE_EXPENSE_BASELINE_MONTHS,
+      minimumActiveMonths: MIN_VARIABLE_EXPENSE_BASELINE_ACTIVE_MONTHS,
+    });
     baselines[patternKey] = {
       patternKey,
       category: pattern.category,
@@ -1051,6 +1052,7 @@ function buildVariableExpenseMonthlyBaselines(transactions, patterns, now = new 
       monthsAnalyzed: monthsForPattern.length,
       activeMonths,
       sourceMonths: monthsForPattern,
+      ...selection,
     };
   });
 
@@ -1084,8 +1086,16 @@ function calculateVariableExpenseBaselineTarget(baseline, monthForecasts, monthT
   const daysInMonthForForecast = getDaysInMonth(firstForecastDate.getFullYear(), firstForecastDate.getMonth());
   const coveredForecastDays = monthForecasts.length;
   const isCurrentMonth = sameMonth(firstForecastDate, now);
+  if (!baseline.isUserExpectation && Number.isFinite(baseline.dailyRate) && baseline.dailyRate >= 0) {
+    return baseline.dailyRate * coveredForecastDays;
+  }
 
   if (isCurrentMonth) {
+    // A learned spending baseline is a rate, not a ceiling. Spending more
+    // than usual does not eliminate the need for groceries or other activity.
+    if (!baseline.isUserExpectation) {
+      return baseline.monthlyBaseline * clamp(coveredForecastDays / daysInMonthForForecast, 0, 1);
+    }
     const actualSpend = getActualSpendForBaseline(monthTransactions, baseline, patterns);
     const remainingBaseline = Math.max(0, baseline.monthlyBaseline - actualSpend);
     const remainingDaysFromWindowStart = Math.max(1, daysInMonthForForecast - firstForecastDate.getDate() + 1);
@@ -1148,6 +1158,20 @@ function reconcileVariableExpenseForecasts(monthForecasts, monthSimulationEntrie
     const targetAmount = calculateVariableExpenseBaselineTarget(baseline, monthForecasts, monthTransactions, now, patterns);
     if (!Number.isFinite(targetAmount)) return;
 
+    if (!baseline.isUserExpectation) {
+      // Category-level variable activity has no dependable payment date.
+      // Spread its expected spend across calendar days instead of inventing
+      // precise purchases from the days on which historical purchases landed.
+      monthForecasts.forEach(day => {
+        const removed = day.predictions.filter(p => p.categoryType === 'expense' && p.patternKey === baseline.patternKey);
+        day.expectedExpenses -= removed.reduce((sum, p) => sum + (Number(p.probabilityWeightedAmount) || 0), 0);
+        day.predictions = day.predictions.filter(p => !removed.includes(p));
+      });
+      monthSimulationEntriesByDay.forEach(day => {
+        day.entries = day.entries.filter(entry => entry.categoryType !== 'expense' || entry.patternKey !== baseline.patternKey);
+      });
+    }
+
     const matchingPredictions = [];
     monthForecasts.forEach((day) => {
       (day.predictions || []).forEach((prediction) => {
@@ -1163,10 +1187,7 @@ function reconcileVariableExpenseForecasts(monthForecasts, monthSimulationEntrie
     );
 
     if (currentForecastedAmount > 0.01) {
-      // Scale toward the target even when it is ~0 (baseline already consumed
-      // by actual spend) — an early return here would snap the remaining
-      // month back to its full uncalibrated forecast the moment the user
-      // overspends the baseline.
+      // Explicit monthly expectations keep the user's remaining-total policy.
       const scale = Math.max(0, targetAmount) / currentForecastedAmount;
       matchingPredictions.forEach(({ day, prediction }) => {
         const previousWeightedAmount = Number(prediction.probabilityWeightedAmount) || 0;
@@ -1206,14 +1227,16 @@ function reconcileVariableExpenseForecasts(monthForecasts, monthSimulationEntrie
         : 'operating';
       const daysCovered = monthForecasts.length;
       const amountPerDay = targetAmount / daysCovered;
+      const date = parseLocalDate(monthForecasts[0].date);
+      const daysInMonth = getDaysInMonth(date.getFullYear(), date.getMonth());
       const dailyProbability = clamp(
-        (Number(pattern?.avgOccurrencesPerMonth) || 1) / Math.max(daysCovered, 1),
+        (Number(pattern?.avgOccurrencesPerMonth) || 1) / daysInMonth,
         0.02,
         1
       );
       const expectedAmount = amountPerDay / dailyProbability;
       const dailyStdDev = Number(pattern?.stdDev)
-        || (Number(baseline.monthlyStdDev) || 0) / Math.max(daysCovered, 1);
+        || (Number(baseline.monthlyStdDev) || 0) / daysInMonth;
 
       monthForecasts.forEach((day) => {
         const prediction = {
@@ -1235,6 +1258,7 @@ function reconcileVariableExpenseForecasts(monthForecasts, monthSimulationEntrie
           probabilityWeightedAmount: amountPerDay,
           useDailyTotal: true,
           isBaselineForecast: true,
+          timingBasis: 'daily_average',
           isCalibrated: true,
           monthlyBaseline: baseline.monthlyBaseline,
         };
@@ -1542,11 +1566,15 @@ function calculateDayProbability(pattern, date, adjustments, patternKey) {
 
 // ==================== SIMULATION ====================
 function sampleAmount(avgAmount, stdDev) {
-  const u1 = Math.random();
+  if (avgAmount <= 0) return 0;
+  if (stdDev <= 0) return avgAmount;
+  const u1 = Math.max(Number.MIN_VALUE, Math.random());
   const u2 = Math.random();
   const z = Math.sqrt(-2 * Math.log(u1)) * Math.cos(2 * Math.PI * u2);
-  const amount = avgAmount + z * stdDev;
-  return Math.max(0, amount);
+  // A positive distribution with the requested mean and variance. Clipping
+  // a Gaussian at zero increased the simulated mean for variable categories.
+  const variance = Math.log1p((stdDev / avgAmount) ** 2);
+  return Math.exp(Math.log(avgAmount) - variance / 2 + Math.sqrt(variance) * z);
 }
 
 function willOccur(probability) {
@@ -1712,6 +1740,7 @@ function runMonteCarloSimulation(dailyForecasts, simulationEntriesByDay, numSimu
     base: scenarios[p50Index],
     best: scenarios[p90Index],
     allScenarios: scenarios,
+    predictionIntervals: buildPredictionIntervals(scenarios),
   };
 }
 
@@ -2016,6 +2045,7 @@ function injectResolvedRecurringPredictions(dailyForecasts, simulationEntriesByD
       incomeType: isIncome ? (occurrence.incomeType || 'operating') : null,
       expenseType: isIncome || isInvestment ? null : (occurrence.expenseType || 'operating'),
       isUserResolvedPattern: true,
+      timingBasis: (pattern?.source && pattern.source !== 'detected') || pattern?.confirmed ? 'scheduled' : 'estimated',
     };
     day.predictions.push(prediction);
     if (isInvestment) {
@@ -2037,7 +2067,10 @@ function injectResolvedRecurringPredictions(dailyForecasts, simulationEntriesByD
         incomeType: prediction.incomeType,
         expenseType: prediction.expenseType,
         patternType: 'financial_pattern',
-        probability: occurrence.probability,
+        // Recurring occurrences contribute their full scheduled amount to
+        // the expected forecast. Confidence is evidence quality, not a
+        // calibrated chance of occurrence; do not randomly omit that amount.
+        probability: 1,
         avgAmount: isInvestment ? Math.abs(Number(occurrence.expectedAmount) || 0) : occurrence.expectedAmount,
         stdDev: occurrence.amountRange
           ? Math.max(0, (occurrence.amountRange.high - occurrence.amountRange.low) / 4)
@@ -2105,6 +2138,7 @@ function buildEmptyForecastResult(startDate, endDate, truthSnapshot, monteCarloR
     analysisInfo: { totalTransactions: 0, projectedEvidenceTransactions: 0, totalCategories: 0, insufficientHistory: true },
     forecastPeriod: { start: formatDate(startDate), end: formatDate(endDate), days: dailyForecasts.length },
     dailyForecasts,
+    predictionIntervals: monteCarloResults.predictionIntervals,
     monteCarloResults: {
       worstCase: monteCarloResults.worst,
       baseCase: monteCarloResults.base,
@@ -2127,10 +2161,7 @@ function recordForecastPredictionSnapshots(db, result, generatedDate = new Date(
   const resolvedModelId = forecastModelRegistry.normalizeModelId(modelId)
     || forecastModelRegistry.normalizeModelId(result.modelId)
     || forecastModelRegistry.DEFAULT_ACTIVE_MODEL;
-  const scenarioMaps = Object.fromEntries(['p10', 'p50', 'p90'].map((key) => [
-    key,
-    new Map((result.scenarios?.[key]?.dailyResults || []).map((day) => [day.date, day])),
-  ]));
+  const intervals = new Map((result.predictionIntervals?.daily || []).map(day => [day.date, day.cashFlow]));
   try {
     const insert = db.prepare(`
       INSERT INTO forecast_prediction_snapshots (
@@ -2138,15 +2169,7 @@ function recordForecastPredictionSnapshots(db, result, generatedDate = new Date(
         expected_income, expected_expenses, expected_cash_flow,
         p10_cash_flow, p50_cash_flow, p90_cash_flow, updated_at
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
-      ON CONFLICT(generated_date, target_date, truth_revision, model_id) DO UPDATE SET
-        horizon_days = excluded.horizon_days,
-        expected_income = excluded.expected_income,
-        expected_expenses = excluded.expected_expenses,
-        expected_cash_flow = excluded.expected_cash_flow,
-        p10_cash_flow = excluded.p10_cash_flow,
-        p50_cash_flow = excluded.p50_cash_flow,
-        p90_cash_flow = excluded.p90_cash_flow,
-        updated_at = datetime('now')
+      ON CONFLICT(generated_date, target_date, truth_revision, model_id) DO NOTHING
     `);
     const write = db.transaction(() => {
       result.dailyForecasts.forEach((day) => {
@@ -2163,9 +2186,9 @@ function recordForecastPredictionSnapshots(db, result, generatedDate = new Date(
           Number(day.expectedIncome) || 0,
           Number(day.expectedExpenses) || 0,
           Number(day.expectedCashFlow) || 0,
-          Number(scenarioMaps.p10.get(day.date)?.cashFlow) || 0,
-          Number(scenarioMaps.p50.get(day.date)?.cashFlow) || 0,
-          Number(scenarioMaps.p90.get(day.date)?.cashFlow) || 0,
+          intervals.get(day.date)?.p10 ?? null,
+          intervals.get(day.date)?.p50 ?? null,
+          intervals.get(day.date)?.p90 ?? null,
         );
       });
     });
@@ -2184,6 +2207,7 @@ function summarizeAccuracyRows(rows) {
       sampleCount: 0,
       expenseMae: null,
       expenseMape: null,
+      expenseWape: null,
       cashFlowMae: null,
       cashFlowBias: null,
       intervalCoverage: null,
@@ -2194,26 +2218,28 @@ function summarizeAccuracyRows(rows) {
   let cashFlowError = 0;
   let percentageError = 0;
   let percentageSamples = 0;
+  let actualExpenseTotal = 0;
   let covered = 0;
   let coverageSamples = 0;
   rows.forEach((row) => {
     const actualExpenses = Number(row.actual_expenses) || 0;
     const expectedExpenses = Number(row.expected_expenses) || 0;
+    actualExpenseTotal += Math.abs(actualExpenses);
     const actualCashFlow = Number(row.actual_cash_flow) || 0;
     const expectedCashFlow = Number(row.expected_cash_flow) || 0;
     expenseAbsoluteError += Math.abs(expectedExpenses - actualExpenses);
     cashFlowAbsoluteError += Math.abs(expectedCashFlow - actualCashFlow);
     cashFlowError += expectedCashFlow - actualCashFlow;
-    if (actualExpenses > 0) {
-      percentageError += Math.abs(expectedExpenses - actualExpenses) / actualExpenses;
+    if (actualExpenses !== 0) {
+      percentageError += Math.abs(expectedExpenses - actualExpenses) / Math.abs(actualExpenses);
       percentageSamples += 1;
     }
     const hasInterval = row.p10_cash_flow != null && row.p90_cash_flow != null;
     const low = Number(row.p10_cash_flow);
     const high = Number(row.p90_cash_flow);
-    if (hasInterval && Number.isFinite(low) && Number.isFinite(high)) {
+    if (hasInterval && Number.isFinite(low) && Number.isFinite(high) && low <= high) {
       coverageSamples += 1;
-      if (actualCashFlow >= Math.min(low, high) && actualCashFlow <= Math.max(low, high)) covered += 1;
+      if (actualCashFlow >= low && actualCashFlow <= high) covered += 1;
     }
   });
   const round = (value) => Math.round(value * 100) / 100;
@@ -2221,6 +2247,7 @@ function summarizeAccuracyRows(rows) {
     sampleCount: rows.length,
     expenseMae: round(expenseAbsoluteError / rows.length),
     expenseMape: percentageSamples ? round((percentageError / percentageSamples) * 100) : null,
+    expenseWape: actualExpenseTotal > 0 ? round(expenseAbsoluteError / actualExpenseTotal * 100) : null,
     cashFlowMae: round(cashFlowAbsoluteError / rows.length),
     cashFlowBias: round(cashFlowError / rows.length),
     intervalCoverage: coverageSamples ? round((covered / coverageSamples) * 100) : null,
@@ -2270,10 +2297,14 @@ function loadForecastAccuracyRows(db, days, modelId = null) {
   const modelFilter = normalizedModelId ? 'AND snapshot.model_id = ?' : '';
   const params = normalizedModelId ? [`-${days} days`, normalizedModelId] : [`-${days} days`];
   return db.prepare(`
-      WITH actuals AS (
+      WITH issued AS (
+        SELECT *, ROW_NUMBER() OVER (
+          PARTITION BY generated_date, target_date, model_id ORDER BY id
+        ) AS issue_rank FROM forecast_prediction_snapshots
+      ), actuals AS (
         SELECT substr(t.date, 1, 10) AS target_date,
           SUM(CASE WHEN t.category_type = 'income' AND t.price > 0 THEN t.price ELSE 0 END) AS actual_income,
-          SUM(CASE WHEN t.category_type = 'expense' AND t.price < 0 THEN ABS(t.price) ELSE 0 END) AS actual_expenses
+          SUM(CASE WHEN t.category_type = 'expense' THEN -t.price ELSE 0 END) AS actual_expenses
         FROM transactions t
         LEFT JOIN (SELECT DISTINCT transaction_identifier, transaction_vendor FROM transaction_pairing_exclusions) excluded
           ON excluded.transaction_identifier = t.identifier AND excluded.transaction_vendor = t.vendor
@@ -2286,9 +2317,10 @@ function loadForecastAccuracyRows(db, days, modelId = null) {
         COALESCE(actual.actual_income, 0) AS actual_income,
         COALESCE(actual.actual_expenses, 0) AS actual_expenses,
         COALESCE(actual.actual_income, 0) - COALESCE(actual.actual_expenses, 0) AS actual_cash_flow
-      FROM forecast_prediction_snapshots snapshot
+      FROM issued snapshot
       LEFT JOIN actuals actual ON actual.target_date = snapshot.target_date
       WHERE snapshot.target_date < date('now', 'localtime')
+        AND snapshot.issue_rank = 1
         AND snapshot.target_date >= date('now', 'localtime', ?)
         AND snapshot.target_date <= (SELECT MAX(target_date) FROM actuals)
         AND snapshot.horizon_days BETWEEN 1 AND 90
@@ -2417,9 +2449,11 @@ async function generateDailyForecastLocal(options = {}) {
       historySince = formatDate(since);
     }
 
-    let allTransactions = historySince ? getAllTransactions(db, historySince) : getAllTransactions(db);
+    const observedThrough = formatDate(now);
+    const observedOnly = rows => rows.filter(row => String(row.date).slice(0, 10) <= observedThrough);
+    let allTransactions = observedOnly(historySince ? getAllTransactions(db, historySince) : getAllTransactions(db));
     if (allTransactions.length === 0 && historySince) {
-      allTransactions = getAllTransactions(db);
+      allTransactions = observedOnly(getAllTransactions(db));
       historySince = null;
     }
     if (allTransactions.length === 0) {
@@ -2430,6 +2464,7 @@ async function generateDailyForecastLocal(options = {}) {
       });
       const emptyTruth = prepareProjectionPolicy([], truthSnapshot, buildForecastEngine(), loadProjectionCategories(db)).truthSnapshot;
       const emptyResult = buildEmptyForecastResult(startDate, endDate, emptyTruth, CONFIG.monteCarloRuns);
+      if (options.recordSnapshot !== false) recordForecastPredictionSnapshots(db, emptyResult, now);
       if (!skipCache) forecastResultCache.set(cacheKey, { value: emptyResult, expiresAt: Date.now() + cacheDurationMs });
       return emptyResult;
     }
@@ -2585,6 +2620,9 @@ function buildBudgetOutlook(result) {
   const today = new Date();
   const todayStr = formatDate(today);
   const monthKey = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`;
+  const tomorrow = new Date(today);
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  const actualEndExclusive = formatDate(tomorrow);
   const monthEnd = new Date(today.getFullYear(), today.getMonth() + 1, 0);
   const monthEndStr = formatDate(monthEnd);
 
@@ -2603,7 +2641,7 @@ function buildBudgetOutlook(result) {
         cd.icon AS category_icon,
         cd.color AS category_color,
         cd.parent_id AS parent_category_id,
-        SUM(ABS(t.price)) AS spent
+        SUM(-t.price) AS spent
       FROM transactions t
       LEFT JOIN category_definitions cd ON t.category_definition_id = cd.id
       LEFT JOIN (SELECT DISTINCT transaction_identifier, transaction_vendor FROM transaction_pairing_exclusions) tpe
@@ -2612,10 +2650,10 @@ function buildBudgetOutlook(result) {
       WHERE t.status = 'completed'
         AND t.category_type = 'expense'
         AND tpe.transaction_identifier IS NULL
-        AND strftime('%Y-%m', t.date) = ?
+        AND t.date >= ? AND t.date < ?
       GROUP BY cd.id, cd.name, cd.name_en, cd.name_fr, cd.icon, cd.color, cd.parent_id
     `;
-    actualSpendingRows = db.prepare(actualSpendingQuery).all(monthKey);
+    actualSpendingRows = db.prepare(actualSpendingQuery).all(`${monthKey}-01`, actualEndExclusive);
   } catch (err) {
     console.warn('[Forecast] Could not load actual spending for quests:', err.message);
   }
@@ -2652,7 +2690,7 @@ function buildBudgetOutlook(result) {
     categoryDefinitionId ? `id:${categoryDefinitionId}` : `name:${categoryName || 'unknown'}`;
 
   (result.dailyForecasts || [])
-    .filter(d => d.date >= todayStr && d.date <= monthEndStr)
+    .filter(d => d.date > todayStr && d.date <= monthEndStr)
     .forEach(day => {
       (day.predictions || [])
         .filter(p => p.categoryType === 'expense')
@@ -2673,9 +2711,9 @@ function buildBudgetOutlook(result) {
 
   // Scenario ratios to scale p10/p90 relative to p50 totals
   const monthEndExpenses = { p10: 0, p50: 0, p90: 0 };
-  (result.scenarios?.p10?.dailyResults || []).filter(d => d.date >= todayStr && d.date <= monthEndStr).forEach(day => { monthEndExpenses.p10 += day.expenses || 0; });
-  (result.scenarios?.p50?.dailyResults || []).filter(d => d.date >= todayStr && d.date <= monthEndStr).forEach(day => { monthEndExpenses.p50 += day.expenses || 0; });
-  (result.scenarios?.p90?.dailyResults || []).filter(d => d.date >= todayStr && d.date <= monthEndStr).forEach(day => { monthEndExpenses.p90 += day.expenses || 0; });
+  (result.scenarios?.p10?.dailyResults || []).filter(d => d.date > todayStr && d.date <= monthEndStr).forEach(day => { monthEndExpenses.p10 += day.expenses || 0; });
+  (result.scenarios?.p50?.dailyResults || []).filter(d => d.date > todayStr && d.date <= monthEndStr).forEach(day => { monthEndExpenses.p50 += day.expenses || 0; });
+  (result.scenarios?.p90?.dailyResults || []).filter(d => d.date > todayStr && d.date <= monthEndStr).forEach(day => { monthEndExpenses.p90 += day.expenses || 0; });
   const p50ScenarioExpenses = monthEndExpenses.p50 || 0;
   const p10Ratio = p50ScenarioExpenses > 0 ? monthEndExpenses.p10 / p50ScenarioExpenses : 1;
   const p90Ratio = p50ScenarioExpenses > 0 ? monthEndExpenses.p90 / p50ScenarioExpenses : 1;
@@ -2805,7 +2843,7 @@ function buildBudgetOutlook(result) {
   });
 
   const budgetOutlook = Array.from(categoryData.values()).filter(entry =>
-    entry.limit > 0 || entry.actualSpent > 0 || entry.forecasted > 0
+    entry.limit > 0 || entry.actualSpent !== 0 || entry.forecasted !== 0
   );
 
   const budgetSummary = {
@@ -2825,11 +2863,36 @@ function buildBudgetOutlook(result) {
 }
 
 /**
+ * Keep monthly budget coverage independent of a caller's shorter chart window.
+ * The requested window is authoritative; generators produce one row per day.
+ */
+async function ensureMonthlyBudgetForecast(result, options = {}, generate = generateDailyForecast, now = new Date()) {
+  const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+  const remainingDays = monthEnd.getDate() - now.getDate();
+  if (remainingDays === 0) return result;
+
+  const requestedDays = options.forecastDays == null ? null : Number(options.forecastDays);
+  const { endDate } = resolveForecastWindow(now, {
+    includeToday: options.includeToday ?? false,
+    forecastDays: Number.isFinite(requestedDays) ? Math.max(0, requestedDays) : null,
+    forecastMonths: Number.isFinite(options.forecastMonths) ? options.forecastMonths : 6,
+  });
+  if (endDate >= monthEnd) return result;
+
+  const budgetResult = await generate({ ...options, forecastDays: remainingDays, includeToday: false });
+  if (Number(budgetResult?.truthRevision || 0) !== Number(result?.truthRevision || 0)) {
+    throw Object.assign(new Error('Financial truth changed while this budget forecast was updating'), { status: 409 });
+  }
+  return budgetResult;
+}
+
+/**
  * Provide a richer forecast bundle for analytics/quests consumers
  */
 async function getForecast(options = {}) {
   const result = await generateDailyForecast(options);
-  const { budgetOutlook, budgetSummary, categoryDefinitionsByName, categoryDefinitionsById } = buildBudgetOutlook(result);
+  const budgetResult = await ensureMonthlyBudgetForecast(result, options);
+  const { budgetOutlook, budgetSummary, categoryDefinitionsByName, categoryDefinitionsById } = buildBudgetOutlook(budgetResult);
 
   // Enrich patterns with category IDs and names
   const patterns = (result.categoryPatterns || []).map(p => {
@@ -2888,6 +2951,7 @@ async function getForecast(options = {}) {
 
 module.exports = {
   generateDailyForecast,
+  ensureMonthlyBudgetForecast,
   getForecast,
   getForecastAccuracy,
   clearCache() {
@@ -2901,6 +2965,7 @@ module.exports = {
     databaseCtor = Database;
   },
   _internal: {
+    buildInfrequentExpenseEstimates,
     analyzeCategoryPatterns,
     adjustProbabilitiesForCurrentMonth,
     adjustMonthlyPatternForecasts,

@@ -72,14 +72,19 @@ export default function ForecastDayDetails({ day, predictions, formatCurrency, o
               }}>
                 <Box sx={{ flex: 1 }}>
                   <Typography variant="body2" sx={{ fontWeight: 'medium', mb: 0.5 }}>
-                    {prediction.transactionName || prediction.category_name || prediction.category}
+                    {prediction.timingBasis === 'daily_average'
+                      ? prediction.category_name || prediction.category
+                      : prediction.transactionName || prediction.category_name || prediction.category}
                   </Typography>
                   <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
                     <Typography variant="caption" sx={{ color: 'warning.main', fontWeight: 500 }}>
-                      {t('forecast.probability', {
-                        percent: ((finiteNumber(prediction.probability) ?? 0) * 100).toFixed(0),
-                        defaultValue: `${((finiteNumber(prediction.probability) ?? 0) * 100).toFixed(0)}% probability`,
-                      })}
+                      {prediction.awaitingReceipt
+                        ? tRoot('analysisPage.modals.future.incomeSources.awaiting')
+                        : prediction.timingBasis === 'daily_average'
+                        ? t('forecast.dailyAverage', { defaultValue: 'Typical daily spending' })
+                        : prediction.timingBasis === 'scheduled'
+                          ? t('forecast.scheduledPayment', { defaultValue: 'Scheduled payment' })
+                          : t('forecast.estimatedDate', { defaultValue: 'Estimated date' })}
                     </Typography>
                     {(prediction.parent_name || prediction.category_name) && <>
                       <Typography variant="caption" color="text.secondary">•</Typography>
@@ -98,10 +103,15 @@ export default function ForecastDayDetails({ day, predictions, formatCurrency, o
                     </>}
                   </Box>
                   <Typography variant="caption" color="text.secondary">
-                    {t('forecast.estimatedAmount', {
-                      amount: money(finiteNumber(prediction.amount) ?? 0),
-                      defaultValue: `Estimated transaction: ${money(finiteNumber(prediction.amount) ?? 0)}`,
-                    })}
+                    {prediction.timingBasis === 'daily_average'
+                      ? t('forecast.dailyEstimate', {
+                        amount: money(contribution(prediction)),
+                        defaultValue: `Daily estimate: ${money(contribution(prediction))}`,
+                      })
+                      : t('forecast.estimatedAmount', {
+                        amount: money(finiteNumber(prediction.amount) ?? 0),
+                        defaultValue: `Estimated transaction: ${money(finiteNumber(prediction.amount) ?? 0)}`,
+                      })}
                   </Typography>
                 </Box>
                 <Box sx={{ textAlign: 'end' }}>

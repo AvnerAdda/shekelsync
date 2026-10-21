@@ -39,6 +39,7 @@ import {
   getInvestmentSuggestionKey,
 } from './investment-account-suggestions-helpers';
 import { linkSuggestionTransactionsBatch } from './investment-account-link-batch';
+import { useTranslation } from 'react-i18next';
 
 interface Transaction {
   transactionIdentifier: string;
@@ -119,6 +120,7 @@ export default function InvestmentAccountSuggestionsCard({
   onCreateAccountClick,
 }: InvestmentAccountSuggestionsCardProps) {
   const { showNotification } = useNotification();
+  const { t } = useTranslation('translation', { keyPrefix: 'accountsModal.realEstateMerge' });
 
   const getSuggestionKey = useCallback(
     (suggestion: GroupedSuggestion) => getInvestmentSuggestionKey(suggestion),
@@ -401,6 +403,11 @@ export default function InvestmentAccountSuggestionsCard({
                           {suggestion.transactionCount} txns • ₪{suggestion.totalAmount.toLocaleString()}
                           {suggestion.suggestedInstitution && ` • ${suggestion.suggestedInstitution}`}
                         </Typography>
+                        {hasMatches && suggestion.suggestedAccountType === 'real_estate' && (
+                          <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block' }}>
+                            {t('linkHint')}
+                          </Typography>
+                        )}
                       </Box>
 
                       {/* RIGHT: Actions */}
@@ -440,7 +447,7 @@ export default function InvestmentAccountSuggestionsCard({
                             minWidth: 70
                           }}
                         >
-                          Create
+                          {hasMatches && suggestion.suggestedAccountType === 'real_estate' ? t('newAccount') : 'Create'}
                         </Button>
                         <IconButton
                           size="small"

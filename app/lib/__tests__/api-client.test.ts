@@ -1,3 +1,5 @@
+// @vitest-environment node
+// These transport tests supply their own window/document objects for each runtime.
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
 import { getAuthorizationHeader } from '@/lib/session-store';
 import { apiClient, invalidateApiCache } from '../api-client';
@@ -361,6 +363,56 @@ describe('api-client', () => {
     expect(privateRead.data).toEqual({ score: 99 });
     expect(cachedAfterPrivateRead.data).toEqual({ score: 71 });
     expect(fetchMock).toHaveBeenCalledTimes(3);
+  });
+
+  it.each([
+    '/api/forecast/daily?days=90',
+    '/api/analytics/personal-intelligence',
+  ])('does not reuse or cache pre-edit requests for %s', async (endpoint) => {
+    let finishOld!: (response: ReturnType<typeof jsonResponse>) => void;
+    const fetchMock = vi.fn()
+      .mockImplementationOnce(() => new Promise(resolve => { finishOld = resolve; }))
+      .mockResolvedValueOnce(jsonResponse({ updated: true }))
+      .mockResolvedValue(jsonResponse({ value: 'fresh' }));
+    global.fetch = fetchMock as any;
+    (global as any).window = {};
+
+    const oldRequest = apiClient.get(endpoint);
+    await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    await apiClient.put('/api/transactions/id%7Cbank', { price: -25 });
+    const freshRequest = apiClient.get(endpoint);
+    // Let the old response arrive after the write and the new read have started.
+    finishOld(jsonResponse({ value: 'stale' }));
+    const [, fresh] = await Promise.all([oldRequest, freshRequest]);
+    const cached = await apiClient.get(endpoint);
+
+    expect(fresh.data).toEqual({ value: 'fresh' });
+    expect(cached.data).toEqual({ value: 'fresh' });
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+  });
+
+  it.each([
+    '/api/forecast/daily?days=90',
+    '/api/analytics/personal-intelligence',
+  ])('does not overwrite fresh cached data with a late pre-edit response for %s', async (endpoint) => {
+    let finishOld!: (response: ReturnType<typeof jsonResponse>) => void;
+    const fetchMock = vi.fn()
+      .mockImplementationOnce(() => new Promise(resolve => { finishOld = resolve; }))
+      .mockResolvedValue(jsonResponse({ value: 'fresh' }));
+    global.fetch = fetchMock as any;
+    (global as any).window = {};
+
+    const oldRequest = apiClient.get(endpoint);
+    await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    invalidateApiCache(['analytics']);
+    const fresh = await apiClient.get(endpoint, { signal: new AbortController().signal });
+    finishOld(jsonResponse({ value: 'stale' }));
+    await oldRequest;
+    const cached = await apiClient.get(endpoint);
+
+    expect(fresh.data).toEqual({ value: 'fresh' });
+    expect(cached.data).toEqual({ value: 'fresh' });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 
   it('times out stalled requests and aborts the fetch transport', async () => {

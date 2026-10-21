@@ -1,8 +1,20 @@
 const DEFAULT_MAX_ENTRIES = 50;
 const DEFAULT_TTL_MS = 60 * 1000;
+const cacheStores = new Set();
+
+// Analytics services share this factory. Clear their cached snapshots after a
+// transaction changes, without importing every analytics service into writers.
+function clearAllTtlCaches() {
+  for (const reference of cacheStores) {
+    const store = reference.deref();
+    if (store) store.clear();
+    else cacheStores.delete(reference);
+  }
+}
 
 function createTtlCache({ maxEntries = DEFAULT_MAX_ENTRIES, defaultTtlMs = DEFAULT_TTL_MS } = {}) {
   const store = new Map();
+  cacheStores.add(new WeakRef(store));
 
   const pruneExpired = () => {
     const now = Date.now();
@@ -51,5 +63,6 @@ function createTtlCache({ maxEntries = DEFAULT_MAX_ENTRIES, defaultTtlMs = DEFAU
 
 module.exports = {
   createTtlCache,
+  clearAllTtlCaches,
 };
 module.exports.default = module.exports;

@@ -60,7 +60,7 @@ test('stacked time series preserves overspending and selects the exact window fo
   const growthCard = page.getByRole('button', { name: 'View Growth transactions', exact: true });
   await expect(growthCard).toContainText('50.0%');
   await expect(growthCard).toContainText('₪5,000');
-  await expect(growthCard).toContainText('Growth expenses₪1,000');
+  await expect(growthCard).toContainText(`${labels.timeline.growthSpent}₪1,000`);
   await expect(growthCard).toContainText('Unspent income₪4,000');
   await page.getByRole('button', { name: 'View Growth transactions', exact: true }).click();
   await expect(page.getByRole('dialog')).toBeVisible();

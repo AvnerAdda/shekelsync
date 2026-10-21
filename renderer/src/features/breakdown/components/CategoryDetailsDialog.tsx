@@ -1,3 +1,4 @@
+import TransactionActions from '@renderer/shared/components/TransactionActions';
 import React from 'react';
 import {
   Dialog,
@@ -365,6 +366,7 @@ const CategoryDetailsDialog: React.FC<CategoryDetailsDialogProps> = ({
                       primary={
                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                           <Typography variant="body2">{txn.transaction_name || txn.name || txn.vendor}</Typography>
+                          <TransactionActions transaction={txn} />
                           {pending && (
                             <Chip
                               icon={<HourglassEmptyIcon sx={{ fontSize: 14 }} />}
@@ -439,7 +441,7 @@ const CategoryDetailsDialog: React.FC<CategoryDetailsDialogProps> = ({
                         fontWeight: "bold"
                       }}
                     >
-                      {formatCurrencyValue(Math.abs(txn.price))}
+                      {formatCurrencyValue(categoryType === 'expense' ? -txn.price : Math.abs(txn.price))}
                     </Typography>
                   </ListItem>
                   {index < transactions.length - 1 && <Divider />}

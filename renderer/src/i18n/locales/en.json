@@ -1,4 +1,32 @@
 {
+  "deleteConfirmation": {
+    "title": "Delete “{{name}}”?",
+    "message": "Please confirm that you want to delete this item. This action cannot be undone.",
+    "cancel": "Cancel",
+    "delete": "Delete"
+  },
+  "transactionDelete": {
+    "title": "Delete transaction",
+    "message": "This removes only this transaction from your records. This action cannot be undone.",
+    "loadError": "Could not load the transaction. Please try again.",
+    "deleteError": "Could not delete the transaction. Please try again.",
+    "retry": "Try again",
+    "deleting": "Deleting…"
+  },
+  "transactionCategoryEditor": {
+    "title": "Edit category",
+    "category": "Category",
+    "singleHint": "Only this transaction will change unless you enable the rule below.",
+    "applyRule": "Also create or update a rule for matching transaction names",
+    "ruleHint": "The rule applies to existing and future transactions whose names contain this transaction name. Income rules match positive amounts; expense rules match negative amounts.",
+    "loadError": "Could not load the transaction and categories. Please try again.",
+    "saveError": "Could not update the category. Please try again.",
+    "ruleError": "The transaction was updated, but the rule could not be saved. Try again to save the rule.",
+    "retry": "Try again",
+    "cancel": "Cancel",
+    "saving": "Saving…",
+    "save": "Save"
+  },
   "common": {
     "language": "Language",
     "languages": {
@@ -83,8 +111,8 @@
     "updatedAt": "Updated at {{time}}",
     "loading": "Loading Money Review",
     "forecastAccuracy": {
-      "collecting": "Forecast learning · {{count}} days",
-      "provisional": "Forecast provisional · {{mape}}% error",
+      "collecting": "Accuracy history · {{count}} days",
+      "provisional": "Forecast error · {{mape}}% · {{count}} days",
       "established": "Forecast measured · {{mape}}% error",
       "details": "{{samples}} realized predictions · average expense error {{mae}} · uncertainty coverage {{coverage}}"
     },
@@ -1063,10 +1091,19 @@
       "unknownVendor": "Unknown vendor",
       "cardRepayments": "Include card repayments",
       "capitalReturns": "Include capital returns",
-      "avgGuides": "Show average guides",
+      "rollingAverages": "Show 30-day daily averages",
       "showForecast": "Show forecast",
       "on": "On",
       "off": "Off"
+    },
+    "rolling": {
+      "title": "30-day average per day",
+      "caption": "Dashed lines: average daily income, expenses and investments over the preceding 30 days, including this day and days with no activity. Weekly and monthly points use the period end.",
+      "legend": "Dashed lines: 30-day daily averages",
+      "series": "{{flow}} · 30-day daily average",
+      "loading": "Loading rolling averages…",
+      "retry": "Retry",
+      "error": "Rolling averages could not be loaded."
     },
     "tabs": {
       "history": "Daily Income vs Expenses",
@@ -1088,6 +1125,8 @@
       "nextMonth": "Next month"
     },
     "forecast": {
+      "beforeInvesting": "Forecast before investing",
+      "afterInvesting": "Forecast after investing",
       "loading": "Loading forecast...",
       "error": "Failed to load forecast",
       "noData": "No forecast data available",
@@ -1104,9 +1143,13 @@
       "forecastData": "Forecast",
       "next30Days": "30 day forecast",
       "basedOnPatterns": "Based on historical spending patterns",
-      "breakdownExplanation": "Each amount below is its contribution to the chart total, weighted by probability. Estimated transaction amounts are shown separately.",
+      "breakdownExplanation": "Each amount below contributes to the chart total. Payment dates are estimates; everyday spending is shown as a daily average.",
       "contribution": "Included in forecast",
       "estimatedAmount": "Estimated transaction: {{amount}}",
+      "estimatedDate": "Estimated date",
+      "scheduledPayment": "Scheduled payment",
+      "dailyAverage": "Typical daily spending",
+      "dailyEstimate": "Daily estimate: {{amount}}",
       "probability": "{{percent}}% probability",
       "remainingForecast": "Other forecast contributions",
       "roundingAdjustment": "Rounding",
@@ -1114,7 +1157,7 @@
       "scenarioSummary": "End of month projection based on {{simulations}} Monte Carlo simulations",
       "daysRemaining": "{{count}} days remaining in month",
       "actualNet": "Actual Net Position",
-      "confidenceBand": "Confidence Band (P10-P90)",
+      "confidenceBand": "Estimated range (P10–P90)",
       "bestCase": "Best Case",
       "baseCase": "Base Case",
       "worstCase": "Worst Case"
@@ -1406,15 +1449,15 @@
         "na": "N/A"
       },
       "future": {
-        "title": "Your Financial Future",
-        "trajectory": "6-Month Savings Trajectory",
+        "title": "Cash-flow outlook",
+        "trajectory": "Projected six-month change",
         "endOfMonth": "End of month",
         "monthlySavings": "Monthly savings",
         "dailyVelocity": "Daily velocity",
         "velocityValue": "{{value}}/day",
-        "baseCase": "Base case",
-        "bestCase": "Optimistic balance",
-        "worstCase": "Pessimistic balance",
+        "baseCase": "Expected closing position",
+        "bestCase": "Upper closing estimate",
+        "worstCase": "Lower closing estimate",
         "na": "N/A"
       },
       "reality": {
@@ -1549,20 +1592,61 @@
         "noData": "No data available"
       },
       "future": {
-        "title": "Your Personalized Future",
+        "title": "Cash-flow outlook",
         "scenarios": {
-          "bad": "Pessimistic",
-          "normal": "Base",
-          "good": "Optimistic",
+          "bad": "Lower estimate",
+          "normal": "Expected",
+          "good": "Upper estimate",
+          "lowerDescription": "Lower end of the estimated net-position range",
+          "expectedDescription": "Projected income less spending",
+          "upperDescription": "Upper end of the estimated net-position range",
           "endOfPeriod": "End of forecast period"
         },
         "netPosition": {
-          "title": "Net Position with Forecast",
-          "subtitle": "Historical data + 6-month forecast",
+          "title": "Net position outlook",
+          "subtitle": "Historical activity and estimated future cash flow",
           "historical": "Historical",
-          "forecast": "Forecast"
+          "forecast": "Forecast",
+          "range": "Estimated range"
         },
-        "noData": "No data available"
+        "noData": "No data available",
+        "subtitle": "Estimated income, spending and net position over the next six months",
+        "refresh": "Refresh outlook",
+        "close": "Close outlook",
+        "retry": "Retry",
+        "fetchFailed": "Could not load your outlook",
+        "unavailable": "Not available",
+        "startingPosition": "Starting net position",
+        "closingPosition": "Projected closing net position",
+        "cashFlowChange": "Projected change",
+        "income": "Income",
+        "expenses": "Spending",
+        "through": "Through {{date}}",
+        "missingBalance": "No current bank balance is available. Values show cash-flow changes from a zero starting point.",
+        "incompleteBalance": "Some bank accounts are missing a balance or currency. Until all balances are available, values show cash-flow changes from a zero starting point.",
+        "missingExchangeRate": "A current exchange rate is missing for a bank account. Update exchange rates to see balances in shekels. Values currently show cash-flow changes from a zero starting point.",
+        "rangeNote": "The shaded range reflects simulated variation. Actual amounts and payment dates can fall outside it.",
+        "assumptionsNote": "Based on recorded activity before investment transfers. Saved schedules and planned spending take precedence.",
+        "reviewAssumptions": "Review assumptions",
+        "drivers": {
+          "title": "Main spending assumptions",
+          "subtitle": "Largest projected categories over this forecast period",
+          "category": "Category",
+          "basis": "Based on",
+          "amount": "Projected spending",
+          "scheduled": "Regular bills",
+          "typical": "Typical spending",
+          "occasional": "Allowance for occasional costs"
+        },
+        "incomeSources": {
+          "title": "Expected income sources",
+          "subtitle": "Income included over this forecast period",
+          "source": "Source",
+          "next": "Next estimated payment",
+          "amount": "Projected income",
+          "awaiting": "Awaiting receipt",
+          "awaitingNote": "A recently due payment has not been recorded yet. It remains in this outlook as expected income, not money already received."
+        }
       },
       "makeItReal": {
         "title": "Make It Real - Time is Money",
@@ -1975,11 +2059,11 @@
         "inspectDate": "Inspect date",
         "selectHelp": "Hover to see a rolling window. Click the chart or choose a date to inspect its totals below.",
         "expenseShare": "{{value}}% of income",
-        "deficitHelp": "Expenses exceed income in this window.",
+        "deficitHelp": "Expenses and investment outflows exceed income in this window.",
         "remainderHelp": "Unspent income, counted toward Growth.",
         "chartCaption": "Each point represents the trailing {{days}} days.",
         "detailsHint": "Select a category to view transactions.",
-        "growthSpent": "Growth expenses",
+        "growthSpent": "Growth expenses & investments",
         "growthUnspent": "Unspent income",
         "targetsTitle": "Targets & category assignments",
         "targetsHelp": "Set your allocation and organize expenses.",
@@ -1998,7 +2082,7 @@
         "date": "Ending date",
         "deficit": "Deficit",
         "income": "Income",
-        "expenses": "Expenses",
+        "expenses": "Expenses & investments",
         "growthRemainder": "Remainder added to Growth",
         "noIncomeRow": "No positive income",
         "noIncome": "This window has no positive net income. Amounts are shown below; percentages cannot be calculated.",
@@ -2007,8 +2091,8 @@
         "allocationTitle": "Allocation of income",
         "openCategory": "View {{category}} transactions",
         "unallocatedHelp": "Expenses awaiting a spending-category assignment are included in the total.",
-        "growthDetail": "{{spent}} in Growth expenses + {{remainder}} remaining income.",
-        "accounting": "Completed transactions only. Refunds reduce expenses. Transfers, investment movements and duplicate card repayments are excluded. Growth includes its expenses plus remaining income; it does not mean a savings transfer was made."
+        "growthDetail": "{{spent}} in Growth expenses and investments + {{remainder}} remaining income.",
+        "accounting": "Completed transactions only. Refunds reduce expenses. Investment outflows count as spending and default to Growth unless assigned elsewhere. Investment withdrawals, other transfers and duplicate card repayments are excluded. Income remaining after expenses and investments is added to Growth as unspent income."
       }
     },
     "targets": {
@@ -3233,7 +3317,7 @@
       "complete": "{{count}} complete"
     },
     "confirm": {
-      "deleteCategory": "Are you sure you want to delete this category? This will also affect all its subcategories.",
+      "deleteCategory": "Deleting this category also removes linked budgets and category settings and unlinks categorization rules. This action cannot be undone. Categories with transactions or subcategories cannot be deleted.",
       "deleteRule": "Are you sure you want to delete this rule?"
     },
     "errors": {
@@ -3790,6 +3874,23 @@
       "notes": "Notes (Optional)",
       "notesPlaceholder": "Any additional notes about this update...",
       "addUpdate": "Add Update"
+    },
+    "realEstateMerge": {
+      "title": "Merge real-estate accounts",
+      "description": "Combine entries for the same property into one account. Values and history are combined, linked transactions are moved, and the other entries are archived.",
+      "keepAccount": "Account to keep",
+      "keepHelper": "Keep the original account with the property profile. Accounts must use the same currency.",
+      "selectAccounts": "Entries for this same property",
+      "combinedValue": "Combined current value: {{value}}",
+      "missingValue": "Some entries have no current value. Linked transactions will be included in the combined history.",
+      "notSet": "Value not set",
+      "cancel": "Cancel",
+      "merge": "Merge accounts",
+      "merging": "Merging...",
+      "failed": "Failed to merge real-estate accounts",
+      "success": "Real-estate accounts merged",
+      "linkHint": "For the same property, link these payments to the existing account.",
+      "newAccount": "New property"
     },
     "investmentEdit": {
       "title": "Edit investment account",

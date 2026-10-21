@@ -1,7 +1,7 @@
 import { beforeAll, describe, expect, it, vi } from 'vitest';
 
 let realEstateService: any;
-let buildCumulativeRealEstateSnapshots: (rows?: any[]) => any[];
+let buildCumulativeRealEstateSnapshots: (rows?: any[], valuations?: any[]) => any[];
 let syncRealEstateHolding: (params?: Record<string, unknown>) => Promise<any>;
 
 beforeAll(async () => {
@@ -55,6 +55,7 @@ describe('real estate investment service', () => {
           { identifier: 'b', vendor: 'discount', date: '2026-05-25T21:00:00.000Z', price: '-500000' },
         ],
       })
+      .mockResolvedValueOnce({ rows: [] })
       .mockResolvedValueOnce({ rows: [{ id: 1 }] })
       .mockResolvedValueOnce({ rows: [{ id: 2 }] });
 
@@ -68,22 +69,36 @@ describe('real estate investment service', () => {
       synced: true,
       latest: { as_of_date: '2026-05-26', current_value: 502500, cost_basis: 502500 },
     });
-    expect(query).toHaveBeenCalledTimes(4);
-    expect(String(query.mock.calls[2][0])).toContain("NOT LIKE 'Real estate simulator valuation%'");
-    expect(query.mock.calls[2][1]).toEqual([
+    expect(query).toHaveBeenCalledTimes(5);
+    expect(String(query.mock.calls[3][0])).toContain("NOT LIKE 'Real estate simulator valuation%'");
+    expect(query.mock.calls[3][1]).toEqual([
       9,
       2500,
       2500,
       '2026-05-20',
       'Auto-synced from linked real estate transactions',
     ]);
-    expect(query.mock.calls[3][1]).toEqual([
+    expect(query.mock.calls[4][1]).toEqual([
       9,
       502500,
       502500,
       '2026-05-26',
       'Auto-synced from linked real estate transactions',
     ]);
+  });
+
+  it('rolls new payments forward from simulator and merged valuations', () => {
+    expect(buildCumulativeRealEstateSnapshots([
+      { date: '2026-05-26', price: -502750 },
+      { date: '2026-09-10', price: -1250.25 },
+      { date: '2026-10-11', price: -2500.75 },
+      { date: '2026-10-14', price: -100 },
+    ], [
+      { as_of_date: '2026-06-18', current_value: 500000, cost_basis: 100000 },
+      { as_of_date: '2026-10-13', current_value: 503751, cost_basis: 501251 },
+    ]).at(-1)).toEqual({
+      as_of_date: '2026-10-14', current_value: 503851, cost_basis: 501351,
+    });
   });
 
   it('skips non-real-estate accounts', async () => {

@@ -23,6 +23,7 @@ import type {
   InvestmentPerformanceResponse,
 } from '@renderer/types/investments';
 import { useTranslation } from 'react-i18next';
+import { useDeleteConfirmation } from '@renderer/shared/hooks/useDeleteConfirmation';
 
 interface BenchmarkComparisonPanelProps {
   performance: InvestmentPerformanceResponse | null;
@@ -68,6 +69,7 @@ function formatPercent(value: number | null | undefined): string {
 
 const BenchmarkComparisonPanel: React.FC<BenchmarkComparisonPanelProps> = ({ performance }) => {
   const { t } = useTranslation('translation');
+  const { confirmDelete, deleteConfirmationDialog } = useDeleteConfirmation();
   const [benchmarks, setBenchmarks] = React.useState<InvestmentBenchmark[]>([]);
   const [comparison, setComparison] = React.useState<BenchmarkComparisonResponse | null>(null);
   const [loading, setLoading] = React.useState(true);
@@ -152,7 +154,7 @@ const BenchmarkComparisonPanel: React.FC<BenchmarkComparisonPanelProps> = ({ per
 
   const removeBenchmark = async () => {
     const benchmark = comparison?.benchmark || benchmarks.find((item) => item.isDefault) || benchmarks[0];
-    if (!benchmark) return;
+    if (saving || !benchmark || !await confirmDelete(benchmark.name)) return;
     setSaving(true);
     setError(null);
     try {
@@ -173,6 +175,7 @@ const BenchmarkComparisonPanel: React.FC<BenchmarkComparisonPanelProps> = ({ per
 
   return (
     <Paper sx={{ p: 2.5, display: 'flex', flexDirection: 'column', gap: 2 }}>
+      {deleteConfirmationDialog}
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 2 }}>
         <Box>
           <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>

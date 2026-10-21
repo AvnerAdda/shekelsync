@@ -396,6 +396,14 @@ function createInvestmentsRouter({ services = {} } = {}) {
     }
   });
 
+  router.post('/accounts/merge', async (req, res) => {
+    try {
+      res.json(await accountsService.mergeRealEstateAccounts(req.body || {}));
+    } catch (error) {
+      res.status(error?.status || 500).json({ error: error?.message || 'Failed to merge real estate accounts' });
+    }
+  });
+
   router.put('/accounts', async (req, res) => {
     try {
       const result = await accountsService.updateAccount(req.body || {});
