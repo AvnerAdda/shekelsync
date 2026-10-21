@@ -146,6 +146,7 @@ export type ChartDisplayMode = 'pie' | 'sunburst';
 export interface SunburstDataNode {
   name: string;
   value?: number;
+  displayValue?: number;
   fill?: string;
   children?: SunburstDataNode[];
 }

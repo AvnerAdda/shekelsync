@@ -235,17 +235,17 @@ function executeQuery(dataset: Dataset, sql: string, params: unknown[]) {
       }));
   }
 
-  if (q.includes('SUM(ABS(t.price)) AS spent') && q.includes("strftime('%Y-%m', t.date) = ?")) {
-    const month = String(params[0] ?? '');
+  if (q.includes('SUM(-t.price) AS spent') && q.includes('t.date >= ? AND t.date < ?')) {
+    const start = String(params[0] ?? '');
+    const end = String(params[1] ?? '');
     const grouped = new Map<number, number>();
     for (const tx of dataset.transactions) {
       if (tx.status !== 'completed') continue;
       if (tx.category_type !== 'expense') continue;
-      if (tx.price >= 0) continue;
       if (!tx.category_definition_id) continue;
-      if (monthKey(tx.date) !== month) continue;
+      if (tx.date < start || tx.date >= end) continue;
       if (isExcluded(tx, dataset.exclusions)) continue;
-      grouped.set(tx.category_definition_id, (grouped.get(tx.category_definition_id) || 0) + Math.abs(tx.price));
+      grouped.set(tx.category_definition_id, (grouped.get(tx.category_definition_id) || 0) - tx.price);
     }
 
     return Array.from(grouped.entries()).map(([categoryId, spent]) => {
@@ -342,7 +342,7 @@ describe('forecast service integration', () => {
     expect(Object.keys(result.monthlyAdjustments).length).toBeGreaterThan(0);
   });
 
-  it('calibrates variable expense forecasts to recent monthly category baselines', async () => {
+  it('uses the validated calendar average for variable spending and reconciles daily totals', async () => {
     vi.useFakeTimers();
     const now = new Date('2026-06-15T12:00:00.000Z');
     vi.setSystemTime(now);
@@ -396,7 +396,14 @@ describe('forecast service integration', () => {
       ), 0);
 
       expect(result.analysisInfo.variableExpenseBaselines).toBe(1);
-      expect(groceryForecast).toBeCloseTo(700, 6);
+      // March 17 through June 14 contains 2,800 of net spending over 90 days.
+      const selectedDailyRate = 2800 / 90;
+      expect(result.analysisInfo.expenseEstimatorCounts).toEqual({ calendar_average: 1 });
+      expect(groceryForecast).toBeCloseTo(selectedDailyRate * 15, 6);
+      result.dailyForecasts.forEach((day: any) => {
+        expect(day.expectedExpenses).toBeCloseTo(selectedDailyRate, 6);
+      });
+      expect(result.predictionIntervals.daily).toHaveLength(15);
       expect(result.dailyForecasts.some((day: any) => (
         (day.predictions || []).some((prediction: any) => prediction.category === 'Groceries' && prediction.isCalibrated)
       ))).toBe(true);
@@ -568,6 +575,8 @@ describe('forecast service integration', () => {
   });
 
   it('handles category/budget query failures in buildBudgetOutlook and still returns a fallback outlook', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date(2026, 6, 9, 12));
     const forecast = await loadForecastModule(buildEmptyDataset());
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
     const closeMock = vi.fn();
@@ -579,7 +588,7 @@ describe('forecast service integration', () => {
             const q = normalize(sql);
             if (
               q.includes('FROM category_definitions') ||
-              q.includes('SUM(ABS(t.price)) AS spent') ||
+              q.includes('SUM(-t.price) AS spent') ||
               q.includes('FROM category_budgets cb')
             ) {
               throw new Error('forced query failure');
@@ -593,12 +602,11 @@ describe('forecast service integration', () => {
 
     forecast.__setDatabaseCtor?.(failingCtor as any);
 
-    const now = new Date();
-    const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+    const forecastDate = '2026-07-10';
     const syntheticResult = {
       dailyForecasts: [
         {
-          date: today,
+          date: forecastDate,
           predictions: [
             {
               categoryType: 'expense',
@@ -610,9 +618,9 @@ describe('forecast service integration', () => {
         },
       ],
       scenarios: {
-        p10: { dailyResults: [{ date: today, expenses: 80 }] },
-        p50: { dailyResults: [{ date: today, expenses: 100 }] },
-        p90: { dailyResults: [{ date: today, expenses: 130 }] },
+        p10: { dailyResults: [{ date: forecastDate, expenses: 80 }] },
+        p50: { dailyResults: [{ date: forecastDate, expenses: 100 }] },
+        p90: { dailyResults: [{ date: forecastDate, expenses: 130 }] },
       },
     };
 
@@ -627,6 +635,8 @@ describe('forecast service integration', () => {
   });
 
   it('derives budgeted and unbudgeted status branches in buildBudgetOutlook', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date(2026, 6, 9, 12));
     const now = new Date();
     const yyyy = now.getFullYear();
     const mm = String(now.getMonth() + 1).padStart(2, '0');
@@ -657,11 +667,11 @@ describe('forecast service integration', () => {
     };
 
     const forecast = await loadForecastModule(dataset);
-    const today = mkDate(Math.max(1, now.getDate()));
+    const forecastDate = mkDate(now.getDate() + 1);
     const syntheticResult = {
       dailyForecasts: [
         {
-          date: today,
+          date: forecastDate,
           predictions: [
             { categoryType: 'expense', category: 'Rent', transactionName: 'Rent', probabilityWeightedAmount: 10 },
             { categoryType: 'expense', category: 'Groceries', transactionName: 'Groceries', probabilityWeightedAmount: 50 },
@@ -672,9 +682,9 @@ describe('forecast service integration', () => {
         },
       ],
       scenarios: {
-        p10: { dailyResults: [{ date: today, expenses: -50 }] },
-        p50: { dailyResults: [{ date: today, expenses: 100 }] },
-        p90: { dailyResults: [{ date: today, expenses: 100 }] },
+        p10: { dailyResults: [{ date: forecastDate, expenses: -50 }] },
+        p50: { dailyResults: [{ date: forecastDate, expenses: 100 }] },
+        p90: { dailyResults: [{ date: forecastDate, expenses: 100 }] },
       },
     };
 
@@ -694,12 +704,14 @@ describe('forecast service integration', () => {
   });
 
   it('marks medium-utilization budgets as at_risk and no-budget categories above p50 as at_risk', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date(2026, 6, 9, 12));
     const now = new Date();
     const yyyy = now.getFullYear();
     const mm = String(now.getMonth() + 1).padStart(2, '0');
     const currentMonthPrefix = `${yyyy}-${mm}`;
     const mkDate = (day: number) => `${currentMonthPrefix}-${String(day).padStart(2, '0')}`;
-    const today = mkDate(Math.max(1, now.getDate()));
+    const forecastDate = mkDate(now.getDate() + 1);
 
     const dataset: Dataset = {
       categories: [
@@ -720,7 +732,7 @@ describe('forecast service integration', () => {
     const syntheticResult = {
       dailyForecasts: [
         {
-          date: today,
+          date: forecastDate,
           predictions: [
             { categoryType: 'expense', category: 'Utilities', transactionName: 'Utilities', probabilityWeightedAmount: 600 },
             { categoryType: 'expense', category: 'NoLimitMidRisk', transactionName: 'NoLimitMidRisk', probabilityWeightedAmount: -1 },
@@ -728,9 +740,9 @@ describe('forecast service integration', () => {
         },
       ],
       scenarios: {
-        p10: { dailyResults: [{ date: today, expenses: 80 }] },
-        p50: { dailyResults: [{ date: today, expenses: 100 }] },
-        p90: { dailyResults: [{ date: today, expenses: 40 }] },
+        p10: { dailyResults: [{ date: forecastDate, expenses: 80 }] },
+        p50: { dailyResults: [{ date: forecastDate, expenses: 100 }] },
+        p90: { dailyResults: [{ date: forecastDate, expenses: 40 }] },
       },
     };
 

@@ -6,7 +6,7 @@ const {
   toNumber,
 } = require('./account-holdings-rollup.js');
 
-function buildCumulativeRealEstateSnapshots(rows = []) {
+function buildCumulativeRealEstateSnapshots(rows = [], valuations = []) {
   const adjustments = new Map();
 
   (rows || []).forEach((row) => {
@@ -32,15 +32,23 @@ function buildCumulativeRealEstateSnapshots(rows = []) {
     adjustments.set(date, (adjustments.get(date) || 0) + signedAmount);
   });
 
+  const valuationByDate = new Map(valuations.map((row) => [row.as_of_date, row]));
   let runningValue = 0;
-  return Array.from(adjustments.entries())
-    .sort((left, right) => left[0].localeCompare(right[0]))
-    .map(([date, delta]) => {
-      runningValue = Math.max(runningValue + delta, 0);
+  let runningCost = 0;
+  return [...new Set([...adjustments.keys(), ...valuationByDate.keys()])]
+    .sort()
+    .map((date) => {
+      const valuation = valuationByDate.get(date);
+      const delta = adjustments.get(date) || 0;
+      // A valuation already includes transactions on its own date.
+      runningValue = valuation ? Number(valuation.current_value) : Math.max(runningValue + delta, 0);
+      runningCost = valuation
+        ? Number(valuation.cost_basis ?? valuation.current_value)
+        : Math.max(runningCost + delta, 0);
       return {
         as_of_date: date,
         current_value: runningValue,
-        cost_basis: runningValue,
+        cost_basis: runningCost,
       };
     });
 }
@@ -97,6 +105,7 @@ async function upsertRealEstateSnapshot(dbAdapter, accountId, snapshot) {
         notes = EXCLUDED.notes,
         updated_at = CURRENT_TIMESTAMP
       WHERE COALESCE(investment_holdings.notes, '') NOT LIKE 'Real estate simulator valuation%'
+        AND COALESCE(investment_holdings.notes, '') NOT LIKE 'Merged real estate valuation%'
       RETURNING *
     `,
     [
@@ -123,7 +132,7 @@ async function syncRealEstateHolding({ dbAdapter, accountId } = {}) {
   }
 
   const transactions = await fetchLinkedRealEstateTransactions(dbAdapter, numericAccountId);
-  const snapshots = buildCumulativeRealEstateSnapshots(transactions);
+  let snapshots = buildCumulativeRealEstateSnapshots(transactions);
   if (snapshots.length === 0) {
     return {
       accountId: numericAccountId,
@@ -132,8 +141,18 @@ async function syncRealEstateHolding({ dbAdapter, accountId } = {}) {
     };
   }
 
+  const { rows: valuations } = await dbAdapter.query(`
+    SELECT current_value, cost_basis, as_of_date
+    FROM investment_holdings
+    WHERE account_id = $1 AND COALESCE(holding_type, 'standard') = 'standard'
+      AND (notes LIKE 'Real estate simulator valuation%' OR notes LIKE 'Merged real estate valuation%')
+    ORDER BY as_of_date, id
+  `, [numericAccountId]);
+  snapshots = buildCumulativeRealEstateSnapshots(transactions, valuations || []);
+  const protectedDates = new Set((valuations || []).map((row) => row.as_of_date));
   const rows = [];
   for (const snapshot of snapshots) {
+    if (protectedDates.has(snapshot.as_of_date)) continue;
     rows.push(await upsertRealEstateSnapshot(dbAdapter, numericAccountId, snapshot));
   }
 

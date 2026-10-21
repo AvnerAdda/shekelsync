@@ -15,7 +15,7 @@ export const calculateVendorDelta = (current: number, previous?: number): number
   if (!previous || previous === 0) {
     return null;
   }
-  return ((current - previous) / previous) * 100;
+  return ((current - previous) / Math.abs(previous)) * 100;
 };
 
 export const getVendorDeltaChipColor = (
@@ -89,7 +89,7 @@ const VendorView: React.FC<VendorViewProps> = ({ vendors, categoryType, formatCu
                   fontWeight: "bold"
                 }}
               >
-                {formatCurrencyValue(Math.abs(vendor.total))}
+                {formatCurrencyValue(vendor.total)}
               </Typography>
               <Typography variant="body2" sx={{
                 color: "text.secondary"

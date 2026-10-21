@@ -61,6 +61,7 @@ import InvestmentAccountSuggestionsCard from '@renderer/features/investments/com
 import CreditCardSuggestionsCard from '@renderer/features/investments/components/CreditCardSuggestionsCard';
 import SmartInvestmentAccountForm from '@renderer/features/investments/components/SmartInvestmentAccountForm';
 import RealEstateSimulatorDialog from '@renderer/features/investments/components/RealEstateSimulatorDialog';
+import RealEstateAccountMergeDialog from '@renderer/features/investments/components/RealEstateAccountMergeDialog';
 import RealEstateSimulatorFields, {
   createEmptyRealEstateProfile,
   hasRealEstateProfileInput,
@@ -581,6 +582,7 @@ const AccountSection = styled(Box)(({ theme }) => ({
 export default function AccountsModal({ isOpen, onClose, openRequest }: AccountsModalProps) {
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [investmentAccounts, setInvestmentAccounts] = useState<InvestmentAccount[]>([]);
+  const [mergingRealEstateAccount, setMergingRealEstateAccount] = useState<InvestmentAccount | null>(null);
   const [institutions, setInstitutions] = useState<InstitutionMetadata[]>([]);
   const [institutionNodes, setInstitutionNodes] = useState<InstitutionTreeNode[]>([]);
   const institutionMap = useMemo(() => {
@@ -2312,6 +2314,18 @@ export default function AccountsModal({ isOpen, onClose, openRequest }: Accounts
                         </IconButton>
                       </Tooltip>
                     )}
+                    {account.account_type === 'real_estate' && investmentAccounts.some((other) => (
+                      other.id !== account.id && other.account_type === 'real_estate' && other.currency === account.currency
+                    )) && (
+                      <Tooltip title={t('realEstateMerge.title')}>
+                        <IconButton
+                          aria-label={t('realEstateMerge.title')}
+                          onClick={() => setMergingRealEstateAccount(account)} color="primary" size="small"
+                        >
+                          <LinkIcon fontSize="small" />
+                        </IconButton>
+                      </Tooltip>
+                    )}
                     {account.account_type === 'brokerage' && (
                       <Tooltip title={t('tooltips.manageAssets')}>
                         <IconButton
@@ -3706,6 +3720,18 @@ export default function AccountsModal({ isOpen, onClose, openRequest }: Accounts
         </DialogContent>
       </Dialog>
       {/* Investment Account Details Modal */}
+      {mergingRealEstateAccount && (
+        <RealEstateAccountMergeDialog
+          account={mergingRealEstateAccount} accounts={investmentAccounts}
+          onClose={() => setMergingRealEstateAccount(null)}
+          onMerged={() => {
+            setMergingRealEstateAccount(null);
+            void fetchInvestmentAccounts();
+            window.dispatchEvent(new CustomEvent('dataRefresh'));
+            showNotification(t('realEstateMerge.success'), 'success');
+          }}
+        />
+      )}
       <Dialog
         open={Boolean(editingInvestmentAccount)}
         onClose={closeInvestmentAccountEditor}

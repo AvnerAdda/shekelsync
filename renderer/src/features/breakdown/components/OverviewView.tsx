@@ -67,8 +67,11 @@ const OverviewView: React.FC<OverviewViewProps> = ({
   const timelineStrings = strings.timeline;
   const isSubcategoryLevel = currentLevel?.type === 'subcategory';
   const totalAmount = React.useMemo(() => data.reduce((sum, item) => sum + item.value, 0), [data]);
+  // Slice sizes need magnitudes, while totals and tooltips retain refund signs.
+  const pieData = React.useMemo(() => data.map(item => ({ ...item, chartValue: Math.abs(item.value) })), [data]);
+  const pieTotal = React.useMemo(() => pieData.reduce((sum, item) => sum + item.chartValue, 0), [pieData]);
   const headerTitle = resolveOverviewHeaderTitle(currentLevel, chartTitle, parentTitle, subcategoryTitle);
-  const renderPieLabel = ({ value }: PieLabelRenderProps) => formatOverviewPieLabel(value as number | undefined, totalAmount);
+  const renderPieLabel = ({ value }: PieLabelRenderProps) => formatOverviewPieLabel(value as number | undefined, pieTotal);
 
   return (
     <Fade in={!isZooming} timeout={300}>
@@ -82,8 +85,8 @@ const OverviewView: React.FC<OverviewViewProps> = ({
               <ResponsiveContainer width="100%" height={300}>
                 <PieChart>
                   <Pie
-                    data={data as any}
-                    dataKey="value"
+                    data={pieData as any}
+                    dataKey="chartValue"
                     nameKey="name"
                     cx="50%"
                     cy="50%"
@@ -119,7 +122,7 @@ const OverviewView: React.FC<OverviewViewProps> = ({
                     ))}
                   </Pie>
                   <Tooltip
-                    formatter={(value) => formatCurrencyValue(typeof value === 'number' ? value : Number(value ?? 0))}
+                    formatter={(value, _name, item) => formatCurrencyValue(item.payload?.value ?? Number(value ?? 0))}
                     contentStyle={{
                       backgroundColor: alpha(theme.palette.background.paper, 0.8),
                       backdropFilter: 'blur(10px)',
@@ -184,7 +187,7 @@ const OverviewView: React.FC<OverviewViewProps> = ({
         <Grid size={{ xs: 12, md: 6 }}>
           <Box sx={{ maxHeight: 400, overflowY: 'auto', pr: 1 }}>
             {data.map((item, index) => {
-              const percentage = totalAmount ? ((item.value / totalAmount) * 100).toFixed(1) : '0.0';
+              const percentage = pieTotal ? ((Math.abs(item.value) / pieTotal) * 100).toFixed(1) : '0.0';
               const delta = computeOverviewDelta(item.value, item.previousValue);
               
               let counts;

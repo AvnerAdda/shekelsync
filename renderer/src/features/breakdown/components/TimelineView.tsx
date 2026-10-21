@@ -248,7 +248,9 @@ const TimelineView: React.FC<TimelineViewProps> = ({
       if (!Number.isFinite(txPrice)) {
         continue;
       }
-      const amount = categoryType === 'income' ? txPrice : Math.abs(txPrice);
+      const amount = categoryType === 'expense'
+        ? -txPrice
+        : categoryType === 'income' ? txPrice : Math.abs(txPrice);
       const seriesDelta = deltaBySeries.get(series.key);
       if (!seriesDelta) {
         continue;
@@ -272,10 +274,10 @@ const TimelineView: React.FC<TimelineViewProps> = ({
         row[`${series.key}_cumulative`] = nextTotal;
         dayTotal += dayDelta;
 
-        if (timelineMode === 'simple' && dayDelta > 0) {
+        if (timelineMode === 'simple' && dayDelta !== 0) {
           hasAnyValue = true;
         }
-        if (timelineMode === 'cumulativeCategory' && nextTotal > 0) {
+        if (timelineMode === 'cumulativeCategory' && nextTotal !== 0) {
           hasAnyValue = true;
         }
       });
@@ -283,7 +285,7 @@ const TimelineView: React.FC<TimelineViewProps> = ({
       totalRunning += dayTotal;
       row.total_simple = dayTotal;
       row.total_cumulative = totalRunning;
-      if (timelineMode === 'cumulative' && totalRunning > 0) {
+      if (timelineMode === 'cumulative' && totalRunning !== 0) {
         hasAnyValue = true;
       }
 
@@ -306,8 +308,8 @@ const TimelineView: React.FC<TimelineViewProps> = ({
   const outflowDataKey = useCumulativeFallback ? 'cumulativeOutflow' : 'outflow';
   const drillDataKeySuffix = timelineMode === 'cumulativeCategory' ? '_cumulative' : '_simple';
 
-  const hasInflow = !drillChart && fallbackChartData.some((entry) => Number(entry[inflowDataKey as keyof typeof entry] ?? 0) > 0);
-  const hasOutflow = !drillChart && fallbackChartData.some((entry) => Number(entry[outflowDataKey as keyof typeof entry] ?? 0) > 0);
+  const hasInflow = !drillChart && fallbackChartData.some((entry) => Number(entry[inflowDataKey as keyof typeof entry] ?? 0) !== 0);
+  const hasOutflow = !drillChart && fallbackChartData.some((entry) => Number(entry[outflowDataKey as keyof typeof entry] ?? 0) !== 0);
   const shouldFallbackToTotal = !hasInflow && !hasOutflow;
 
   const formatXAxisLabel = React.useCallback((value: string | number) => {
@@ -635,7 +637,7 @@ const TimelineView: React.FC<TimelineViewProps> = ({
                           fontWeight: "bold"
                         }}
                       >
-                        {formatCurrencyValue(Math.abs(txn.price))}
+                        {formatCurrencyValue(categoryType === 'expense' ? -txn.price : Math.abs(txn.price))}
                       </Typography>
                     </ListItem>
                     {index < selectedTransactions.length - 1 && <Divider />}

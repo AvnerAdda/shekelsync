@@ -1,4 +1,4 @@
-import EditTransactionCategoryButton from '@renderer/shared/components/EditTransactionCategoryButton';
+import TransactionActions from '@renderer/shared/components/TransactionActions';
 import React, { useEffect, useMemo, useState } from 'react';
 import {
   Alert,
@@ -122,7 +122,11 @@ const SpendingCategoryTransactionsModal: React.FC<Props> = ({
       onDataChanged();
     };
     window.addEventListener('transactionCategoryUpdated', refresh);
-    return () => window.removeEventListener('transactionCategoryUpdated', refresh);
+    window.addEventListener('transactionDeleted', refresh);
+    return () => {
+      window.removeEventListener('transactionCategoryUpdated', refresh);
+      window.removeEventListener('transactionDeleted', refresh);
+    };
   });
 
   const categoryGroups = useMemo<CategoryGroup[]>(() => {
@@ -331,7 +335,7 @@ const SpendingCategoryTransactionsModal: React.FC<Props> = ({
                               }}>
                                 {formatCurrency(incomeBasis ? transaction.price : Math.abs(transaction.price), { absolute: !incomeBasis, maximumFractionDigits: 0 })}
                               </Typography>
-                              <EditTransactionCategoryButton transaction={transaction} />
+                              <TransactionActions transaction={transaction} />
                             </Box>
                           }
                         >

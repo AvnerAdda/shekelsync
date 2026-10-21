@@ -69,9 +69,9 @@ const useBreakdownDrilldown = ({
         color: item.color,
         icon: item.icon,
         description: item.description,
-        value: Math.abs(item.total),
+        value: item.total,
         count: item.count,
-        previousValue: item.previousTotal ? Math.abs(item.previousTotal) : undefined,
+        previousValue: item.previousTotal,
         history: item.history,
         subcategories: item.subcategories,
       }));
@@ -89,7 +89,7 @@ const useBreakdownDrilldown = ({
         color: sub.color,
         icon: sub.icon,
         description: sub.description,
-        value: Math.abs(sub.total),
+        value: sub.total,
         count: sub.count,
       }));
     }

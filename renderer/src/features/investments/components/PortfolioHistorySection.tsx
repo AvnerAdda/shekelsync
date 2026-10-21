@@ -1,4 +1,4 @@
-import EditTransactionCategoryButton from '@renderer/shared/components/EditTransactionCategoryButton';
+import TransactionActions from '@renderer/shared/components/TransactionActions';
 import React, { useEffect, useState } from 'react';
 import {
   Box,
@@ -320,7 +320,7 @@ const PortfolioHistorySection: React.FC<PortfolioHistorySectionProps> = ({
                             size="small"
                             variant="outlined"
                           />
-                          <EditTransactionCategoryButton transaction={txn} />
+                          <TransactionActions transaction={txn} />
                         </TableCell>
                         <TableCell align="right">
                           <Typography

@@ -12,6 +12,31 @@ Release binaries are published at
 
 ## [Unreleased]
 
+## [0.2.2] - 2026-10-21
+
+### Added
+- Edit transaction categories and delete individual transactions with a confirmation
+  dialog from Activity, search, forecasts, and spending breakdowns.
+- Merge duplicate real-estate accounts in the same currency while preserving
+  linked transactions, valuation history, and property details.
+- Add forecast replay tooling, adaptive expense estimates, recurring bill detection,
+  and prediction intervals, with documented retrospective evaluations.
+
+### Fixed
+- Align forecast actuals and budget comparisons with calendar-month boundaries,
+  account for income already received, and avoid repeating overdue income.
+- Include refunds as signed amounts in spending breakdowns, include transactions
+  on the final day of a period, and preserve distinct transactions across vendors.
+- Match bank credentials to the correct investment accounts and improve balance
+  rollforwards, historical valuations, and real-estate balance-sheet calculations.
+- Keep planning automation and dashboard insights consistent with updated forecasts.
+
+### Changed
+- Simplify the cash-flow outlook and clarify estimated payment timing and forecast
+  uncertainty, with updated English, French, and Hebrew translations.
+- Update application dependencies and development tooling.
+- Keep the existing database schema; no migration is required for this release.
+
 ## [0.2.1] - 2026-09-24
 
 ### Security

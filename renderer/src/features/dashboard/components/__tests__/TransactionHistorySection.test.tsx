@@ -47,8 +47,13 @@ vi.mock('recharts', async () => {
         data-dash={strokeDasharray}
       />
     ),
-    Area: ({ dataKey }: { dataKey: string }) => (
-      <div data-testid="area-series" data-key={dataKey} />
+    Area: ({ dataKey, stroke, strokeOpacity, fillOpacity, legendType, isAnimationActive }: {
+      dataKey: string; stroke?: string; strokeOpacity?: number; fillOpacity?: number;
+      legendType?: string; isAnimationActive?: boolean;
+    }) => (
+      <div data-testid="area-series" data-key={dataKey} data-stroke={stroke}
+        data-stroke-opacity={strokeOpacity} data-fill-opacity={fillOpacity}
+        data-legend-type={legendType} data-animated={isAnimationActive} />
     ),
     Line: ({ dataKey, stroke, name, strokeDasharray }: {
       dataKey: string; stroke: string; name: string; strokeDasharray?: string;
@@ -211,6 +216,56 @@ describe('TransactionHistorySection income, expense, and investment chart', () =
     const rows = getChartData();
     expect(rows.map((row: any) => row.forecastAfterInvesting)).toEqual([800, 800, -400, undefined, undefined]);
     expect(rows.map((row: any) => row.forecastCumulative)).toEqual([800, 800, 800, 900, 1000]);
+  });
+
+  it.each([false, true])('uses cumulative quantiles and shades their actual range (operating: %s)', operating => {
+    renderHistory({
+      data: { history: [{ date: '2026-09-03', income: 1000, expenses: 250, operatingIncome: 1000,
+        operatingExpenses: 200, pairedCardRepayments: operating ? 50 : 0 }] },
+      forecastData: {
+        dailyForecasts: [{ date: '2026-09-04', cashFlow: -100, operatingCashFlow: -80 }],
+        predictionIntervals: { level: 0.8, daily: [{ date: '2026-09-04',
+          cumulativeCashFlow: { p10: -300, p50: -80, p90: 200 },
+          cumulativeOperatingCashFlow: { p10: -200, p50: -60, p90: 250 },
+        }] },
+        scenarios: { p10: { daily: [{ date: '2026-09-04', cashFlow: 9999 }] } },
+      },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'tabs.netPosition' }));
+    const start = operating ? 800 : 750;
+    expect(getChartData()[0].forecastRange).toEqual([start, start]);
+    expect(getChartData()[1]).toMatchObject(operating
+      ? { p10Cumulative: 600, p50Cumulative: 740, p90Cumulative: 1050, forecastRange: [600, 1050] }
+      : { p10Cumulative: 450, p50Cumulative: 670, p90Cumulative: 950, forecastRange: [450, 950] });
+    const area = screen.getAllByTestId('area-series').find(area => area.getAttribute('data-key') === 'forecastRange')!;
+    expect(area).toBeTruthy();
+    expect(area).not.toHaveAttribute('data-stroke', 'transparent');
+    expect(area).toHaveAttribute('data-stroke-opacity', '0');
+    expect(area).toHaveAttribute('data-fill-opacity', '0.16');
+    expect(area).toHaveAttribute('data-legend-type', 'rect');
+    expect(area).toHaveAttribute('data-animated', 'false');
+  });
+
+  it('does not imply an uncertainty band for legacy scenario-only responses', () => {
+    renderHistory({ data: { history: [{ date: '2026-09-03', income: 1000, expenses: 200 }] }, forecastData });
+    fireEvent.click(screen.getByRole('button', { name: 'tabs.netPosition' }));
+    expect(getChartData().some((row: any) => row.forecastRange)).toBe(false);
+    expect(screen.getAllByTestId('area-series').some(area => area.getAttribute('data-key') === 'forecastRange')).toBe(false);
+  });
+
+  it('distinguishes everyday spending from scheduled and inferred payments', () => {
+    renderHistory({ data: { history: [{ date: '2026-09-03', income: 1, expenses: 0 }] },
+      forecastData: { dailyForecasts: [{ date: '2026-09-04', expenses: 50, income: 1000,
+        predictions: [
+          { category: 'Groceries', categoryType: 'expense', timingBasis: 'daily_average', amount: 200, probability: 0.25, probabilityWeightedAmount: 50 },
+          { category: 'Salary', categoryType: 'income', timingBasis: 'scheduled', amount: 1000, probability: 1, probabilityWeightedAmount: 1000 },
+        ],
+      }] }, hoveredDate: '2026-09-04', formatCurrency: formatForecastCurrency,
+    });
+    expect(screen.getByText('Typical daily spending')).toBeInTheDocument();
+    expect(screen.getByText('Scheduled payment')).toBeInTheDocument();
+    expect(screen.getByText('Daily estimate: ₪50.00')).toBeInTheDocument();
+    expect(screen.queryByText('100% probability')).not.toBeInTheDocument();
   });
 
   it('omits the additional line when investment forecasts are unavailable', () => {
@@ -446,7 +501,7 @@ describe('TransactionHistorySection income, expense, and investment chart', () =
     const merchantDetails = screen.getByText('שוק הרצל בת ים').parentElement!;
     expect(within(merchantDetails).getByText('הוצאות > מזון')).toBeInTheDocument();
     expect(within(merchantDetails).getByText('isracard')).toBeInTheDocument();
-    expect(within(merchantDetails).getByText('80% probability')).toBeInTheDocument();
+    expect(within(merchantDetails).getByText('Estimated date')).toBeInTheDocument();
     const salaryDetails = screen.getByText('בנק לאומי משכורת').parentElement!;
     expect(within(salaryDetails).getByText('הכנסות > משכורת')).toBeInTheDocument();
     expect(within(salaryDetails).getByText('discount')).toBeInTheDocument();
@@ -463,7 +518,7 @@ describe('TransactionHistorySection income, expense, and investment chart', () =
       },
     });
     const details = screen.getByText('Unmapped prediction').parentElement!;
-    expect(within(details).getByText('50% probability')).toBeInTheDocument();
+    expect(within(details).getByText('Estimated date')).toBeInTheDocument();
     expect(within(details).queryByText('•')).not.toBeInTheDocument();
     expect(within(details).queryByText('Unknown institution')).not.toBeInTheDocument();
     expect(within(details).queryByText('00:00')).not.toBeInTheDocument();
@@ -689,7 +744,7 @@ describe('TransactionHistorySection income, expense, and investment chart', () =
       expect(within(expenses).getByText(amount)).toBeInTheDocument();
     }
     expect(within(expenses).getByText('Estimated transaction: ₪204.00')).toBeInTheDocument();
-    expect(within(expenses).getByText('97% probability')).toBeInTheDocument();
+    expect(within(expenses).getAllByText('Estimated date')).toHaveLength(6);
     expect(within(expenses).getByText('₪1,439.00')).toBeInTheDocument();
     expect(within(expenses).queryByText('Other forecast contributions')).not.toBeInTheDocument();
     expect(within(screen.getByTestId('chart-tooltip-2026-09-24'))
@@ -703,7 +758,7 @@ describe('TransactionHistorySection income, expense, and investment chart', () =
         predictions: [
           { transactionName: 'Groceries', categoryType: 'expense', amount: 200, probability: 0.5, probabilityWeightedAmount: 80 },
           { transactionName: 'Suppressed payment', categoryType: 'expense', amount: 999, probability: 1, probabilityWeightedAmount: 0 },
-          { transactionName: 'Salary', categoryType: 'income', amount: 1000, probability: 0.5, probabilityWeightedAmount: 500 },
+          { transactionName: 'Salary', categoryType: 'income', amount: 1000, probability: 0.5, probabilityWeightedAmount: 500, awaitingReceipt: true },
           { transactionName: 'Investment withdrawal', categoryType: 'investment', amount: -120, probability: 0.5, probabilityWeightedAmount: -60 },
         ],
       }] },
@@ -722,6 +777,7 @@ describe('TransactionHistorySection income, expense, and investment chart', () =
 
     const income = screen.getByRole('region', { name: 'legend.income' });
     expect(within(income).getByText('Salary')).toBeInTheDocument();
+    expect(within(income).getByText('analysisPage.modals.future.incomeSources.awaiting')).toBeInTheDocument();
     expect(within(income).getAllByText('₪500.00')).toHaveLength(2);
     expect(within(income).getByText('Estimated transaction: ₪1,000.00')).toBeInTheDocument();
 

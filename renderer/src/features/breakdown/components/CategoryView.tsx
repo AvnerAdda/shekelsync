@@ -19,47 +19,53 @@ function convertSubcategory(sub: Subcategory, parentColor: string): SunburstData
   const hasChildren = sub.subcategories && sub.subcategories.length > 0;
 
   if (hasChildren) {
+    const children = sub.subcategories!.map(child => convertSubcategory(child, subColor));
     return {
       name: sub.name,
       fill: subColor,
-      value: Math.abs(sub.total),
-      children: sub.subcategories!.map(child => convertSubcategory(child, subColor)),
+      value: children.reduce((sum, child) => sum + (child.value ?? 0), 0),
+      displayValue: sub.total,
+      children,
     };
   } else {
     return {
       name: sub.name,
       fill: subColor,
       value: Math.abs(sub.total),
+      displayValue: sub.total,
     };
   }
 }
 
 function toSunburstData(data: OverviewDataItem[]): SunburstDataNode {
-  const totalValue = data.reduce((sum, item) => sum + item.value, 0);
+  const children = data.map((item, index) => {
+    const defaultColor = PIE_COLORS[index % PIE_COLORS.length];
+    const itemColor = item.color || defaultColor;
+    const hasSubcategories = item.subcategories && item.subcategories.length > 0;
 
+    if (hasSubcategories) {
+      const subcategories = item.subcategories!.map(sub => convertSubcategory(sub, itemColor));
+      return {
+        name: item.name,
+        fill: itemColor,
+        value: subcategories.reduce((sum, sub) => sum + (sub.value ?? 0), 0),
+        displayValue: item.value,
+        children: subcategories,
+      };
+    } else {
+      return {
+        name: item.name,
+        fill: itemColor,
+        value: Math.abs(item.value),
+        displayValue: item.value,
+      };
+    }
+  });
   return {
     name: 'Total',
-    value: totalValue,
-    children: data.map((item, index) => {
-      const defaultColor = PIE_COLORS[index % PIE_COLORS.length];
-      const itemColor = item.color || defaultColor;
-      const hasSubcategories = item.subcategories && item.subcategories.length > 0;
-
-      if (hasSubcategories) {
-        return {
-          name: item.name,
-          fill: itemColor,
-          value: item.value,
-          children: item.subcategories!.map(sub => convertSubcategory(sub, itemColor)),
-        };
-      } else {
-        return {
-          name: item.name,
-          fill: itemColor,
-          value: item.value,
-        };
-      }
-    }),
+    value: children.reduce((sum, child) => sum + child.value, 0),
+    displayValue: data.reduce((sum, item) => sum + item.value, 0),
+    children,
   };
 }
 
@@ -77,11 +83,12 @@ const CategoryView: React.FC<CategoryViewProps> = ({ data, categoryType, formatC
 
   const valueLabel = getValueLabel();
   const totalValue = data.reduce((sum, item) => sum + item.value, 0);
+  const pieData = useMemo(() => data.map(item => ({ ...item, chartValue: Math.abs(item.value) })), [data]);
 
   const sunburstData = useMemo(() => toSunburstData(data), [data]);
 
   const sunburstIcons = useMemo(() => {
-    if (totalValue === 0) return [];
+    if (!sunburstData.value) return [];
 
     const INNER_RADIUS = 50;
     const OUTER_RADIUS = 180;
@@ -93,7 +100,7 @@ const CategoryView: React.FC<CategoryViewProps> = ({ data, categoryType, formatC
 
     let currentAngle = 0; // in radians
     return data.map((item, index) => {
-      const fraction = item.value / totalValue;
+      const fraction = (sunburstData.children?.[index]?.value ?? 0) / sunburstData.value!;
       const angleSpan = fraction * 360;
       const startAngle = currentAngle;
       currentAngle += angleSpan;
@@ -114,7 +121,7 @@ const CategoryView: React.FC<CategoryViewProps> = ({ data, categoryType, formatC
         size: ICON_SIZE,
       };
     }).filter(Boolean) as { key: string; x: number; y: number; icon: string | null | undefined; color: string; size: number }[];
-  }, [data, totalValue]);
+  }, [data, sunburstData]);
 
   const handleChartTypeChange = (_event: React.MouseEvent<HTMLElement>, newType: ChartDisplayMode | null) => {
     if (newType !== null) {
@@ -148,13 +155,13 @@ const CategoryView: React.FC<CategoryViewProps> = ({ data, categoryType, formatC
             <ResponsiveContainer width="100%" height={400}>
               <PieChart>
                 <Pie
-                  data={data as any}
+                  data={pieData as any}
                   cx="50%"
                   cy="50%"
                   innerRadius={120}
                   outerRadius={160}
                   paddingAngle={2}
-                  dataKey="value"
+                  dataKey="chartValue"
                   stroke="none"
                 >
                   {data.map((entry, index) => (
@@ -165,7 +172,7 @@ const CategoryView: React.FC<CategoryViewProps> = ({ data, categoryType, formatC
                   ))}
                 </Pie>
                 <RechartsTooltip
-                  formatter={(value) => value != null ? formatCurrencyValue(Number(value)) : ''}
+                  formatter={(value, _name, item) => formatCurrencyValue(item.payload?.value ?? Number(value ?? 0))}
                   contentStyle={{
                     backgroundColor: alpha(theme.palette.background.paper, 0.8),
                     backdropFilter: 'blur(10px)',
@@ -224,7 +231,7 @@ const CategoryView: React.FC<CategoryViewProps> = ({ data, categoryType, formatC
                 textOptions={{ fill: 'transparent' }}
               >
                 <RechartsTooltip
-                  formatter={(value) => value != null ? formatCurrencyValue(Number(value)) : ''}
+                  formatter={(value, _name, item) => formatCurrencyValue(item.payload?.displayValue ?? Number(value ?? 0))}
                   contentStyle={{
                     backgroundColor: alpha(theme.palette.background.paper, 0.9),
                     backdropFilter: 'blur(10px)',

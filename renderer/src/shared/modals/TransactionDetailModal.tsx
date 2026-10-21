@@ -1,4 +1,6 @@
-import EditTransactionCategoryButton, { CATEGORY_UPDATED_EVENT } from '@renderer/shared/components/EditTransactionCategoryButton';
+import TransactionActions from '../components/TransactionActions';
+import { TRANSACTION_DELETED_EVENT } from '../components/DeleteTransactionButton';
+import { CATEGORY_UPDATED_EVENT } from '@renderer/shared/components/EditTransactionCategoryButton';
 import React, { useState, useEffect, useCallback } from 'react';
 import {
   Dialog,
@@ -88,6 +90,16 @@ const TransactionDetailModal: React.FC<TransactionDetailModalProps> = ({
     window.addEventListener(CATEGORY_UPDATED_EVENT, updateCategory);
     return () => window.removeEventListener(CATEGORY_UPDATED_EVENT, updateCategory);
   }, [transaction?.identifier, transaction?.vendor]);
+
+  useEffect(() => {
+    if (!open) return;
+    const deleted = (event: Event) => {
+      const reference = (event as CustomEvent<{ identifier: string; vendor: string }>).detail;
+      if (reference?.identifier === transaction?.identifier && reference?.vendor === transaction?.vendor) onClose();
+    };
+    window.addEventListener(TRANSACTION_DELETED_EVENT, deleted);
+    return () => window.removeEventListener(TRANSACTION_DELETED_EVENT, deleted);
+  }, [open, transaction?.identifier, transaction?.vendor, onClose]);
 
   const fetchAllTags = async () => {
     setLoading(true);
@@ -255,7 +267,7 @@ const TransactionDetailModal: React.FC<TransactionDetailModalProps> = ({
                 {formatDate(transaction.date)}
               </Typography>
             </Box>
-            <EditTransactionCategoryButton transaction={transaction} />
+            <TransactionActions transaction={transaction} />
             {categoryLabel && (
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                 <CategoryIcon sx={{ fontSize: 18, color: 'text.secondary' }} />

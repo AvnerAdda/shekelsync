@@ -5,6 +5,14 @@
     "cancel": "Annuler",
     "delete": "Supprimer"
   },
+  "transactionDelete": {
+    "title": "Supprimer la transaction",
+    "message": "Cette action supprime uniquement cette transaction de vos données. Elle est irréversible.",
+    "loadError": "Impossible de charger la transaction. Veuillez réessayer.",
+    "deleteError": "Impossible de supprimer la transaction. Veuillez réessayer.",
+    "retry": "Réessayer",
+    "deleting": "Suppression…"
+  },
   "transactionCategoryEditor": {
     "title": "Modifier la catégorie",
     "category": "Catégorie",
@@ -103,8 +111,8 @@
     "updatedAt": "Actualisé à {{time}}",
     "loading": "Chargement de la revue financière",
     "forecastAccuracy": {
-      "collecting": "Prévision en apprentissage · {{count}} jours",
-      "provisional": "Prévision provisoire · erreur de {{mape}} %",
+      "collecting": "Historique de précision · {{count}} jours",
+      "provisional": "Erreur de prévision · {{mape}} % · {{count}} jours",
       "established": "Prévision mesurée · erreur de {{mape}} %",
       "details": "{{samples}} prévisions réalisées · erreur moyenne des dépenses {{mae}} · couverture de l’incertitude {{coverage}}"
     },
@@ -1130,9 +1138,13 @@
       "forecastData": "Prévision",
       "next30Days": "Prévision 30 jours",
       "basedOnPatterns": "Basé sur les habitudes de dépenses historiques",
-      "breakdownExplanation": "Chaque montant ci-dessous représente sa contribution au total du graphique, pondérée par sa probabilité. Les montants estimés des transactions sont affichés séparément.",
+      "breakdownExplanation": "Chaque montant ci-dessous contribue au total du graphique. Les dates de paiement sont estimées ; les dépenses courantes sont présentées sous forme de moyenne quotidienne.",
       "contribution": "Inclus dans la prévision",
       "estimatedAmount": "Transaction estimée : {{amount}}",
+      "estimatedDate": "Date estimée",
+      "scheduledPayment": "Paiement prévu",
+      "dailyAverage": "Dépenses quotidiennes habituelles",
+      "dailyEstimate": "Estimation quotidienne : {{amount}}",
       "probability": "{{percent}} % de probabilité",
       "remainingForecast": "Autres contributions à la prévision",
       "roundingAdjustment": "Arrondi",
@@ -1140,7 +1152,7 @@
       "scenarioSummary": "Projection de fin de mois basée sur {{simulations}} simulations Monte Carlo",
       "daysRemaining": "{{count}} jours restants dans le mois",
       "actualNet": "Position nette réelle",
-      "confidenceBand": "Bande de confiance (P10-P90)",
+      "confidenceBand": "Fourchette estimée (P10–P90)",
       "bestCase": "Meilleur scénario",
       "baseCase": "Scénario de base",
       "worstCase": "Pire scénario"
@@ -1432,15 +1444,15 @@
         "na": "N/D"
       },
       "future": {
-        "title": "Votre avenir financier",
-        "trajectory": "Trajectoire d'épargne sur 6 mois",
+        "title": "Prévisions de trésorerie",
+        "trajectory": "Variation prévue sur six mois",
         "endOfMonth": "Fin du mois",
         "monthlySavings": "Épargne mensuelle",
         "dailyVelocity": "Vélocité quotidienne",
         "velocityValue": "{{value}}/jour",
-        "baseCase": "Scénario de base",
-        "bestCase": "Solde optimiste",
-        "worstCase": "Solde pessimiste",
+        "baseCase": "Solde final prévu",
+        "bestCase": "Estimation haute du solde final",
+        "worstCase": "Estimation basse du solde final",
         "na": "N/D"
       },
       "reality": {
@@ -1575,20 +1587,61 @@
         "noData": "Aucune donnée disponible"
       },
       "future": {
-        "title": "Votre avenir personnalisé",
+        "title": "Perspectives de trésorerie",
         "scenarios": {
-          "bad": "Pessimiste",
-          "normal": "Base",
-          "good": "Optimiste",
+          "bad": "Estimation basse",
+          "normal": "Prévision",
+          "good": "Estimation haute",
+          "lowerDescription": "Borne basse de la position nette estimée",
+          "expectedDescription": "Revenus prévus moins les dépenses",
+          "upperDescription": "Borne haute de la position nette estimée",
           "endOfPeriod": "Fin de la période de prévision"
         },
         "netPosition": {
-          "title": "Position nette avec prévision",
-          "subtitle": "Données historiques + prévision sur 6 mois",
+          "title": "Position nette estimée",
+          "subtitle": "Activité passée et flux de trésorerie futurs estimés",
           "historical": "Historique",
-          "forecast": "Prévision"
+          "forecast": "Prévision",
+          "range": "Plage estimée"
         },
-        "noData": "Aucune donnée disponible"
+        "noData": "Aucune donnée disponible",
+        "subtitle": "Revenus, dépenses et position nette estimés pour les six prochains mois",
+        "refresh": "Actualiser les perspectives",
+        "close": "Fermer les perspectives",
+        "retry": "Réessayer",
+        "fetchFailed": "Impossible de charger vos perspectives",
+        "unavailable": "Indisponible",
+        "startingPosition": "Position nette initiale",
+        "closingPosition": "Position nette finale estimée",
+        "cashFlowChange": "Variation estimée",
+        "income": "Revenus",
+        "expenses": "Dépenses",
+        "through": "Jusqu’au {{date}}",
+        "missingBalance": "Aucun solde bancaire actuel n’est disponible. Les valeurs montrent les variations de trésorerie à partir de zéro.",
+        "incompleteBalance": "Le solde ou la devise de certains comptes bancaires manque. En attendant les soldes complets, les valeurs montrent les variations de trésorerie à partir de zéro.",
+        "missingExchangeRate": "Un taux de change récent manque pour un compte bancaire. Actualisez les taux pour afficher les soldes en shekels. Les valeurs montrent actuellement les variations de trésorerie à partir de zéro.",
+        "rangeNote": "La plage ombrée reflète la variation des simulations. Les montants et dates réels peuvent se situer hors de cette plage.",
+        "assumptionsNote": "Basé sur l’activité enregistrée avant les transferts vers les investissements. Vos échéanciers et dépenses prévus restent prioritaires.",
+        "reviewAssumptions": "Vérifier les hypothèses",
+        "drivers": {
+          "title": "Principales hypothèses de dépenses",
+          "subtitle": "Catégories les plus importantes sur la période de prévision",
+          "category": "Catégorie",
+          "basis": "Basé sur",
+          "amount": "Dépenses prévues",
+          "scheduled": "Factures régulières",
+          "typical": "Dépenses habituelles",
+          "occasional": "Provision pour dépenses occasionnelles"
+        },
+        "incomeSources": {
+          "title": "Sources de revenus prévues",
+          "subtitle": "Revenus inclus sur cette période de prévision",
+          "source": "Source",
+          "next": "Prochain versement estimé",
+          "amount": "Revenus prévus",
+          "awaiting": "En attente de réception",
+          "awaitingNote": "Un versement récemment dû n’a pas encore été enregistré. Il reste inclus dans ces prévisions comme revenu attendu, pas comme argent déjà reçu."
+        }
       },
       "makeItReal": {
         "title": "Concrétiser - Le temps c'est de l'argent",
@@ -3817,6 +3870,23 @@
       "notes": "Notes (optionnel)",
       "notesPlaceholder": "Toutes notes supplémentaires sur cette mise à jour...",
       "addUpdate": "Ajouter la mise à jour"
+    },
+    "realEstateMerge": {
+      "title": "Fusionner les comptes immobiliers",
+      "description": "Regroupez les entrées du même bien dans un seul compte. Les valeurs et leur historique sont combinés, les transactions liées sont transférées et les autres entrées sont archivées.",
+      "keepAccount": "Compte à conserver",
+      "keepHelper": "Conservez le compte original avec la fiche du bien. Les comptes doivent utiliser la même devise.",
+      "selectAccounts": "Entrées pour ce même bien",
+      "combinedValue": "Valeur actuelle combinée : {{value}}",
+      "missingValue": "Certaines entrées n’ont pas de valeur actuelle. Les transactions liées seront incluses dans l’historique combiné.",
+      "notSet": "Valeur non définie",
+      "cancel": "Annuler",
+      "merge": "Fusionner les comptes",
+      "merging": "Fusion en cours...",
+      "failed": "Échec de la fusion des comptes immobiliers",
+      "success": "Comptes immobiliers fusionnés",
+      "linkHint": "Pour le même bien, liez ces paiements au compte existant.",
+      "newAccount": "Nouveau bien"
     },
     "investmentEdit": {
       "title": "Modifier le compte d’investissement",

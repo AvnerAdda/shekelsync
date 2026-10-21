@@ -429,6 +429,9 @@ module.exports = {
   createAccount,
   updateAccount,
   deactivateAccount,
+  mergeRealEstateAccounts(payload) {
+    return require('./merge-real-estate-accounts.js').mergeRealEstateAccounts(database, payload);
+  },
   __setDatabase(mockDatabase) {
     database = mockDatabase || actualDatabase;
   },
