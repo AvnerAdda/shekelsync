@@ -595,21 +595,25 @@ const AnalysisPageNew: React.FC = () => {
     }
   }, [shouldBlockPageData, t]);
 
-  const fetchFutureData = useCallback(async () => {
+  const futureRequestSequence = useRef(0);
+  const fetchFutureData = useCallback(async (force = false) => {
     if (shouldBlockPageData) return;
+    const sequence = ++futureRequestSequence.current;
     setFutureLoading(true);
     setFutureError(null);
     try {
-      const response = await apiClient.get('/api/analytics/forecast-extended');
+      const response = await apiClient.get('/api/analytics/forecast-extended', force
+        ? { params: { noCache: 'true' }, cacheMode: 'reload' } : {});
       if (!response.ok) {
         throw new Error(t('errors.fetchFailed'));
       }
-      setFutureData(response.data);
+      if (sequence === futureRequestSequence.current) setFutureData(response.data);
     } catch (err) {
+      if (sequence !== futureRequestSequence.current) return;
       setFutureError(err instanceof Error ? err.message : t('errors.generic'));
       console.error('Error fetching extended forecast analytics:', err);
     } finally {
-      setFutureLoading(false);
+      if (sequence === futureRequestSequence.current) setFutureLoading(false);
     }
   }, [shouldBlockPageData, t]);
 
@@ -807,7 +811,7 @@ const AnalysisPageNew: React.FC = () => {
       fetchBehavioralData();
     }
     if (fetchOnceRef.current.future) {
-      fetchFutureData();
+      fetchFutureData(true);
     }
     if (fetchOnceRef.current.timeValue) {
       fetchTimeValueData();
@@ -879,18 +883,24 @@ const AnalysisPageNew: React.FC = () => {
 
       // Defer the heavier endpoints slightly so the tab becomes interactive faster.
       if (!fetchOnceRef.current.future) {
-        fetchOnceRef.current.future = true;
-        timers.push(setTimeout(() => fetchFutureData(), 250));
+        timers.push(setTimeout(() => {
+          fetchOnceRef.current.future = true;
+          void fetchFutureData();
+        }, 250));
       }
 
       if (!fetchOnceRef.current.timeValue) {
-        fetchOnceRef.current.timeValue = true;
-        timers.push(setTimeout(() => fetchTimeValueData(), 250));
+        timers.push(setTimeout(() => {
+          fetchOnceRef.current.timeValue = true;
+          void fetchTimeValueData();
+        }, 250));
       }
 
       if (!fetchOnceRef.current.snapshot) {
-        fetchOnceRef.current.snapshot = true;
-        timers.push(setTimeout(() => fetchSnapshotProgress(), 150));
+        timers.push(setTimeout(() => {
+          fetchOnceRef.current.snapshot = true;
+          void fetchSnapshotProgress();
+        }, 150));
       }
     }
 
@@ -1689,36 +1699,28 @@ const AnalysisPageNew: React.FC = () => {
   );
 
   const scenarioEndBalances = useMemo(() => {
-    const combined = futureData?.combinedData;
-    if (!combined) {
+    const summaries = futureData?.summaries;
+    if (!summaries || futureData.hasCurrentBalance === false) {
       return { p10: null, p50: null, p90: null };
     }
-    const reversed = [...combined].reverse();
-    const findEnd = (key: 'p10Cumulative' | 'p50Cumulative' | 'p90Cumulative') => {
-      const entry = reversed.find((item) => item[key] !== null && item[key] !== undefined);
-      return entry ? entry[key] : null;
-    };
-
     return {
-      p10: findEnd('p10Cumulative'),
-      p50: findEnd('p50Cumulative'),
-      p90: findEnd('p90Cumulative'),
+      p10: summaries.pessimistic?.endingBalance ?? null,
+      p50: summaries.base?.endingBalance ?? null,
+      p90: summaries.optimistic?.endingBalance ?? null,
     };
   }, [futureData]);
 
   const scenarioNetCash = useMemo(() => ({
-    base: futureData?.summaries?.base?.netCashFlow ?? intelligence?.predictiveAnalytics?.savingsTrajectory6m ?? 0,
-    optimistic: futureData?.summaries?.optimistic?.netCashFlow ?? intelligence?.predictiveAnalytics?.savingsTrajectory6m ?? 0,
-    pessimistic: futureData?.summaries?.pessimistic?.netCashFlow ?? intelligence?.predictiveAnalytics?.savingsTrajectory6m ?? 0,
-  }), [futureData?.summaries, intelligence?.predictiveAnalytics?.savingsTrajectory6m]);
+    base: futureData?.summaries?.base?.netCashFlow ?? null,
+  }), [futureData?.summaries]);
 
   const futureSparklineData = useMemo(() => {
     if (!futureData?.combinedData) return [];
     return futureData.combinedData
-      .filter((item: any) => item.p50Cumulative !== null && item.p50Cumulative !== undefined)
+      .filter((item: any) => Number.isFinite(item.expectedCumulative))
       .map((item: any, idx: number) => ({
         month: idx + 1,
-        value: item.p50Cumulative,
+        value: item.expectedCumulative,
       }));
   }, [futureData]);
 
@@ -2167,9 +2169,9 @@ const AnalysisPageNew: React.FC = () => {
                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                           <Typography
                             variant="h6"
-                            color={scenarioNetCash.base >= 0 ? 'success.main' : 'error.main'}
+                            color={scenarioNetCash.base == null ? 'text.secondary' : scenarioNetCash.base >= 0 ? 'success.main' : 'error.main'}
                           >
-                            {formatCurrencyValue(scenarioNetCash.base, { showSign: true })}
+                            {scenarioNetCash.base == null ? t('dashboard.future.na') : formatCurrencyValue(scenarioNetCash.base, { showSign: true })}
                           </Typography>
                           <Box sx={{ flex: 1, height: 30 }}>
                             <ResponsiveContainer width="100%" height={30} minHeight={30}>
@@ -2177,7 +2179,7 @@ const AnalysisPageNew: React.FC = () => {
                                 <Line
                                   type="monotone"
                                   dataKey="value"
-                                  stroke={scenarioNetCash.base >= 0 ? '#4caf50' : '#f44336'}
+                                  stroke={scenarioNetCash.base == null ? theme.palette.text.secondary : scenarioNetCash.base >= 0 ? '#4caf50' : '#f44336'}
                                   strokeWidth={2}
                                   dot={false}
                                 />
@@ -2207,7 +2209,7 @@ const AnalysisPageNew: React.FC = () => {
                           <Typography
                             variant="h6"
                             sx={{
-                              color: "success.main"
+                              color: "text.secondary"
                             }}
                           >
                             {scenarioEndBalances.p90 !== null && scenarioEndBalances.p90 !== undefined
@@ -2222,7 +2224,7 @@ const AnalysisPageNew: React.FC = () => {
                           <Typography
                             variant="body2"
                             sx={{
-                              color: "error.main",
+                              color: "text.secondary",
                               fontWeight: "bold"
                             }}>
                             {scenarioEndBalances.p10 !== null && scenarioEndBalances.p10 !== undefined

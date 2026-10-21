@@ -126,7 +126,7 @@ const BreakdownPanel: React.FC<BreakdownPanelProps> = ({
 
   const formatCurrencyValue: FormatCurrencyFn = (value, options) =>
     formatCurrency(value, {
-      absolute: true,
+      absolute: false,
       minimumFractionDigits: options?.minimumFractionDigits ?? 0,
       maximumFractionDigits: options?.maximumFractionDigits ?? 0,
     });

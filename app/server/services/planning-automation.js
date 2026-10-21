@@ -29,8 +29,16 @@ const accountKey = (value) => String(value || '').replace(/[^a-zA-Z0-9]/g, '');
 /** Imported processing dates describe the billing cycle, not the purchase date. */
 function detectCardCommitments({ today, banks, cards, transactions, pairings }) {
   if (!cards.length) return { amount: 0, source: 'imported' };
-  if (cards.some((card) => !card.last_scrape_success && !transactions.some((row) => row.vendor === card.vendor))) {
-    return { amount: null, source: 'unavailable' };
+  // A transaction from one login does not establish that another login at the
+  // same provider has synced. Vendors without credentials can still be imported.
+  if (cards.some((card) => {
+    const synced = dateOf(card.last_scrape_success);
+    if (card.credential_id != null || card.last_scrape_success) {
+      return !math.validDate(synced) || synced > today;
+    }
+    return !transactions.some((row) => row.vendor === card.vendor);
+  })) {
+    return { amount: null, source: 'unavailable', reason: 'CARD_DATA_MISSING' };
   }
   if (cards.some((card) => math.validDate(dateOf(card.last_scrape_success))
     && dateOf(card.last_scrape_success) < math.shiftDays(today, -7))) {

@@ -9,6 +9,7 @@ const {
   getInstitutionByVendorCode,
   mapVendorCodeToInstitutionId,
 } = require('../institutions.js');
+const { credentialIdMatchSql } = require('./credential-link.js');
 
 const STANDARD_SNAPSHOT_CONFLICT_TARGET = `
   ON CONFLICT (account_id, as_of_date) WHERE holding_type = 'standard'
@@ -35,9 +36,9 @@ async function getOrCreateBankBalanceAccount(client, credential, accountNumber, 
     `SELECT ia.*
      FROM investment_accounts ia
      WHERE ia.account_type = 'bank_balance'
-       AND ia.notes LIKE $1
+       AND ${credentialIdMatchSql('ia.notes', '$1')}
      LIMIT 1`,
-    [`%credential_id:${credentialId}%`]
+    [credentialId]
   );
 
   if (existing.rows.length > 0) {
@@ -77,12 +78,14 @@ async function getOrCreateBankBalanceAccount(client, credential, accountNumber, 
        FROM investment_accounts ia
        WHERE ia.account_type = 'bank_balance'
          AND ia.institution_id = $1
+         AND COALESCE(ia.notes, '') NOT LIKE '%credential_id:%'
+         AND (ia.account_number IS NULL OR ia.account_number = $2)
        LIMIT 1`,
-      [institution_id]
+      [institution_id, accountNumber || null]
     );
 
     // Only use this match if there's exactly one account for this institution
-    if (existing.rows.length > 0 && existing.rows[0].total_count === '1') {
+    if (existing.rows.length > 0 && Number(existing.rows[0].total_count) === 1) {
       logger?.debug?.(`[Balance Sync] Found single existing account by institution: ${existing.rows[0].id}`);
       // Update notes to include credential_id for future lookups
       await client.query(
@@ -498,12 +501,27 @@ async function forwardFillForCredential(client, credential, logger = console) {
      WHERE account_type = 'bank_balance'
        AND is_active = 1
        AND (
-         notes LIKE $1
-         OR (institution_id IN (
-           SELECT institution_id FROM vendor_credentials WHERE id = $2
-         ))
+         ${credentialIdMatchSql('notes', '$1')}
+         OR (
+           COALESCE(notes, '') NOT LIKE '%credential_id:%'
+           AND EXISTS (
+             SELECT 1 FROM vendor_credentials vc
+             WHERE vc.id = $1
+               AND vc.institution_id = investment_accounts.institution_id
+               AND (
+                 investment_accounts.account_number = vc.bank_account_number
+                 OR (
+                   investment_accounts.account_number IS NULL
+                   AND (SELECT COUNT(*) FROM investment_accounts ia2
+                     WHERE ia2.account_type = 'bank_balance'
+                       AND ia2.is_active = 1
+                       AND ia2.institution_id = vc.institution_id) = 1
+                 )
+               )
+           )
+         )
        )`,
-    [`%credential_id:${credentialId}%`, credentialId]
+    [credentialId]
   );
 
   if (accountsResult.rows.length === 0) {

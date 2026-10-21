@@ -123,10 +123,12 @@ const MoneyReviewPage: React.FC<MoneyReviewPageProps> = ({
     }).format(generatedAt);
   }, [i18n?.language, response.generatedAt]);
   const forecastAccuracy = response.forecastAccuracy;
+  const expenseError = forecastAccuracy?.expenseWape !== undefined
+    ? forecastAccuracy.expenseWape : forecastAccuracy?.expenseMape;
   const forecastAccuracyLabel = forecastAccuracy
     ? t(`forecastAccuracy.${forecastAccuracy.readiness}`, {
       count: forecastAccuracy.observedDays,
-      mape: forecastAccuracy.expenseMape == null ? '—' : Math.round(forecastAccuracy.expenseMape),
+      mape: expenseError == null ? '—' : Math.round(expenseError),
     })
     : null;
   const forecastAccuracyDetails = forecastAccuracy
@@ -228,9 +230,8 @@ const MoneyReviewPage: React.FC<MoneyReviewPageProps> = ({
                   size="small"
                   icon={<QueryStatsIcon />}
                   label={forecastAccuracyLabel}
-                  color={forecastAccuracy.readiness === 'established'
-                    ? (forecastAccuracy.expenseMape != null && forecastAccuracy.expenseMape > 35 ? 'warning' : 'success')
-                    : forecastAccuracy.readiness === 'provisional' ? 'info' : 'default'}
+                  color={forecastAccuracy.readiness === 'collecting' ? 'default'
+                    : expenseError != null && expenseError > 35 ? 'warning' : 'info'}
                   variant="outlined"
                 />
               </Tooltip>

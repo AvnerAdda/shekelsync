@@ -60,8 +60,8 @@ function buildPriceFilter(type) {
   }
 
   return {
-    clause: 't.price < 0',
-    amountExpression: 'ABS(t.price)',
+    clause: '',
+    amountExpression: '-t.price',
   };
 }
 
@@ -121,7 +121,11 @@ async function getCategoryDetails(params = {}) {
     }
   }
 
-  const boundParams = [...categoryParams, start, end];
+  const startStr = start.toISOString().slice(0, 10);
+  const endExclusive = new Date(`${end.toISOString().slice(0, 10)}T00:00:00.000Z`);
+  endExclusive.setUTCDate(endExclusive.getUTCDate() + 1);
+  const endStr = endExclusive.toISOString().slice(0, 10);
+  const boundParams = [...categoryParams, startStr, endStr];
   const dateStartIdx = categoryParams.length + 1;
   const dateEndIdx = categoryParams.length + 2;
 
@@ -151,7 +155,7 @@ async function getCategoryDetails(params = {}) {
         WHERE ${categoryFilter}
           ${priceFilterClause}
           AND t.date >= $${dateStartIdx}
-          AND t.date <= $${dateEndIdx}
+          AND t.date < $${dateEndIdx}
   AND tpe.transaction_identifier IS NULL
       `,
       boundParams,
@@ -168,7 +172,7 @@ async function getCategoryDetails(params = {}) {
         WHERE ${categoryFilter}
           ${priceFilterClause}
           AND t.date >= $${dateStartIdx}
-          AND t.date <= $${dateEndIdx}
+          AND t.date < $${dateEndIdx}
           AND tpe.transaction_identifier IS NULL
         GROUP BY t.vendor
         ORDER BY total DESC
@@ -188,7 +192,7 @@ async function getCategoryDetails(params = {}) {
         WHERE ${categoryFilter}
           ${priceFilterClause}
           AND t.date >= $${dateStartIdx}
-          AND t.date <= $${dateEndIdx}
+          AND t.date < $${dateEndIdx}
           AND t.account_number IS NOT NULL
           AND tpe.transaction_identifier IS NULL
         GROUP BY t.account_number, t.vendor
@@ -217,12 +221,12 @@ async function getCategoryDetails(params = {}) {
           WHERE cd.parent_id = $1
             ${priceFilterClause}
             AND t.date >= $2
-            AND t.date <= $3
+            AND t.date < $3
             AND tpe.transaction_identifier IS NULL
           GROUP BY cd.id, cd.name, cd.name_en, cd.name_fr, cd.color, cd.icon, cd.description
           ORDER BY total DESC
         `,
-        [parentId, start, end],
+        [parentId, startStr, endStr],
       );
     }
 
@@ -250,7 +254,7 @@ async function getCategoryDetails(params = {}) {
         WHERE ${categoryFilter}
           ${priceFilterClause}
           AND t.date >= $${dateStartIdx}
-          AND t.date <= $${dateEndIdx}
+          AND t.date < $${dateEndIdx}
           AND tpe.transaction_identifier IS NULL
         ORDER BY t.date DESC
         LIMIT 20
@@ -270,7 +274,7 @@ async function getCategoryDetails(params = {}) {
         WHERE ${categoryFilter}
           ${priceFilterClause}
           AND t.date >= $${dateStartIdx}
-          AND t.date <= $${dateEndIdx}
+          AND t.date < $${dateEndIdx}
           AND tpe.transaction_identifier IS NULL
         GROUP BY ${monthExpr}
         ORDER BY month ASC

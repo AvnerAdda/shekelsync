@@ -1,6 +1,9 @@
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const queryMock = vi.fn();
+const pairing = (vendor: string) => ({
+  vendor, bank_vendor: 'hapoalim', match_patterns: JSON.stringify([vendor]),
+});
 
 let balanceSheetService: any;
 let getInvestmentBalanceSheet: (query?: Record<string, unknown>) => Promise<any>;
@@ -177,7 +180,7 @@ describe('investment balance sheet service', () => {
         ],
       })
       .mockResolvedValueOnce({
-        rows: [{ vendor: 'visaCal' }, { vendor: '' }, { vendor: null }],
+        rows: [pairing('visaCal'), { vendor: '' }, { vendor: null }],
       })
       .mockResolvedValueOnce({
         rows: [{ last_date: '2026-02-05' }],
@@ -189,7 +192,7 @@ describe('investment balance sheet service', () => {
     const result = await getInvestmentBalanceSheet({ includeAccounts: 'true' });
 
     expect(queryMock).toHaveBeenCalledTimes(4);
-    expect(String(queryMock.mock.calls[3][0])).toContain('vendor IN ($1)');
+    expect(String(queryMock.mock.calls[3][0])).toContain('vendor = $1');
     expect(queryMock.mock.calls[3][1]).toEqual(['visaCal', '2026-02-05']);
     expect(result.assets.total).toBe(100);
     expect(result.assets.buckets.other.accounts).toHaveLength(1);
@@ -215,7 +218,7 @@ describe('investment balance sheet service', () => {
   it('returns missing repayment baseline status when pairings exist but no repayment is found', async () => {
     queryMock
       .mockResolvedValueOnce({ rows: [] })
-      .mockResolvedValueOnce({ rows: [{ vendor: 'max' }] })
+      .mockResolvedValueOnce({ rows: [pairing('max')] })
       .mockResolvedValueOnce({ rows: [{ last_date: null }] });
 
     const result = await getInvestmentBalanceSheet();
@@ -326,12 +329,12 @@ describe('investment balance sheet service', () => {
         };
       }
       if (sql.includes('SELECT DISTINCT credit_card_vendor as vendor')) {
-        return { rows: [{ vendor: 'max' }] };
+        return { rows: [pairing('max')] };
       }
       if (sql.includes('SELECT MAX(t.date) as last_date')) {
         return { rows: [{ last_date: '2026-02-05' }] };
       }
-      if (sql.includes('SELECT COALESCE(SUM(ABS(price)), 0) as pending_debt')) {
+      if (sql.includes('SELECT COALESCE(SUM(-price), 0) as pending_debt')) {
         return { rows: [{ pending_debt: '0' }] };
       }
       if (sql.includes('SELECT base_currency FROM investment_fx_preferences')) {
@@ -394,12 +397,12 @@ describe('investment balance sheet service', () => {
         };
       }
       if (sql.includes('SELECT DISTINCT credit_card_vendor as vendor')) {
-        return { rows: [{ vendor: 'max' }] };
+        return { rows: [pairing('max')] };
       }
       if (sql.includes('SELECT MAX(t.date) as last_date')) {
         return { rows: [{ last_date: '2026-02-05' }] };
       }
-      if (sql.includes('SELECT COALESCE(SUM(ABS(price)), 0) as pending_debt')) {
+      if (sql.includes('SELECT COALESCE(SUM(-price), 0) as pending_debt')) {
         return { rows: [{ pending_debt: '0' }] };
       }
       if (sql.includes('SELECT base_currency FROM investment_fx_preferences')) {
@@ -441,7 +444,7 @@ describe('investment balance sheet service', () => {
     queryMock.mockImplementation(async (sql: string) => {
       if (sql.includes('FROM investment_accounts ia')) {
         expect(sql).toContain("credential_id:");
-        expect(sql).toContain('ia.account_number = vc.bank_account_number');
+        expect(sql).toContain('ia.account_number = vc2.bank_account_number');
         return {
           rows: [
             {

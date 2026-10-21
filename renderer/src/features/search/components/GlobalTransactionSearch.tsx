@@ -1,4 +1,4 @@
-import EditTransactionCategoryButton from '@renderer/shared/components/EditTransactionCategoryButton';
+import TransactionActions from '@renderer/shared/components/TransactionActions';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Dialog,
@@ -563,7 +563,7 @@ const GlobalTransactionSearch: React.FC<GlobalTransactionSearchProps> = ({
           <List sx={{ py: 0 }}>
             {results.map((transaction, index) => (
               <React.Fragment key={`${transaction.identifier}-${transaction.vendor}`}>
-                <ListItem disablePadding secondaryAction={<EditTransactionCategoryButton transaction={transaction} />}>
+                <ListItem disablePadding sx={{ '& .MuiListItemButton-root': { pr: 10 } }} secondaryAction={<TransactionActions transaction={transaction} />}>
                   <ListItemButton
                     selected={index === selectedIndex}
                     onClick={() => handleSelectTransaction(transaction)}

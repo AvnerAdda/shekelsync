@@ -1,4 +1,4 @@
-import EditTransactionCategoryButton from '@renderer/shared/components/EditTransactionCategoryButton';
+import TransactionActions from '@renderer/shared/components/TransactionActions';
 import React, { useState, useCallback, useEffect } from 'react';
 import {
   Paper,
@@ -163,7 +163,11 @@ const TransactionHistorySection: React.FC<TransactionHistorySectionProps> = ({
       else if (hoveredDate) fetchTransactionsByDate(hoveredDate);
     };
     window.addEventListener('transactionCategoryUpdated', refreshTransactions);
-    return () => window.removeEventListener('transactionCategoryUpdated', refreshTransactions);
+    window.addEventListener('transactionDeleted', refreshTransactions);
+    return () => {
+      window.removeEventListener('transactionCategoryUpdated', refreshTransactions);
+      window.removeEventListener('transactionDeleted', refreshTransactions);
+    };
   }, [transactionPeriod, hoveredDate, fetchTransactionsByDate]);
 
   const settingsOpen = Boolean(settingsAnchorEl);
@@ -664,6 +668,9 @@ const TransactionHistorySection: React.FC<TransactionHistorySectionProps> = ({
     const p10Daily = forecastData.scenarios?.p10?.daily || [];
     const p50Daily = forecastData.scenarios?.p50?.daily || [];
     const p90Daily = forecastData.scenarios?.p90?.daily || [];
+    const intervalsByDate = new Map<string, any>((forecastData.predictionIntervals?.daily || [])
+      .map((day: any) => [day.date, day]));
+    const hasIntervals = intervalsByDate.size > 0;
     
     // Historical data - mark gap period items for tooltip
     const historicalData = actualHistoricalData.map((item: any, idx: number) => {
@@ -691,6 +698,7 @@ const TransactionHistorySection: React.FC<TransactionHistorySectionProps> = ({
         p10Cumulative: startingCumulative,
         p50Cumulative: startingCumulative,
         p90Cumulative: startingCumulative,
+        forecastRange: hasIntervals ? [startingCumulative, startingCumulative] : undefined,
       };
     }
     
@@ -721,6 +729,11 @@ const TransactionHistorySection: React.FC<TransactionHistorySectionProps> = ({
         p10Cumulative += getCashFlowForForecast(p10Day || d, useOperatingBasis);
         p50Cumulative += getCashFlowForForecast(p50Day || d, useOperatingBasis);
         p90Cumulative += getCashFlowForForecast(p90Day || d, useOperatingBasis);
+        const interval = intervalsByDate.get(d.date);
+        const bounds = useOperatingBasis ? interval?.cumulativeOperatingCashFlow : interval?.cumulativeCashFlow;
+        const lower = bounds ? startingCumulative + bounds.p10 : undefined;
+        const median = bounds ? startingCumulative + bounds.p50 : undefined;
+        const upper = bounds ? startingCumulative + bounds.p90 : undefined;
 
         return {
           date: d.date,
@@ -728,9 +741,10 @@ const TransactionHistorySection: React.FC<TransactionHistorySectionProps> = ({
           cumulative: expectedCumulative,
           forecastCumulative: expectedCumulative,
           forecastAfterInvesting: afterInvesting,
-          p10Cumulative,
-          p50Cumulative,
-          p90Cumulative,
+          p10Cumulative: lower ?? p10Cumulative,
+          p50Cumulative: median ?? p50Cumulative,
+          p90Cumulative: upper ?? p90Cumulative,
+          forecastRange: lower !== undefined && upper !== undefined ? [lower, upper] : undefined,
           isForecast: true,
           isInGap: false,
         };
@@ -1766,10 +1780,6 @@ const TransactionHistorySection: React.FC<TransactionHistorySectionProps> = ({
                       <stop offset="5%" stopColor={theme.palette.primary.main} stopOpacity={0.4} />
                       <stop offset="95%" stopColor={theme.palette.primary.main} stopOpacity={0.05} />
                     </linearGradient>
-                    <linearGradient id="confidenceBandGradient" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor={theme.palette.success.main} stopOpacity={0.2} />
-                      <stop offset="95%" stopColor={theme.palette.success.main} stopOpacity={0.05} />
-                    </linearGradient>
                   </defs>
                   <CartesianGrid strokeDasharray="3 3" stroke={theme.palette.divider} vertical={false} opacity={0.5} />
                   <XAxis 
@@ -1787,20 +1797,29 @@ const TransactionHistorySection: React.FC<TransactionHistorySectionProps> = ({
                     tickLine={false}
                   />
                   <Tooltip 
-                    formatter={(value, name) => [formatCurrencyValue(typeof value === 'number' ? value : 0), name ?? '']}
+                    formatter={(value, name) => [Array.isArray(value)
+                      ? `${formatCurrencyValue(Number(value[0]))} – ${formatCurrencyValue(Number(value[1]))}`
+                      : formatCurrencyValue(typeof value === 'number' ? value : 0), name ?? '']}
                     labelFormatter={(label) => format(parseLocalDate(String(label ?? '')), 'MMM dd, yyyy')}
                   />
                   <Legend />
                   <ReferenceLine y={0} stroke={theme.palette.divider} strokeWidth={2} />
-                  {/* Confidence band between P10 and P90 */}
-                  <Area 
-                    type="monotone" 
-                    dataKey="p90Cumulative" 
-                    fill="url(#confidenceBandGradient)" 
-                    stroke="transparent"
+                  {/* Pointwise cumulative range; no band for legacy scenario paths. */}
+                  {netPositionData.some((day: any) => Array.isArray(day.forecastRange)) && <Area
+                    className="forecast-range-band"
+                    type="linear"
+                    dataKey="forecastRange"
+                    fill={theme.palette.info.main}
+                    fillOpacity={theme.palette.mode === 'dark' ? 0.24 : 0.16}
+                    // Recharts uses the stroke colour for legend text too.
+                    // Hide only the outline so the legend remains readable.
+                    stroke={theme.palette.info.main}
+                    strokeOpacity={0}
+                    legendType="rect"
                     name={t('forecast.confidenceBand')}
-                    connectNulls={true}
-                  />
+                    connectNulls={false}
+                    isAnimationActive={false}
+                  />}
                   {/* Historical cumulative - solid blue line */}
                   <Area 
                     type="monotone" 
@@ -1844,7 +1863,7 @@ const TransactionHistorySection: React.FC<TransactionHistorySectionProps> = ({
                     name={t('forecast.beforeInvesting', { defaultValue: 'Forecast before investing' })}
                     connectNulls={true}
                   />
-                  {netPositionData.some(item => item.isForecast && item.forecastAfterInvesting !== undefined) && (
+                  {netPositionData.some((item: { isForecast: boolean; forecastAfterInvesting?: number }) => item.isForecast && item.forecastAfterInvesting !== undefined) && (
                     <Line
                       type="monotone"
                       dataKey="forecastAfterInvesting"
@@ -2010,7 +2029,7 @@ const TransactionHistorySection: React.FC<TransactionHistorySectionProps> = ({
                           }}>
                             {format(parseLocalDate(txn.date), transactionPeriod ? 'MMM dd, yyyy · HH:mm' : 'HH:mm')}
                           </Typography>
-                          <EditTransactionCategoryButton transaction={txn} />
+                          <TransactionActions transaction={txn} />
                           {(txn.parent_name || txn.category_name) && (
                             <>
                               <Typography variant="caption" sx={{

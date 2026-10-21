@@ -1,3 +1,4 @@
+import TransactionDeleteDialog from '@renderer/shared/modals/TransactionDeleteDialog';
 import TransactionCategoryEditor from '@renderer/shared/modals/TransactionCategoryEditor';
 import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -516,6 +517,7 @@ const AppLayoutContent: React.FC<AppLayoutContentProps> = ({ authLoading, sessio
       />
 
       <TransactionCategoryEditor />
+      <TransactionDeleteDialog />
       <TransactionDetailModal
         open={transactionDetailOpen}
         onClose={handleTransactionDetailClose}

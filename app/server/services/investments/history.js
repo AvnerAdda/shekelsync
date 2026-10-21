@@ -253,6 +253,7 @@ async function fetchHistoryRows({
   const standardConditions = [
     "COALESCE(ih.holding_type, 'standard') <> 'pikadon'",
   ];
+  if (!accountId && idsFilter.length === 0) standardConditions.push('ia.is_active = true');
   buildAccountConditions(accountId, idsFilter, standardParams, standardConditions);
   appendDateFilter(standardParams, standardConditions, 'ih.as_of_date', '<=', todayDateStr);
   if (startDateStr) {
@@ -274,6 +275,7 @@ async function fetchHistoryRows({
     const baselineConditions = [
       "COALESCE(ih.holding_type, 'standard') <> 'pikadon'",
     ];
+    if (!accountId && idsFilter.length === 0) baselineConditions.push('ia.is_active = true');
     buildAccountConditions(accountId, idsFilter, baselineParams, baselineConditions);
     appendDateFilter(baselineParams, baselineConditions, 'ih.as_of_date', '<', startDateStr);
 
@@ -344,6 +346,7 @@ async function fetchHistoryRows({
   const pikadonConditions = [
     "ih.holding_type = 'pikadon'",
   ];
+  if (!accountId && idsFilter.length === 0) pikadonConditions.push('ia.is_active = true');
   buildAccountConditions(accountId, idsFilter, pikadonParams, pikadonConditions);
   appendDateFilter(pikadonParams, pikadonConditions, 'ih.as_of_date', '<=', todayDateStr);
   if (startDateStr) {

@@ -1,4 +1,4 @@
-import { renderHook, waitFor } from '@testing-library/react';
+import { act, renderHook, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { useDashboardInsights } from '../useDashboardInsights';
 
@@ -41,6 +41,15 @@ describe('useDashboardInsights', () => {
     expect(mockGet).toHaveBeenCalledTimes(2);
     expect(mockGet).toHaveBeenCalledWith('/api/forecast/daily?days=30');
     expect(mockGet).toHaveBeenCalledWith('/api/analytics/personal-intelligence?days=60');
+  });
+
+  it('bypasses the forecast cache when refreshing after a transaction mutation', async () => {
+    mockGet.mockResolvedValue({ ok: true, data: { dailyForecasts: [] } });
+    const { result } = renderHook(() => useDashboardInsights());
+    await waitFor(() => expect(result.current.forecastLoading).toBe(false));
+    act(() => result.current.refresh());
+    await waitFor(() => expect(mockGet).toHaveBeenCalledWith('/api/forecast/daily?days=30&noCache=1'));
+    await waitFor(() => expect(result.current.forecastLoading).toBe(false));
   });
 
   it('surfaces forecast failures without discarding health data', async () => {

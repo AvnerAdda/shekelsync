@@ -67,7 +67,7 @@ describe('automatic planning inputs', () => {
   it('uses a labeled conservative estimate for undated purchases and identifies missing imports', () => {
     expect(cards([{ ...charge, processed_date: null }, { ...charge, processed_date: null, date: '2025-01-01' }]))
       .toEqual({ amount: 100, source: 'estimated' });
-    expect(cards([], { cards: [{ vendor: 'max' }] })).toEqual({ amount: null, source: 'unavailable' });
+    expect(cards([], { cards: [{ vendor: 'max' }] })).toEqual({ amount: null, source: 'unavailable', reason: 'CARD_DATA_MISSING' });
     expect(cards([])).toEqual({ amount: 0, source: 'imported' });
     expect(cards([], { cards: [{ vendor: 'max', last_scrape_success: '2026-08-01' }] }).amount).toBeNull();
     expect(cards([{ ...charge, charged_currency: 'USD' }]).amount).toBeNull();
@@ -81,5 +81,27 @@ describe('automatic planning inputs', () => {
     expect(cards([{ ...charge, charged_currency: 'USD' }]).reason).toBe('UNSUPPORTED_CARD_CURRENCY');
     expect(cards([], { cards: [{ vendor: 'max', last_scrape_success: '2026-08-01' }] }).reason).toBe('STALE_CARD_DATA');
     expect(cards([{ ...charge, price: null }]).reason).toBe('INVALID_CARD_AMOUNT');
+  });
+
+  it.each([
+    ['2026-08-01', 'STALE_CARD_DATA'],
+    [null, 'CARD_DATA_MISSING'],
+    ['', 'CARD_DATA_MISSING'],
+    ['invalid', 'CARD_DATA_MISSING'],
+    ['2026-09-09', 'CARD_DATA_MISSING'],
+  ])('requires each credential at a provider to have a recent successful sync (%s)', (lastSuccess, reason) => {
+    expect(cards([charge], { cards: [
+      { vendor: 'max', credential_id: 1, last_scrape_success: today },
+      { vendor: 'max', credential_id: 2, last_scrape_success: lastSuccess },
+    ] })).toEqual({ amount: null, source: 'unavailable', reason });
+  });
+
+  it('accepts multiple fresh logins and retains transaction-only vendor imports', () => {
+    expect(cards([charge, { ...charge, account_number: '2222', price: -50 }], { cards: [
+      { vendor: 'max', credential_id: 1, last_scrape_success: today },
+      { vendor: 'max', credential_id: 2, last_scrape_success: '2026-09-01' },
+    ] })).toEqual({ amount: 150, source: 'imported' });
+    expect(cards([charge], { cards: [{ vendor: 'max', credential_id: null }] }))
+      .toEqual({ amount: 100, source: 'imported' });
   });
 });

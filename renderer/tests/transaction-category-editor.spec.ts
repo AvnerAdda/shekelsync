@@ -59,3 +59,44 @@ test('edits a category from Activity, refreshes the row, and preserves notes in 
   await expect(page.getByPlaceholder('Add notes about this transaction...')).toHaveValue('Unsaved note');
   expect(rules).toBe(1);
 });
+
+test('deletes a transaction with confirmation from the shared actions and refreshes Activity', async ({ page }) => {
+  const transaction = {
+    identifier: 'delete-1', vendor: 'demo-market', name: 'Duplicate market charge', price: -245,
+    category_definition_id: 3, category_name: 'Groceries', parent_name: 'Expenses', category_type: 'expense',
+    memo: '', tags: [], date: '2025-09-19T16:30:00.000Z', processed_date: null, status: 'completed',
+  };
+  let deleted = false;
+  let attempts = 0;
+  await setupRendererTest(page, {
+    'GET /api/transactions/search': async ({ route }) => route.fulfill({ json: { transactions: deleted ? [] : [transaction], count: deleted ? 0 : 1 } }),
+    'GET /api/transactions/tags': async ({ route }) => route.fulfill({ json: [] }),
+    'GET /api/transactions/delete-1%7Cdemo-market': async ({ route }) => route.fulfill({ json: transaction }),
+    'DELETE /api/transactions/delete-1%7Cdemo-market': async ({ route }) => {
+      attempts += 1;
+      if (attempts === 1) return route.fulfill({ status: 500, json: { error: 'Temporary failure' } });
+      deleted = true;
+      return route.fulfill({ json: { success: true } });
+    },
+  });
+  await goHome(page);
+  await page.getByRole('button', { name: 'Activity', exact: true }).click();
+  const row = page.getByRole('listitem').filter({ hasText: transaction.name });
+  await row.getByRole('button', { name: 'Delete transaction' }).click();
+  const confirmation = page.getByRole('dialog', { name: 'Delete transaction', exact: true });
+  await expect(confirmation.getByText(transaction.name)).toBeVisible();
+  await expect(confirmation.getByRole('button', { name: 'Cancel' })).toBeFocused();
+  await page.keyboard.press('Enter');
+  await expect(confirmation).toBeHidden();
+  await expect(row).toBeVisible();
+  expect(attempts).toBe(0);
+
+  await row.getByText(transaction.name).click();
+  await page.getByRole('dialog').getByRole('button', { name: 'Delete transaction' }).click();
+  await confirmation.getByRole('button', { name: 'Delete', exact: true }).click();
+  await expect(confirmation.getByRole('alert')).toContainText('Could not delete');
+  await confirmation.getByRole('button', { name: 'Delete', exact: true }).click();
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+  await expect(row).toHaveCount(0);
+  expect(attempts).toBe(2);
+});

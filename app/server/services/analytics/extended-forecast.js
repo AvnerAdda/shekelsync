@@ -1,6 +1,12 @@
-const database = require('../database.js');
-const forecastService = require('../forecast.js');
-const financialTruthService = require('../financial-truth.js');
+const defaultDatabase = require('../database.js');
+let database = defaultDatabase;
+const defaultForecastService = require('../forecast.js');
+let forecastService = defaultForecastService;
+const defaultFinancialTruthService = require('../financial-truth.js');
+let financialTruthService = defaultFinancialTruthService;
+const defaultFxService = require('../investments/fx.js');
+let fxService = defaultFxService;
+const { normalizePlanningCurrency } = require('../planning-currency.js');
 const { createTtlCache } = require('../../../lib/server/ttl-cache.js');
 
 const extendedForecastCache = createTtlCache({ maxEntries: 5, defaultTtlMs: 60 * 1000 });
@@ -21,6 +27,25 @@ function parseLocalDate(dateStr) {
   return new Date(year, month - 1, day);
 }
 
+async function resolveCurrentBalance(accounts, today) {
+  if (!accounts.length) return { amount: 0, status: 'missing' };
+  // Keep every active account in the check: a known subtotal is not the full balance.
+  if (accounts.some(account => account.current_value == null
+    || String(account.current_value).trim() === '' || !Number.isFinite(Number(account.current_value))
+    || !/^[A-Z]{3}$/.test(normalizePlanningCurrency(account.currency, '')))) {
+    return { amount: 0, status: 'incomplete' };
+  }
+  const amounts = await Promise.all(accounts.map(async account => {
+    const amount = Number(account.current_value);
+    const currency = normalizePlanningCurrency(account.currency, '');
+    if (currency === 'ILS' || amount === 0) return amount;
+    const conversion = await fxService.convertAmount({ amount, currency, baseCurrency: 'ILS', date: today });
+    return conversion.complete && Number.isFinite(conversion.baseAmount) ? conversion.baseAmount : null;
+  }));
+  if (amounts.some(amount => amount === null)) return { amount: 0, status: 'missing_exchange_rate' };
+  return { amount: amounts.reduce((sum, amount) => sum + Math.round(amount * 100), 0) / 100, status: 'ready' };
+}
+
 /**
  * Generate extended forecast with net position history + future scenarios
  * IMPORTANT: Always generates 6 months, regardless of other forecast settings
@@ -31,7 +56,9 @@ async function getExtendedForecast(params = {}) {
     params.noCache === true ||
     params.noCache === 'true' ||
     params.noCache === '1';
-  const cacheKey = formatLocalDate(new Date());
+  let revision = null;
+  try { revision = financialTruthService.getProjectionSnapshot({ materialize: false }).truthRevision; } catch {}
+  const cacheKey = `${formatLocalDate(new Date())}:${revision ?? 'unknown'}`;
   if (!skipCache) {
     const cached = extendedForecastCache.get(cacheKey);
     if (cached) {
@@ -42,7 +69,8 @@ async function getExtendedForecast(params = {}) {
   const forecastData = await forecastService.generateDailyForecast({
     includeToday: false,
     forecastMonths: 6,
-    verbose: false
+    verbose: false,
+    noCache: skipCache
   });
 
   // Get historical net position data (last 6 months)
@@ -52,8 +80,8 @@ async function getExtendedForecast(params = {}) {
   const historyResult = await database.query(
     `SELECT
       DATE(t.date) as date,
-      SUM(CASE WHEN t.category_type = 'income' THEN t.price ELSE 0 END) as income,
-      SUM(CASE WHEN t.category_type = 'expense' THEN ABS(t.price) ELSE 0 END) as expenses
+      SUM(CASE WHEN COALESCE(cd.category_type, t.category_type) = 'income' THEN t.price ELSE 0 END) as income,
+      SUM(CASE WHEN COALESCE(cd.category_type, t.category_type) = 'expense' THEN -t.price ELSE 0 END) as expenses
     FROM transactions t
     LEFT JOIN (SELECT DISTINCT transaction_identifier, transaction_vendor FROM transaction_pairing_exclusions) tpe
       ON t.identifier = tpe.transaction_identifier
@@ -61,31 +89,32 @@ async function getExtendedForecast(params = {}) {
     LEFT JOIN category_definitions cd ON t.category_definition_id = cd.id
     WHERE t.status IN ('completed', 'pending')
       AND tpe.transaction_identifier IS NULL
-      AND cd.name NOT IN ('החזר קרן', 'ריבית מהשקעות', 'פיקדונות')
+      AND COALESCE(cd.name, '') NOT IN ('החזר קרן', 'ריבית מהשקעות', 'פיקדונות')
       AND t.date >= $1
+      AND substr(t.date, 1, 10) <= $2
     GROUP BY DATE(t.date)
     ORDER BY date`,
-    [sixMonthsAgo.toISOString()]
+    [sixMonthsAgo.toISOString(), formatLocalDate(new Date())]
   );
 
   const history = historyResult.rows || [];
 
-  // Get current account balance as the starting point
+  // Load each active account before converting; an inner join would hide missing balances.
   const balanceResult = await database.query(
     `SELECT
-      SUM(ih.current_value) as total_balance
-    FROM investment_holdings ih
-    JOIN investment_accounts ia ON ih.account_id = ia.id
+      ia.id AS account_id, ia.currency, ih.current_value
+    FROM investment_accounts ia
+    LEFT JOIN investment_holdings ih ON ih.id = (
+      SELECT h.id FROM investment_holdings h
+      WHERE h.account_id = ia.id AND COALESCE(h.holding_type, 'standard') <> 'pikadon'
+      ORDER BY h.as_of_date DESC, h.id DESC LIMIT 1
+    )
     WHERE ia.account_type = 'bank_balance'
-      AND ia.is_active = 1
-      AND ih.as_of_date = (
-        SELECT MAX(as_of_date)
-        FROM investment_holdings
-        WHERE account_id = ia.id
-      )`
+      AND ia.is_active = 1`
   );
 
-  const currentBalance = (balanceResult.rows?.[0]?.total_balance) || 0;
+  const balance = await resolveCurrentBalance(balanceResult.rows || [], formatLocalDate(new Date()));
+  const currentBalance = balance.amount;
 
   // Fill missing dates in history (days with no transactions)
   // Fill from first transaction through today
@@ -153,177 +182,9 @@ async function getExtendedForecast(params = {}) {
     ? historicalData[historicalData.length - 1].historicalCumulative
     : normalizedCurrentBalance;
 
-  let cumulativeP10 = lastHistoricalCumulative;
-  let cumulativeP50 = lastHistoricalCumulative;
-  let cumulativeP90 = lastHistoricalCumulative;
-
-  const mc = forecastData.monteCarloResults || {};
-  const scenarioMap = {
-    p10: mc.worstCase || {},
-    p50: mc.baseCase || {},
-    p90: mc.bestCase || {}
-  };
-
-  const p10Data = [];
-  const p50Data = [];
-  const p90Data = [];
-
-  (scenarioMap.p10.dailyResults || []).forEach(day => {
-    const netFlow = (day.income || 0) - (day.expenses || 0);
-    cumulativeP10 += netFlow;
-    p10Data.push({
-      date: day.date,
-      income: day.income || 0,
-      expenses: day.expenses || 0,
-      netFlow,
-      forecastCumulative: cumulativeP10,
-      historicalCumulative: null
-    });
-  });
-
-  (scenarioMap.p50.dailyResults || []).forEach(day => {
-    const netFlow = (day.income || 0) - (day.expenses || 0);
-    cumulativeP50 += netFlow;
-    p50Data.push({
-      date: day.date,
-      income: day.income || 0,
-      expenses: day.expenses || 0,
-      netFlow,
-      forecastCumulative: cumulativeP50,
-      historicalCumulative: null
-    });
-  });
-
-  (scenarioMap.p90.dailyResults || []).forEach(day => {
-    const netFlow = (day.income || 0) - (day.expenses || 0);
-    cumulativeP90 += netFlow;
-    p90Data.push({
-      date: day.date,
-      income: day.income || 0,
-      expenses: day.expenses || 0,
-      netFlow,
-      forecastCumulative: cumulativeP90,
-      historicalCumulative: null
-    });
-  });
-
-  // Merge historical and all three scenarios into one array for charting
-  // Start with historical data, then merge in scenario forecasts
-  const combinedData = historicalData.map(item => ({
-    ...item,
-    p10Cumulative: null,
-    p50Cumulative: null,
-    p90Cumulative: null
-  }));
-
-  // Bridge point: start scenario curves from the last historical value.
-  if (combinedData.length > 0) {
-    const lastIndex = combinedData.length - 1;
-    const bridgeValue = combinedData[lastIndex].historicalCumulative;
-    combinedData[lastIndex] = {
-      ...combinedData[lastIndex],
-      p10Cumulative: bridgeValue,
-      p50Cumulative: bridgeValue,
-      p90Cumulative: bridgeValue,
-    };
-  } else {
-    const todayStr = formatLocalDate(new Date());
-    combinedData.push({
-      date: todayStr,
-      historicalCumulative: lastHistoricalCumulative,
-      income: 0,
-      expenses: 0,
-      netFlow: 0,
-      p10Cumulative: lastHistoricalCumulative,
-      p50Cumulative: lastHistoricalCumulative,
-      p90Cumulative: lastHistoricalCumulative,
-    });
-  }
-
-  // Add p10 scenario forecast
-  p10Data.forEach(day => {
-    combinedData.push({
-      date: day.date,
-      historicalCumulative: null,
-      income: null,
-      expenses: null,
-      netFlow: null,
-      p10Cumulative: day.forecastCumulative,
-      p50Cumulative: null,
-      p90Cumulative: null
-    });
-  });
-
-  // Merge p50 into existing forecast entries
-  p50Data.forEach((day, index) => {
-    const existingIndex = combinedData.findIndex(item => item.date === day.date && item.p50Cumulative === null);
-    if (existingIndex >= 0) {
-      combinedData[existingIndex].p50Cumulative = day.forecastCumulative;
-      combinedData[existingIndex].income = day.income;
-      combinedData[existingIndex].expenses = day.expenses;
-    } else {
-      combinedData.push({
-        date: day.date,
-        historicalCumulative: null,
-        income: day.income,
-        expenses: day.expenses,
-        netFlow: null,
-        p10Cumulative: null,
-        p50Cumulative: day.forecastCumulative,
-        p90Cumulative: null
-      });
-    }
-  });
-
-  // Merge p90 into existing forecast entries
-  p90Data.forEach(day => {
-    const existingIndex = combinedData.findIndex(item => item.date === day.date && item.p90Cumulative === null);
-    if (existingIndex >= 0) {
-      combinedData[existingIndex].p90Cumulative = day.forecastCumulative;
-    } else {
-      combinedData.push({
-        date: day.date,
-        historicalCumulative: null,
-        income: null,
-        expenses: null,
-        netFlow: null,
-        p10Cumulative: null,
-        p50Cumulative: null,
-        p90Cumulative: day.forecastCumulative
-      });
-    }
-  });
-
-  // Sort by date
-  combinedData.sort((a, b) => a.date.localeCompare(b.date));
-
-  const response = {
-    truthRevision: forecastData.truthRevision || 0,
-    refreshState: 'ready',
-    combinedData,
-    scenarios: {
-      p10: p10Data,
-      p50: p50Data,
-      p90: p90Data
-    },
-    summaries: {
-      pessimistic: {
-        netCashFlow: Math.round(scenarioMap.p10.totalCashFlow || 0),
-        income: Math.round(scenarioMap.p10.totalIncome || 0),
-        expenses: Math.round(scenarioMap.p10.totalExpenses || 0)
-      },
-      base: {
-        netCashFlow: Math.round(scenarioMap.p50.totalCashFlow || 0),
-        income: Math.round(scenarioMap.p50.totalIncome || 0),
-        expenses: Math.round(scenarioMap.p50.totalExpenses || 0)
-      },
-      optimistic: {
-        netCashFlow: Math.round(scenarioMap.p90.totalCashFlow || 0),
-        income: Math.round(scenarioMap.p90.totalIncome || 0),
-        expenses: Math.round(scenarioMap.p90.totalExpenses || 0)
-      }
-    }
-  };
+  const response = buildExtendedForecastPayload(forecastData, historicalData, lastHistoricalCumulative);
+  response.hasCurrentBalance = balance.status === 'ready';
+  response.balanceStatus = balance.status;
   let currentTruthRevision = response.truthRevision;
   try {
     currentTruthRevision = financialTruthService.getProjectionSnapshot({ materialize: false }).truthRevision;
@@ -342,8 +203,103 @@ async function getExtendedForecast(params = {}) {
   return response;
 }
 
+function buildExtendedForecastPayload(forecastData, history, startingBalance) {
+  const number = value => Number.isFinite(Number(value)) ? Number(value) : 0;
+  const intervals = new Map((forecastData.predictionIntervals?.daily || []).map(day => [day.date, day]));
+  const days = forecastData.dailyForecasts || [];
+  let expected = startingBalance;
+  let income = 0;
+  let expenses = 0;
+  const combinedData = history.map(day => ({ ...day, expectedCumulative: null,
+    p10Cumulative: null, p50Cumulative: null, p90Cumulative: null }));
+  if (!combinedData.length) combinedData.push({ date: formatLocalDate(new Date()),
+    historicalCumulative: startingBalance, income: 0, expenses: 0, netFlow: 0,
+    expectedCumulative: null, p10Cumulative: null, p50Cumulative: null, p90Cumulative: null });
+  Object.assign(combinedData.at(-1), { expectedCumulative: startingBalance,
+    p10Cumulative: startingBalance, p50Cumulative: startingBalance, p90Cumulative: startingBalance });
+  const scenarios = { p10: [], p50: [], p90: [] };
+  for (const day of days) {
+    const dayIncome = number(day.expectedIncome);
+    const dayExpenses = number(day.expectedExpenses);
+    income += dayIncome;
+    expenses += dayExpenses;
+    expected += dayIncome - dayExpenses;
+    const range = intervals.get(day.date)?.cumulativeCashFlow;
+    const validRange = range && ['p10', 'p50', 'p90'].every(key => Number.isFinite(range[key]))
+      && range.p10 <= range.p50 && range.p50 <= range.p90;
+    const entry = { date: day.date, income: dayIncome, expenses: dayExpenses,
+      netFlow: dayIncome - dayExpenses, historicalCumulative: null, expectedCumulative: expected,
+      p10Cumulative: validRange ? startingBalance + range.p10 : null,
+      p50Cumulative: validRange ? startingBalance + range.p50 : null,
+      p90Cumulative: validRange ? startingBalance + range.p90 : null };
+    combinedData.push(entry);
+    for (const key of ['p10', 'p50', 'p90']) scenarios[key].push({
+      date: day.date, forecastCumulative: entry[`${key}Cumulative`], historicalCumulative: null,
+    });
+  }
+  const last = combinedData.at(-1);
+  const tailSummary = key => ({
+    netCashFlow: Number.isFinite(last?.[key]) ? last[key] - startingBalance : null,
+    endingBalance: Number.isFinite(last?.[key]) ? last[key] : null,
+  });
+  const categoryNames = new Map((forecastData.categoryPatterns || []).map(pattern => [
+    pattern.categoryDefinitionId, pattern.categoryNameEn || pattern.category,
+  ]));
+  const drivers = new Map();
+  const incomeDrivers = new Map();
+  for (const day of days) for (const prediction of day.predictions || []) {
+    if (prediction.categoryType === 'income') {
+      const source = prediction.transactionName || prediction.displayName || prediction.category || 'Income';
+      const key = JSON.stringify([prediction.categoryDefinitionId ?? null, prediction.vendor || '', source]);
+      if (!incomeDrivers.has(key)) incomeDrivers.set(key, {
+        source, amount: 0, nextDate: day.date,
+        expectedPaymentDate: prediction.expectedPaymentDate || day.date,
+        awaitingReceipt: Boolean(prediction.awaitingReceipt),
+      });
+      incomeDrivers.get(key).amount += number(prediction.probabilityWeightedAmount);
+      continue;
+    }
+    if (prediction.categoryType !== 'expense') continue;
+    const id = prediction.categoryDefinitionId ?? null;
+    const key = id == null ? prediction.category || 'Uncategorized' : String(id);
+    if (!drivers.has(key)) drivers.set(key, { categoryDefinitionId: id,
+      category: prediction.category || 'Uncategorized', categoryNameEn: categoryNames.get(id) || prediction.category,
+      amount: 0, scheduled: 0, typical: 0, occasional: 0 });
+    const driver = drivers.get(key);
+    const amount = number(prediction.probabilityWeightedAmount);
+    driver.amount += amount;
+    const basis = prediction.forecastBasis === 'irregular_allowance' ? 'occasional'
+      : prediction.predictionKind === 'recurring_expense' || prediction.isUserResolvedPattern ? 'scheduled' : 'typical';
+    driver[basis] += amount;
+  }
+  return {
+    modelId: forecastData.modelId, truthRevision: forecastData.truthRevision || 0, refreshState: 'ready',
+    startingBalance, forecastPeriod: forecastData.forecastPeriod, combinedData, scenarios,
+    expenseDrivers: [...drivers.values()].sort((left, right) => right.amount - left.amount),
+    incomeDrivers: [...incomeDrivers.values()].sort((left, right) => right.amount - left.amount),
+    summaries: {
+      pessimistic: tailSummary('p10Cumulative'),
+      base: { income, expenses, netCashFlow: income - expenses, endingBalance: expected },
+      optimistic: tailSummary('p90Cumulative'),
+    },
+  };
+}
+
 module.exports = {
   getExtendedForecast,
+  _internal: { buildExtendedForecastPayload },
+  __setDependencies(dependencies) {
+    database = dependencies.database || defaultDatabase;
+    forecastService = dependencies.forecast || defaultForecastService;
+    financialTruthService = dependencies.financialTruth || defaultFinancialTruthService;
+    fxService = dependencies.fx || defaultFxService;
+    extendedForecastCache.clear();
+  },
+  __resetDependencies() {
+    database = defaultDatabase; forecastService = defaultForecastService; financialTruthService = defaultFinancialTruthService;
+    fxService = defaultFxService;
+    extendedForecastCache.clear();
+  },
   clearCache() {
     extendedForecastCache.clear();
   },

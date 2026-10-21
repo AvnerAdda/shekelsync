@@ -53,14 +53,14 @@ export function useDashboardInsights(): UseDashboardInsightsResult {
   const [healthLoading, setHealthLoading] = useState(true);
   const requestIdRef = useRef(0);
 
-  const fetchInsights = useCallback(async () => {
+  const fetchInsights = useCallback(async (noCache = false) => {
     const requestId = ++requestIdRef.current;
     setForecastLoading(true);
     setHealthLoading(true);
     setForecastError(null);
 
     const [forecastResult, healthResult] = await Promise.allSettled([
-      apiClient.get<DashboardForecastData>('/api/forecast/daily?days=30'),
+      apiClient.get<DashboardForecastData>(`/api/forecast/daily?days=30${noCache ? '&noCache=1' : ''}`),
       apiClient.get<DashboardHealthSnapshot>('/api/analytics/personal-intelligence?days=60'),
     ]);
 
@@ -95,7 +95,7 @@ export function useDashboardInsights(): UseDashboardInsightsResult {
   }, [fetchInsights]);
 
   const refresh = useCallback(() => {
-    void fetchInsights();
+    void fetchInsights(true);
   }, [fetchInsights]);
 
   return {

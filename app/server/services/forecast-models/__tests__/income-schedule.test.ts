@@ -18,6 +18,47 @@ const monthly = ['2026-01-07', '2026-02-07', '2026-03-07'].map(d => tx(d));
 afterEach(() => vi.restoreAllMocks());
 
 describe('income schedules across payment patterns', () => {
+  it('keeps a monthly salary due today in a tomorrow-starting outlook when it has not arrived', () => {
+    const rows = ['2026-07-06', '2026-08-05', '2026-09-06'].map(date => tx(date, 17000));
+    const schedule = build(rows, '2026-10-07', 176);
+    const model = schedule.get('category:1');
+    expect(model.daily.get('2026-10-07')).toBe(17000);
+    expect(model.events[0]).toMatchObject({ expectedPaymentDate: '2026-10-06', awaitingReceipt: true });
+    expect(total(schedule)).toBe(6 * 17000);
+    expect(model.events[1]).toMatchObject({ expectedPaymentDate: '2026-11-06', awaitingReceipt: false });
+  });
+
+  it('carries a recently due salary without duplicating a receipt already recorded', () => {
+    const rows = ['2026-07-06', '2026-08-05', '2026-09-06'].map(date => tx(date, 17000));
+    expect(build(rows, '2026-10-13').get('category:1').daily.get('2026-10-13')).toBe(17000);
+    const received = build([...rows, tx('2026-10-06', 17000)], '2026-10-13');
+    expect(received.get('category:1').daily.has('2026-10-13')).toBe(false);
+    expect(total(received)).toBe(17000);
+    const pending = build([...rows, tx('2026-10-06', 17000, { status: 'pending' })], '2026-10-07');
+    expect(pending.get('category:1').daily.get('2026-10-07')).toBe(17000);
+  });
+
+  it('includes a carried receipt once in chart contributions and simulation entries', () => {
+    const rows = ['2026-07-06', '2026-08-05', '2026-09-06'].map(date => tx(date, 17000));
+    const schedule = build(rows, '2026-10-07', 30);
+    const forecast: any[] = dates('2026-10-07', 30).map(date => ({ date, predictions: [], expectedExpenses: 0 }));
+    const simulation = forecast.map(day => ({ date: day.date, entries: [] }));
+    applyIncomeSchedule(forecast, simulation, schedule, engine);
+    expect(forecast[0].expectedIncome).toBe(17000);
+    expect(forecast[0].predictions).toHaveLength(1);
+    expect(forecast[0].predictions[0]).toMatchObject({ awaitingReceipt: true, expectedPaymentDate: '2026-10-06' });
+    expect(simulation.flatMap(day => day.entries)).toHaveLength(1);
+    expect((simulation[0].entries[0] as any).avgAmount).toBe(17000);
+  });
+
+  it('does not invent an old missed payment or carry arrears into a later requested horizon', () => {
+    const rows = ['2026-07-06', '2026-08-05', '2026-09-06'].map(date => tx(date, 17000));
+    expect(build(rows, '2026-10-18').get('category:1').events.every((event: any) => !event.awaitingReceipt)).toBe(true);
+    const upcoming = dates('2026-11-01', 30);
+    const schedule = buildIncomeSchedule(rows, upcoming, new Date('2026-10-06T12:00:00'), engine);
+    expect(total(schedule)).toBe(17000);
+    expect(schedule.get('category:1').events[0].awaitingReceipt).toBe(false);
+  });
   it('learns cadence separately from changing amounts and resists one bonus', () => {
     const rows = [tx('2026-01-07', 1000), tx('2026-02-07', 1100), tx('2026-03-07', 10000)];
     const model = build(rows).get('category:1');
