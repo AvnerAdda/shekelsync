@@ -12,6 +12,8 @@ import {
   LinearProgress,
   Paper,
 } from '@mui/material';
+import ToggleButton from '@mui/material/ToggleButton';
+import ToggleButtonGroup from '@mui/material/ToggleButtonGroup';
 import TrendIcon from '@mui/icons-material/TrendingUp';
 import SavingsIcon from '@mui/icons-material/Savings';
 import DiversityIcon from '@mui/icons-material/Diversity3';
@@ -19,8 +21,10 @@ import ImpulseIcon from '@mui/icons-material/ShoppingCart';
 import RunwayIcon from '@mui/icons-material/Schedule';
 import HelpIcon from '@mui/icons-material/HelpOutlined';
 import RefreshIcon from '@mui/icons-material/Refresh';
+import { startOfMonth, subDays, format } from 'date-fns';
 import { apiClient } from '@renderer/lib/api-client';
 import { useTranslation } from 'react-i18next';
+import { useThemeMode } from '@renderer/contexts/ThemeContext';
 import HealthScoreTrendModal from './HealthScoreTrendModal';
 
 export interface HealthBreakdown {
@@ -45,27 +49,54 @@ interface FinancialHealthScoreProps {
 
 const FinancialHealthScore: React.FC<FinancialHealthScoreProps> = ({ data, loading, error, onRefresh }) => {
   const { t } = useTranslation('translation', { keyPrefix: 'analysisPage.health' });
+  const { setHealthScore } = useThemeMode();
   const hasExternalData = data !== undefined;
   const [intelligence, setIntelligence] = useState<FinancialHealthSnapshot | null>(data ?? null);
   const [internalLoading, setInternalLoading] = useState(!hasExternalData);
   const [internalError, setInternalError] = useState<string | null>(null);
   const [trendModalOpen, setTrendModalOpen] = useState(false);
 
+  type PeriodPreset = 'mtd' | '30d' | '60d';
+  const [periodPreset, setPeriodPreset] = useState<PeriodPreset>('60d');
+
+  const getPeriodDates = useCallback((preset: PeriodPreset): { startDate: string; endDate: string } => {
+    const now = new Date();
+    const end = format(now, 'yyyy-MM-dd');
+    switch (preset) {
+      case 'mtd':
+        return { startDate: format(startOfMonth(now), 'yyyy-MM-dd'), endDate: end };
+      case '30d':
+        return { startDate: format(subDays(now, 29), 'yyyy-MM-dd'), endDate: end };
+      case '60d':
+      default:
+        return { startDate: format(subDays(now, 59), 'yyyy-MM-dd'), endDate: end };
+    }
+  }, []);
+
   useEffect(() => {
     if (hasExternalData) {
       setIntelligence(data ?? null);
+      if (data?.overallHealthScore != null) {
+        setHealthScore(data.overallHealthScore);
+      }
     }
-  }, [data, hasExternalData]);
+  }, [data, hasExternalData, setHealthScore]);
 
   const fetchHealthScore = useCallback(async () => {
     setInternalLoading(true);
     setInternalError(null);
     try {
-      const response = await apiClient.get<FinancialHealthSnapshot>('/api/analytics/personal-intelligence?days=60');
+      const { startDate, endDate } = getPeriodDates(periodPreset);
+      const response = await apiClient.get<FinancialHealthSnapshot>(
+        `/api/analytics/personal-intelligence?startDate=${startDate}&endDate=${endDate}`
+      );
       if (!response.ok) {
         throw new Error(t('errors.fetchFailed'));
       }
       setIntelligence(response.data);
+      if (response.data?.overallHealthScore != null) {
+        setHealthScore(response.data.overallHealthScore);
+      }
     } catch (err) {
       const message = err instanceof Error ? err.message : t('errors.generic');
       setInternalError(message);
@@ -73,7 +104,7 @@ const FinancialHealthScore: React.FC<FinancialHealthScoreProps> = ({ data, loadi
     } finally {
       setInternalLoading(false);
     }
-  }, [t]);
+  }, [t, periodPreset, getPeriodDates, setHealthScore]);
 
   useEffect(() => {
     if (!hasExternalData) {
@@ -188,26 +219,35 @@ const FinancialHealthScore: React.FC<FinancialHealthScoreProps> = ({ data, loadi
       {/* Header */}
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
         <Box>
-          <Typography variant="h6" gutterBottom sx={{
-            fontWeight: "bold"
-          }}>
+          <Typography variant="h6" gutterBottom sx={{ fontWeight: "bold" }}>
             {t('title')}
           </Typography>
-          <Typography variant="body2" sx={{
-            color: "text.secondary"
-          }}>
+          <Typography variant="body2" sx={{ color: "text.secondary" }}>
             {t('subtitle')}
           </Typography>
         </Box>
-        <Button
-          variant="outlined"
-          startIcon={<RefreshIcon />}
-          onClick={handleRefresh}
-          disabled={effectiveLoading}
-          size="small"
-        >
-          {t('actions.refresh')}
-        </Button>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+          <ToggleButtonGroup
+            value={periodPreset}
+            exclusive
+            onChange={(_e, val) => { if (val) setPeriodPreset(val as PeriodPreset); }}
+            size="small"
+            disabled={effectiveLoading}
+          >
+            <ToggleButton value="mtd" sx={{ px: 1.5, fontSize: '0.75rem', textTransform: 'none' }}>MTD</ToggleButton>
+            <ToggleButton value="30d" sx={{ px: 1.5, fontSize: '0.75rem', textTransform: 'none' }}>30d</ToggleButton>
+            <ToggleButton value="60d" sx={{ px: 1.5, fontSize: '0.75rem', textTransform: 'none' }}>60d</ToggleButton>
+          </ToggleButtonGroup>
+          <Button
+            variant="outlined"
+            startIcon={<RefreshIcon />}
+            onClick={handleRefresh}
+            disabled={effectiveLoading}
+            size="small"
+          >
+            {t('actions.refresh')}
+          </Button>
+        </Box>
       </Box>
       {/* Overall Health Score */}
       <Paper

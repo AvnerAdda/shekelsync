@@ -24,8 +24,14 @@ async function getPersonalIntelligence(params = {}) {
 
   const daysInt = Math.max(parseInt(params.days, 10) || 0, 0);
   const monthsInt = Math.max(parseInt(params.months, 10) || 1, 1);
-  const endDate = new Date();
-  const startDate = daysInt > 0 ? subDays(endDate, daysInt) : subMonths(endDate, monthsInt);
+  let endDate, startDate;
+  if (params.startDate && params.endDate) {
+    startDate = new Date(params.startDate + 'T00:00:00');
+    endDate = new Date(params.endDate + 'T23:59:59');
+  } else {
+    endDate = new Date();
+    startDate = daysInt > 0 ? subDays(endDate, daysInt) : subMonths(endDate, monthsInt);
+  }
   const startStr = startDate.toISOString().split('T')[0];
   const endStr = endDate.toISOString().split('T')[0];
   const skipCache =
