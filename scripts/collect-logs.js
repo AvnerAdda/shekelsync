@@ -5,6 +5,7 @@ const os = require('os');
 const envPaths = require('env-paths');
 
 const pkg = require('../app/package.json');
+const { redactSensitiveText } = require('../electron/log-redaction');
 
 const DEFAULT_MAX_BYTES = 1024 * 512; // 512KB per log file
 const maxBytes = Number(process.env.LOG_SHIP_MAX_BYTES || DEFAULT_MAX_BYTES);
@@ -59,6 +60,11 @@ function resolveUserDataDir() {
   return candidates[0] || path.join(os.homedir(), '.config', 'ShekelSync');
 }
 
+function redactHomeDirectory(value) {
+  const home = os.homedir();
+  return home && value.startsWith(home) ? `~${value.slice(home.length)}` : value;
+}
+
 async function readLogTail(filePath) {
   try {
     const stat = await fs.promises.stat(filePath);
@@ -72,7 +78,8 @@ async function readLogTail(filePath) {
       name: path.basename(filePath),
       size: stat.size,
       lastModified: stat.mtime.toISOString(),
-      tail: buffer.toString('utf8'),
+      // Logs written before redaction shipped can still hold account numbers and balances
+      tail: redactSensitiveText(buffer.toString('utf8')),
     };
   } catch (error) {
     return {
@@ -97,12 +104,11 @@ async function main() {
 
   const bundle = {
     generatedAt: new Date().toISOString(),
-    host: os.hostname(),
     platform: process.platform,
     release: os.release(),
     appVersion: pkg.version,
-    userDataDir,
-    logDirectory,
+    userDataDir: redactHomeDirectory(userDataDir),
+    logDirectory: redactHomeDirectory(logDirectory),
     logs,
   };
 

@@ -118,6 +118,18 @@ function createCategorizationRouter() {
     }
   });
 
+  router.get('/categorization_rules/match_counts', async (_req, res) => {
+    try {
+      const counts = await categorizationService.getRuleMatchCounts();
+      res.json({ counts });
+    } catch (error) {
+      console.error('Categorization match counts error:', error);
+      res.status(error?.status || 500).json({
+        error: error?.message || 'Failed to count rule matches',
+      });
+    }
+  });
+
   router.post('/merge_categories', async (req, res) => {
     try {
       const result = await categorizationService.mergeCategories(req.body || {});

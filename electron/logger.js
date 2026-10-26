@@ -1,6 +1,7 @@
 const fs = require('fs');
 const path = require('path');
 const { requireFromApp } = require('./paths');
+const { redactLogMessageHook } = require('./log-redaction');
 
 let app;
 try {
@@ -29,6 +30,9 @@ try {
 }
 
 electronLog.initialize();
+if (Array.isArray(electronLog.hooks)) {
+  electronLog.hooks.push(redactLogMessageHook);
+}
 
 function getLogDirectory() {
   return path.join(app.getPath('userData'), 'logs');

@@ -310,8 +310,13 @@ const SpendingCategoryTransactionsModal: React.FC<Props> = ({
                               return t(`categories.${value}`, { defaultValue: value });
                             }}
                           >
-                            {ALLOCATION_BUCKETS.filter(b => b !== spendingCategory).map(bucket => (
-                              <MenuItem key={bucket} value={bucket} sx={{ fontSize: '0.8rem' }}>
+                            {ALLOCATION_BUCKETS.map(bucket => (
+                              <MenuItem
+                                key={bucket}
+                                value={bucket}
+                                disabled={bucket === spendingCategory}
+                                sx={{ fontSize: '0.8rem' }}
+                              >
                                 {t(`categories.${bucket}`, { defaultValue: bucket })}
                               </MenuItem>
                             ))}

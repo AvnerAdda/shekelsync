@@ -71,6 +71,14 @@ describe('Shared categorization routes', () => {
     expect(res.body).toEqual(preview);
   });
 
+  it('returns all rule match counts in one response', async () => {
+    vi.spyOn(categorizationService, 'getRuleMatchCounts').mockResolvedValue({ 1: 3 });
+
+    const res = await request(app).get('/api/categorization_rules/match_counts').expect(200);
+
+    expect(res.body).toEqual({ counts: { 1: 3 } });
+  });
+
   it('handles merge categories', async () => {
     const mergeResult = { success: true };
     vi.spyOn(categorizationService, 'mergeCategories').mockResolvedValue(mergeResult);

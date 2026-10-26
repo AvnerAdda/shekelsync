@@ -752,7 +752,7 @@ describe('scraping run service', () => {
       expect(bankSim.success).toBe(true);
       expect(bankSim.accounts[0].txns).toHaveLength(1);
       expect(bankSim.accounts[0].txns[0].chargedAmount).toBeLessThan(0);
-      expect(cardSim.accounts[0].txns[0].chargedAmount).toBeGreaterThan(0);
+      expect(cardSim.accounts[0].txns[0].chargedAmount).toBeLessThan(0);
 
       expect(internal.isBankVendor('hapoalim')).toBe(true);
       expect(internal.isBankVendor('isracard')).toBe(false);
@@ -1546,6 +1546,167 @@ describe('scraping run service', () => {
       ).toBe(false);
     });
 
+    it('keeps two identical same-day charges from one scrape as separate transactions', async () => {
+      const internal = (runService as any)._internal;
+      const coffee = (identifier: string) => ({
+        identifier,
+        date: '2026-03-19T22:00:00.000Z',
+        processedDate: '2026-04-09T21:00:00.000Z',
+        description: 'ארומה תל אביב',
+        chargedAmount: -14,
+        originalAmount: -14,
+        originalCurrency: 'ILS',
+        chargedCurrency: 'ILS',
+        type: 'card',
+        status: 'completed',
+      });
+      const first = coffee('arn-1');
+      const second = coffee('arn-2');
+      const batchContext = internal.createScrapeBatchContext([first, second], 'max', false);
+      const firstStoredId = internal.computeTransactionIdentifier(first, 'max', false);
+
+      mockClient.query.mockImplementation(async (sql: string) => {
+        if (String(sql).includes('FROM transactions')) {
+          return {
+            rows: [{
+              identifier: firstStoredId,
+              vendor: 'max',
+              name: 'ארומה תל אביב',
+              status: 'completed',
+              processed_date: '2026-04-09T21:00:00.000Z',
+              transaction_datetime: '2026-03-19T22:00:00.000Z',
+            }],
+          };
+        }
+        return { rows: [], rowCount: 1 };
+      });
+
+      await internal.insertTransaction(second, mockClient, 'max', false, '4886', 'Nick', batchContext);
+
+      const sqls = mockClient.query.mock.calls.map(([sql]: any[]) => String(sql));
+      expect(sqls.some((sql: string) => sql.includes('INSERT INTO transactions'))).toBe(true);
+      expect(sqls.some((sql: string) => sql.includes('UPDATE transactions'))).toBe(false);
+    });
+
+    it('still merges a re-scraped MAX charge when the stored row is not owned by another scraped transaction', async () => {
+      const internal = (runService as any)._internal;
+      const txn = {
+        identifier: 'txn-bat-yam',
+        date: '2026-03-20T10:29:57.000Z',
+        processedDate: '2026-04-09T21:00:00.000Z',
+        description: 'עיריית בת ים מוקד מילגם',
+        chargedAmount: -1180.27,
+        originalAmount: -1180.27,
+        originalCurrency: 'ILS',
+        chargedCurrency: 'ILS',
+        type: 'card',
+        status: 'completed',
+      };
+      const batchContext = internal.createScrapeBatchContext([txn], 'max', false);
+
+      mockClient.query.mockResolvedValueOnce({
+        rows: [{
+          identifier: 'completed-midnight',
+          vendor: 'max',
+          name: 'עיריית בת ים מוקד מילגם',
+          status: 'completed',
+          processed_date: '2026-04-09T21:00:00.000Z',
+          transaction_datetime: '2026-03-19T22:00:00.000Z',
+        }],
+      });
+      mockClient.query.mockResolvedValueOnce({ rows: [], rowCount: 1 });
+
+      await internal.insertTransaction(txn, mockClient, 'max', false, '4886', 'Nick', batchContext);
+
+      expect(mockClient.query).toHaveBeenCalledWith(
+        expect.stringContaining('UPDATE transactions'),
+        expect.arrayContaining(['completed-midnight', 'max']),
+      );
+      expect(batchContext.claimedIdentifiers.has('completed-midnight')).toBe(true);
+    });
+
+    it('gives distinct fallback identifiers to unidentified same-day transactions with different amounts', () => {
+      const internal = (runService as any)._internal;
+      const transfer = (amount: number) => ({
+        date: '2026-03-20T00:00:00.000Z',
+        processedDate: '2026-03-20T00:00:00.000Z',
+        description: 'העברה לישראל ישראלי',
+        chargedAmount: amount,
+      });
+      expect(internal.computeTransactionIdentifier(transfer(-100), 'yahav', true))
+        .not.toBe(internal.computeTransactionIdentifier(transfer(-250), 'yahav', true));
+      expect(internal.computeTransactionIdentifier({ ...transfer(-100), identifier: 'ref-1' }, 'yahav', true))
+        .toBe(internal.computeTransactionIdentifier({ ...transfer(-250), identifier: 'ref-1' }, 'yahav', true));
+    });
+
+    it('removes pending rows the bank no longer reports, keeping ones seen or claimed in this scrape', async () => {
+      const internal = (runService as any)._internal;
+      const batchContext = { batchIdentifiers: new Set(['still-pending']), claimedIdentifiers: new Set(['promoted']) };
+      mockClient.query.mockImplementation(async (sql: string) => {
+        if (String(sql).includes('SELECT identifier, vendor')) {
+          return {
+            rows: [
+              { identifier: 'still-pending', vendor: 'max' },
+              { identifier: 'promoted', vendor: 'max' },
+              { identifier: 'released-hold', vendor: 'max' },
+            ],
+          };
+        }
+        return { rows: [], rowCount: 1 };
+      });
+
+      const result = await internal.removeStalePendingTransactions(mockClient, {
+        vendor: 'max',
+        accountNumber: '4886',
+        scrapeStartDate: new Date('2026-03-01T00:00:00.000Z'),
+        batchContext,
+        now: new Date('2026-03-20T00:00:00.000Z'),
+      });
+
+      expect(result).toEqual({ removed: 1 });
+      const deletes = mockClient.query.mock.calls.filter(([sql]: any[]) => String(sql).includes('DELETE FROM transactions'));
+      expect(deletes).toHaveLength(1);
+      expect(deletes[0][1]).toEqual(['released-hold', 'max']);
+    });
+
+    it('does not remove pending rows without a scrape window', async () => {
+      const internal = (runService as any)._internal;
+      const result = await internal.removeStalePendingTransactions(mockClient, {
+        vendor: 'max',
+        accountNumber: '4886',
+        scrapeStartDate: null,
+        batchContext: { batchIdentifiers: new Set(), claimedIdentifiers: new Set() },
+      });
+      expect(result).toEqual({ removed: 0 });
+      expect(mockClient.query).not.toHaveBeenCalled();
+    });
+
+    it('skips pending foreign-currency authorizations that carry no shekel amount', async () => {
+      const internal = (runService as any)._internal;
+      expect(internal.hasReliableIlsAmount({ chargedAmount: -50, originalCurrency: 'USD' })).toBe(false);
+      expect(internal.hasReliableIlsAmount({ chargedAmount: 0, originalAmount: -50, originalCurrency: 'USD', chargedCurrency: 'ILS' })).toBe(false);
+      expect(internal.hasReliableIlsAmount({ chargedAmount: -185, chargedCurrency: 'ILS', originalCurrency: 'USD' })).toBe(true);
+      expect(internal.hasReliableIlsAmount({ chargedAmount: -40, originalCurrency: '₪' })).toBe(true);
+
+      await internal.insertTransaction(
+        {
+          date: '2026-03-20T10:00:00.000Z',
+          processedDate: '2026-03-20T10:00:00.000Z',
+          description: 'AMAZON.COM',
+          chargedAmount: -50,
+          originalAmount: -50,
+          originalCurrency: 'USD',
+          status: 'pending',
+        },
+        mockClient,
+        'visaCal',
+        false,
+        '4886',
+        'Nick',
+      );
+      expect(mockClient.query).not.toHaveBeenCalled();
+    });
+
     it('updates pending rows when completed transactions use renamed merchant labels', async () => {
       const internal = (runService as any)._internal;
       const renamedTxn = {
@@ -1644,8 +1805,8 @@ describe('scraping run service', () => {
               date: '2026-03-20T09:08:48.000Z',
               processedDate: '2026-03-20T09:08:48.000Z',
               description: 'מגה בעיר מגדל נחום',
-              chargedAmount: 292.74,
-              originalAmount: 292.74,
+              chargedAmount: -292.74,
+              originalAmount: -292.74,
               originalCurrency: 'ILS',
               chargedCurrency: 'ILS',
               type: 'card',
@@ -1715,8 +1876,8 @@ describe('scraping run service', () => {
               date: '2026-03-20T09:08:48.000Z',
               processedDate: '2026-03-21T09:08:48.000Z',
               description: 'מגה בעיר מגדל נחום',
-              chargedAmount: 292.74,
-              originalAmount: 292.74,
+              chargedAmount: -292.74,
+              originalAmount: -292.74,
               originalCurrency: 'ILS',
               chargedCurrency: 'ILS',
               type: 'card',
@@ -1769,8 +1930,8 @@ describe('scraping run service', () => {
           date: '2026-02-11T09:00:00.000Z',
           processedDate: '2026-02-11T09:00:00.000Z',
           description: 'Unknown merchant',
-          chargedAmount: 120,
-          originalAmount: 120,
+          chargedAmount: -120,
+          originalAmount: -120,
           originalCurrency: 'ILS',
           chargedCurrency: 'ILS',
           type: 'card',
@@ -1788,6 +1949,40 @@ describe('scraping run service', () => {
         expect.stringContaining('INSERT INTO transactions'),
         expect.arrayContaining(['max', 'Nick', -120, 1, 'expense']),
       );
+    });
+
+    it('keeps card refunds positive and negates unsigned vendor charges', async () => {
+      const internal = (runService as any)._internal;
+      expect(internal.getTransactionPrice({ chargedAmount: -500 }, false, 'max')).toBe(-500);
+      expect(internal.getTransactionPrice({ chargedAmount: 500 }, false, 'max')).toBe(500);
+      expect(internal.getTransactionPrice({ chargedAmount: 80 }, false, 'beyahadBishvilha')).toBe(-80);
+      expect(internal.getTransactionPrice({ chargedAmount: 1200 }, true, 'hapoalim')).toBe(1200);
+
+      mockClient.query.mockImplementation(async () => ({ rows: [], rowCount: 0 }));
+      await internal.insertTransaction(
+        {
+          identifier: 'txn-refund',
+          date: '2026-02-13T09:00:00.000Z',
+          processedDate: '2026-02-13T09:00:00.000Z',
+          description: 'Shoe store refund',
+          chargedAmount: 500,
+          originalAmount: 500,
+          originalCurrency: 'ILS',
+          chargedCurrency: 'ILS',
+          type: 'card',
+          status: 'completed',
+        },
+        mockClient,
+        'max',
+        false,
+        '1234',
+        'Nick',
+      );
+
+      const insertCall = mockClient.query.mock.calls.find(([sql]: [string]) => String(sql).includes('INSERT INTO transactions'));
+      expect(insertCall[1]).toContain(500);
+      expect(insertCall[1]).not.toContain(-500);
+      expect(insertCall[0]).toContain('WHERE transactions.price = -excluded.price AND excluded.price > 0');
     });
 
     it('inserts non-bank transactions using resolved categorization metadata', async () => {
@@ -1820,8 +2015,8 @@ describe('scraping run service', () => {
           date: '2026-02-12T09:00:00.000Z',
           processedDate: '2026-02-12T09:00:00.000Z',
           description: 'Electric Company',
-          chargedAmount: 150,
-          originalAmount: 150,
+          chargedAmount: -150,
+          originalAmount: -150,
           originalCurrency: 'ILS',
           chargedCurrency: 'ILS',
           type: 'card',

@@ -12,6 +12,19 @@ const {
   logInputValidationFailure,
 } = require(resolveElectronPath('security-logger.js'));
 
+// The API never echoes decrypted bank secrets back, even to the caller that supplied them.
+function withoutSecrets(credential) {
+  if (!credential || typeof credential !== 'object') return credential;
+  const {
+    username: _username,
+    password: _password,
+    id_number: _idNumber,
+    identification_code: _identificationCode,
+    ...publicCredential
+  } = credential;
+  return publicCredential;
+}
+
 function createCredentialsRouter() {
   const router = express.Router();
 
@@ -63,7 +76,7 @@ function createCredentialsRouter() {
         credentialId: credential.id,
         vendor: validation.data.vendor,
       });
-      res.status(201).json(credential);
+      res.status(201).json(withoutSecrets(credential));
     } catch (error) {
       // SECURITY: Do not log request body (contains credentials)
       const sanitizedLog = sanitizeErrorForLogging(error, {
@@ -106,7 +119,7 @@ function createCredentialsRouter() {
         credentialId: credential.id,
         fieldsUpdated: Object.keys(validation.data).filter(k => k !== 'id'),
       });
-      res.json(credential);
+      res.json(withoutSecrets(credential));
     } catch (error) {
       // SECURITY: Do not log request body (contains credentials)
       const sanitizedLog = sanitizeErrorForLogging(error, {

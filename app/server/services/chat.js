@@ -76,6 +76,27 @@ function serviceError(status, message, details) {
 }
 
 /**
+ * Category names are not personal data and the model needs them verbatim to answer.
+ * @returns {Promise<Set<string>>}
+ */
+async function loadSafeQueryValues(client) {
+  try {
+    const result = await client.query('SELECT * FROM category_definitions');
+    const values = new Set();
+    for (const row of result.rows || []) {
+      for (const [key, value] of Object.entries(row)) {
+        if (key.startsWith('name') && typeof value === 'string' && value.trim()) {
+          values.add(value.trim());
+        }
+      }
+    }
+    return values;
+  } catch {
+    return new Set();
+  }
+}
+
+/**
  * Process a tool call from OpenAI
  * @param {Object} toolCall - The tool call from OpenAI
  * @param {Object} sandbox - The code sandbox instance
@@ -276,9 +297,11 @@ async function processMessage(payload = {}) {
     ];
 
     // Create sandbox for tool execution
+    const safeQueryValues = await loadSafeQueryValues(client);
     const sandbox = createSandbox(async (sql) => {
       const result = await client.query(sql);
-      return result.rows;
+      // Query results go to the model too, so they get the same anonymization as the context
+      return anonymizer.anonymizeQueryRows(result.rows, { safeValues: safeQueryValues });
     });
 
     // Determine which tools to provide based on permissions
@@ -591,9 +614,11 @@ async function processMessageStream(payload = {}, onEvent) {
       { role: 'user', content: message },
     ];
 
+    const safeQueryValues = await loadSafeQueryValues(client);
     const sandbox = createSandbox(async (sql) => {
       const result = await client.query(sql);
-      return result.rows;
+      // Query results go to the model too, so they get the same anonymization as the context
+      return anonymizer.anonymizeQueryRows(result.rows, { safeValues: safeQueryValues });
     });
 
     const availableTools = [...MEMORY_TOOLS];

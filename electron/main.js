@@ -4,6 +4,8 @@ require('./stdio-errors').installStdioErrorHandlers();
 const hadKeyAtStart = !!process.env.SHEKELSYNC_ENCRYPTION_KEY;
 
 require('./setup-module-alias');
+const { setMasterKey, getMasterKey, getMasterKeySource } = require('./master-key-store');
+const { buildPreRestoreBackupPath, replaceDatabaseFile, validateRestoreSource } = require('./sqlite-restore');
 
 const {
   app,
@@ -273,14 +275,28 @@ async function restoreSqliteDatabase(sourcePath) {
     return { success: false, error: 'SQLite database path is unavailable.' };
   }
 
+  const validation = validateRestoreSource(sourcePath, { masterKey: getMasterKey() });
+  if (!validation.ok) {
+    logger.warn('SQLite restore rejected', { reason: validation.error, credentialStatus: validation.credentialStatus });
+    return { success: false, error: validation.error };
+  }
+
+  const preRestoreBackupPath = buildPreRestoreBackupPath(targetPath);
+  const preRestoreBackup = await backupSqliteDatabase(preRestoreBackupPath, { reason: 'pre-restore' });
+  if (!preRestoreBackup.success) {
+    return {
+      success: false,
+      error: `Could not back up the current database before restoring, so nothing was changed: ${preRestoreBackup.error}`,
+    };
+  }
+
   try {
-    await dbManager.close();
-    await fs.promises.copyFile(sourcePath, targetPath);
-    await fs.promises.rm(`${targetPath}-wal`, { force: true });
-    await fs.promises.rm(`${targetPath}-shm`, { force: true });
-    await dbManager.initialize();
-    logger.info('SQLite restore completed', { sourcePath, targetPath });
-    return { success: true, path: targetPath, restartRecommended: true };
+    await replaceDatabaseFile(sourcePath, targetPath, {
+      closeDatabase: () => dbManager.close(),
+      reopenDatabase: () => dbManager.initialize(),
+    });
+    logger.info('SQLite restore completed', { sourcePath, targetPath, preRestoreBackupPath });
+    return { success: true, path: targetPath, preRestoreBackupPath, restartRecommended: true };
   } catch (error) {
     logger.error('SQLite restore failed', { error: error.message });
     return { success: false, error: error.message };
@@ -653,9 +669,11 @@ async function ensureEncryptionKey(config) {
   // A key that merely appeared in the environment after module load is still
   // untrusted and must pass the manager's store/conflict validation below.
   if (secureKeyManager.isInitialized()) {
-    process.env.SHEKELSYNC_ENCRYPTION_KEY = await secureKeyManager.getKey();
+    setMasterKey(await secureKeyManager.getKey(), { source: getMasterKeySource() || 'keychain' });
     return;
   }
+
+  const keyFromEnvironment = Boolean(process.env.SHEKELSYNC_ENCRYPTION_KEY && hadKeyAtStart);
 
   // Check if key was injected externally (existed before our script started)
   if (process.env.SHEKELSYNC_ENCRYPTION_KEY && hadKeyAtStart) {
@@ -727,7 +745,9 @@ Click "Exit" to close the app and manually remove the variable.${instructions}`,
   // Use secure key manager to get or generate key from OS keychain
   try {
     const masterKey = await secureKeyManager.getKey();
-    process.env.SHEKELSYNC_ENCRYPTION_KEY = masterKey;
+    setMasterKey(masterKey, {
+      source: keyFromEnvironment && process.env.SHEKELSYNC_ENCRYPTION_KEY ? 'environment' : 'keychain',
+    });
     logger.info('Encryption key loaded from secure storage');
 
     // SECURITY: Remove any old keys from config file if they exist

@@ -39,6 +39,7 @@ let databaseRef = baseDatabase;
 let lastTransactionDateServiceRef = lastTransactionDateService;
 
 const PENDING_COMPLETED_MATCH_WINDOW_HOURS = 36; // 1.5 days (handles timezone/date rounding)
+const STALE_PENDING_MAX_AGE_DAYS = 45; // Holds older than this are never still outstanding
 const MERCHANT_ALIAS_RULES = [
   {
     canonical: 'mega_bair',
@@ -432,7 +433,7 @@ function buildSimulatedDemoResult(options, credentials, isBank) {
   const merchants = DEMO_SYNC_MERCHANTS[vendor] || DEMO_SYNC_MERCHANTS.default;
   const merchantName = pickRandom(merchants, 'עסקת דמו חדשה');
   const amount = Number((Math.random() * 180 + 40).toFixed(2));
-  const rawAmount = isBank ? -amount : amount;
+  const rawAmount = -amount;
   const accountNumber = resolvePrimaryAccountNumber(credentials);
   const balance = isBank
     ? Number((32000 + Math.random() * 28000).toFixed(2))
@@ -918,9 +919,16 @@ function getAbsHoursDiff(leftIso, rightIso) {
   return Math.abs(left.getTime() - right.getTime()) / (1000 * 60 * 60);
 }
 
-function getTransactionPrice(txn, isBank = false) {
+// Scrapers report charges as negative and credits (refunds) as positive. These
+// vendors parse unsigned amounts from the page, so every positive value is a charge.
+const UNSIGNED_CHARGE_VENDORS = new Set(['beyahadBishvilha']);
+
+function getTransactionPrice(txn, isBank = false, vendor = null) {
   const rawAmount = txn?.chargedAmount || txn?.originalAmount || 0;
-  return isBank ? rawAmount : rawAmount > 0 ? rawAmount * -1 : rawAmount;
+  if (!isBank && UNSIGNED_CHARGE_VENDORS.has(vendor) && rawAmount > 0) {
+    return rawAmount * -1;
+  }
+  return rawAmount;
 }
 
 function getIsraelDateTimeParts(value) {
@@ -1124,7 +1132,7 @@ function findMatchingScrapedCompletedTransaction(storedCompletedTxn, transaction
   const scored = transactions
     .filter((txn) => txn?.status === 'completed')
     .map((txn) => {
-      if (Number(getTransactionPrice(txn, isBank)) !== Number(storedCompletedTxn?.price)) {
+      if (Number(getTransactionPrice(txn, isBank, storedCompletedTxn?.vendor)) !== Number(storedCompletedTxn?.price)) {
         return null;
       }
 
@@ -1265,6 +1273,46 @@ async function reconcileRecentlyScrapedAccountDuplicates(
   return { duplicatePairsResolved };
 }
 
+/**
+ * Remove pending rows the bank no longer reports. A pending charge that completes with a
+ * different amount, or a hold that is released, would otherwise be counted forever.
+ * Only rows dated inside the scrape window (which the scraper would have returned if still
+ * pending) or older than STALE_PENDING_MAX_AGE_DAYS are removed.
+ */
+async function removeStalePendingTransactions(
+  client,
+  { vendor, accountNumber, scrapeStartDate, batchContext, now = new Date() },
+) {
+  const windowStart = scrapeStartDate ? new Date(scrapeStartDate) : null;
+  if (!batchContext || !windowStart || Number.isNaN(windowStart.getTime())) {
+    return { removed: 0 };
+  }
+
+  const staleCutoff = new Date(now.getTime() - STALE_PENDING_MAX_AGE_DAYS * 24 * 60 * 60 * 1000);
+  const result = await client.query(
+    `
+      SELECT identifier, vendor
+      FROM transactions
+      WHERE vendor = $1
+        AND (account_number IS $2 OR (account_number IS NULL AND $2 IS NULL))
+        AND status = 'pending'
+        AND (COALESCE(transaction_datetime, date) >= $3 OR COALESCE(transaction_datetime, date) < $4)
+    `,
+    [vendor, accountNumber ?? null, windowStart.toISOString(), staleCutoff.toISOString()],
+  );
+
+  let removed = 0;
+  for (const row of result.rows || []) {
+    if (batchContext.batchIdentifiers.has(row.identifier) || batchContext.claimedIdentifiers.has(row.identifier)) {
+      continue;
+    }
+    await deleteTransactionRecord(client, row);
+    removed += 1;
+  }
+
+  return { removed };
+}
+
 async function findPotentialDuplicateTransactions(client, { vendor, accountNumber, price, transactionDatetimeIso }) {
   const transactionDate = new Date(transactionDatetimeIso);
   if (Number.isNaN(transactionDate.getTime())) return [];
@@ -1309,21 +1357,76 @@ function pickBestDuplicateCandidate(candidates, { name, transactionDatetimeIso, 
   return scored[0] || null;
 }
 
-async function insertTransaction(txn, client, companyId, isBank, accountNumber, vendorNickname) {
+const ILS_CURRENCY_CODES = new Set(['ILS', 'NIS', '₪', 'ש"ח', 'שח']);
+
+function isIlsCurrency(currency) {
+  if (currency === undefined || currency === null || String(currency).trim() === '') return true;
+  return ILS_CURRENCY_CODES.has(String(currency).trim().toUpperCase());
+}
+
+// Pending foreign-currency authorizations often carry only the original (e.g. USD) amount.
+// Storing that number as shekels inflates totals; the completed charge brings the real amount.
+function hasReliableIlsAmount(txn) {
+  const currency = txn?.chargedAmount ? (txn.chargedCurrency || txn.originalCurrency) : txn?.originalCurrency;
+  return isIlsCurrency(currency);
+}
+
+function hasScraperIdentifier(txn) {
+  return txn?.identifier !== undefined && txn?.identifier !== null && String(txn.identifier).trim() !== '';
+}
+
+function computeTransactionIdentifier(txn, companyId, isBank = false) {
+  let uniqueId = `${txn.identifier}-${companyId}-${txn.processedDate}-${txn.description}`;
+  // Without a scraper identifier, same-day transactions to the same payee would collide;
+  // include the amount and timestamp so distinct transactions keep distinct keys.
+  if (!hasScraperIdentifier(txn)) {
+    uniqueId += `-${getTransactionPrice(txn, isBank, companyId)}-${txn.date}`;
+  }
+  const hash = crypto.createHash('sha1');
+  hash.update(uniqueId);
+  return hash.digest('hex');
+}
+
+function createScrapeBatchContext(transactions = [], companyId, isBank = false) {
+  return {
+    // Identifiers of every transaction in this scrape: a scrape never returns the same
+    // charge twice, so a stored row owned by another incoming transaction is not a duplicate.
+    batchIdentifiers: new Set(
+      transactions
+        .filter((txn) => txn?.status !== 'pending' || hasReliableIlsAmount(txn))
+        .map((txn) => computeTransactionIdentifier(txn, companyId, isBank)),
+    ),
+    // Stored rows already promoted or merged by an earlier transaction in this scrape.
+    claimedIdentifiers: new Set(),
+  };
+}
+
+function isCandidateOwnedByOtherTransaction(candidate, ownIdentifier, batchContext) {
+  if (!batchContext || candidate.identifier === ownIdentifier) return false;
+  return batchContext.batchIdentifiers.has(candidate.identifier)
+    || batchContext.claimedIdentifiers.has(candidate.identifier);
+}
+
+async function insertTransaction(txn, client, companyId, isBank, accountNumber, vendorNickname, batchContext = null) {
   const transactionDate = new Date(txn.date);
   const transactionDatetimeIso = Number.isNaN(transactionDate.getTime())
     ? null
     : transactionDate.toISOString();
 
-  const transactionPrice = getTransactionPrice(txn, isBank);
+  if (txn.status === 'pending' && !hasReliableIlsAmount(txn)) {
+    return;
+  }
+
+  const transactionPrice = getTransactionPrice(txn, isBank, companyId);
+  const identifier = computeTransactionIdentifier(txn, companyId, isBank);
 
   if (transactionDatetimeIso && (txn.status === 'pending' || txn.status === 'completed')) {
-    const candidates = await findPotentialDuplicateTransactions(client, {
+    const candidates = (await findPotentialDuplicateTransactions(client, {
       vendor: companyId,
       accountNumber,
       price: transactionPrice,
       transactionDatetimeIso,
-    });
+    })).filter((candidate) => !isCandidateOwnedByOtherTransaction(candidate, identifier, batchContext));
 
     const bestPending = pickBestDuplicateCandidate(candidates, {
       name: txn.description,
@@ -1338,11 +1441,13 @@ async function insertTransaction(txn, client, companyId, isBank, accountNumber, 
     });
 
     if (txn.status === 'pending' && (bestCompleted || bestPending)) {
+      batchContext?.claimedIdentifiers.add((bestPending || bestCompleted).identifier);
       return;
     }
 
     if (txn.status === 'completed' && bestPending) {
       await promotePendingTransactionToCompleted(client, bestPending, buildCompletionRecordFromTxn(txn));
+      batchContext?.claimedIdentifiers.add(bestPending.identifier);
       if (bestCompleted && isLikelyCompletedDuplicate(bestCompleted, txn)) {
         await deleteTransactionRecord(client, bestCompleted);
       }
@@ -1356,14 +1461,11 @@ async function insertTransaction(txn, client, companyId, isBank, accountNumber, 
         buildCompletionRecordFromTxn(txn),
         txn.date,
       );
+      batchContext?.claimedIdentifiers.add(bestCompleted.identifier);
       return;
     }
   }
 
-  const uniqueId = `${txn.identifier}-${companyId}-${txn.processedDate}-${txn.description}`;
-  const hash = crypto.createHash('sha1');
-  hash.update(uniqueId);
-  const identifier = hash.digest('hex');
 
   if (isBank) {
     const bankCategory = await getBankCategoryDefinition(client);
@@ -1474,7 +1576,9 @@ async function insertTransaction(txn, client, companyId, isBank, accountNumber, 
       transaction_datetime,
       processed_datetime
     ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21)
-    ON CONFLICT (identifier, vendor) DO NOTHING`,
+    ON CONFLICT (identifier, vendor) DO UPDATE SET price = excluded.price
+    -- Heal card refunds that older builds stored with a flipped (negative) sign
+    WHERE transactions.price = -excluded.price AND excluded.price > 0`,
     [
       identifier,
       companyId,
@@ -1785,8 +1889,9 @@ async function updateVendorBalance(client, options, credentials, account, logger
   }
 }
 
-async function processScrapeResult(client, { options, credentials, result, isBank, logger = console }) {
+async function processScrapeResult(client, { options, credentials, result, isBank, logger = console, scrapeStartDate = null }) {
   let bankTransactions = 0;
+  let processedTransactions = 0;
   const discoveredAccountNumbers = new Set();
 
   const accountCount = result.accounts?.length || 0;
@@ -1825,11 +1930,13 @@ async function processScrapeResult(client, { options, credentials, result, isBan
       // Don't fail the entire scrape for balance update errors
     }
 
+    const batchContext = createScrapeBatchContext(account.txns || [], options.companyId, isBank);
     for (const txn of account.txns || []) {
+      processedTransactions += 1;
       if (isBank) {
         bankTransactions += 1;
       }
-      await insertTransaction(txn, client, options.companyId, isBank, account.accountNumber, credentials.nickname);
+      await insertTransaction(txn, client, options.companyId, isBank, account.accountNumber, credentials.nickname, batchContext);
     }
 
     const reconciliation = await reconcileRecentlyScrapedAccountDuplicates(client, {
@@ -1841,6 +1948,18 @@ async function processScrapeResult(client, { options, credentials, result, isBan
     if (reconciliation.duplicatePairsResolved > 0) {
       logger?.info?.(
         `[Scrape:${options.companyId}] Reconciled ${reconciliation.duplicatePairsResolved} duplicate lifecycle pair(s) for account ${account.accountNumber || 'N/A'}`,
+      );
+    }
+
+    const stalePending = await removeStalePendingTransactions(client, {
+      vendor: options.companyId,
+      accountNumber: account.accountNumber,
+      scrapeStartDate,
+      batchContext,
+    });
+    if (stalePending.removed > 0) {
+      logger?.info?.(
+        `[Scrape:${options.companyId}] Removed ${stalePending.removed} pending transaction(s) no longer reported by the bank`,
       );
     }
 
@@ -1863,7 +1982,7 @@ async function processScrapeResult(client, { options, credentials, result, isBan
 
   await updateVendorAccountNumbers(client, options, credentials, discoveredAccountNumbers, isBank);
 
-  logger?.info?.(`[Scrape:${options.companyId}] Completed: ${bankTransactions} bank transactions, ${discoveredAccountNumbers.size} unique accounts`);
+  logger?.info?.(`[Scrape:${options.companyId}] Completed: ${processedTransactions} transactions (${bankTransactions} bank), ${discoveredAccountNumbers.size} unique accounts`);
 
   return { bankTransactions };
 }
@@ -2147,6 +2266,7 @@ async function _runScrapeInternal({
       result,
       isBank,
       logger,
+      scrapeStartDate: resolvedStartDate,
     });
 
     await applyCategorizationRules(client);
@@ -2252,6 +2372,10 @@ module.exports = {
     getNameMatchScore,
     getAbsHoursDiff,
     getTransactionPrice,
+    computeTransactionIdentifier,
+    createScrapeBatchContext,
+    removeStalePendingTransactions,
+    hasReliableIlsAmount,
     getIsraelDateTimeParts,
     isIsraelMidnight,
     hasSameInstant,

@@ -23,7 +23,16 @@ function detectNextIncome(forecast, today, end) {
   return null;
 }
 
-const dateOf = (value) => String(value || '').slice(0, 10);
+// Stored timestamps are UTC ISO strings; a card billed on 10 April local time is stored as
+// 2026-04-09T21:00:00Z, so slicing the string would compare the wrong calendar day.
+const dateOf = (value) => {
+  const text = String(value || '');
+  if (/^\d{4}-\d{2}-\d{2}$/.test(text) || !/^\d{4}-\d{2}-\d{2}T/.test(text)) return text.slice(0, 10);
+  const parsed = new Date(text);
+  if (Number.isNaN(parsed.getTime())) return text.slice(0, 10);
+  const pad = (number) => String(number).padStart(2, '0');
+  return `${parsed.getFullYear()}-${pad(parsed.getMonth() + 1)}-${pad(parsed.getDate())}`;
+};
 const accountKey = (value) => String(value || '').replace(/[^a-zA-Z0-9]/g, '');
 
 /** Imported processing dates describe the billing cycle, not the purchase date. */
