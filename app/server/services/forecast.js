@@ -95,6 +95,8 @@ function getAllTransactions(db, sinceDate = null) {
       t.price,
       t.account_number,
       t.is_pikadon_related,
+      t.type,
+      t.memo,
       COALESCE(cd.category_type, t.category_type) AS category_type,
       t.category_definition_id,
       cd.name as category_name,

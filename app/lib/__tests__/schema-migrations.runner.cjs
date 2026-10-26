@@ -503,6 +503,7 @@ const scenarios = {
           category_type TEXT NOT NULL,
           category_definition_id INTEGER,
           status TEXT NOT NULL,
+          type TEXT NOT NULL DEFAULT 'normal',
           PRIMARY KEY (identifier, vendor)
         );
         CREATE TABLE transaction_pairing_exclusions (
@@ -533,7 +534,9 @@ const scenarios = {
           event_date TEXT NOT NULL
         );
         INSERT INTO category_definitions VALUES (5, 'Media');
-        INSERT INTO transactions VALUES
+        INSERT INTO transactions (
+          identifier, vendor, date, name, merchant_name, price, category_type, category_definition_id, status
+        ) VALUES
           ('tx-1', 'card-a', '2026-05-05', 'Example Stream', 'Example Stream', -49, 'expense', 5, 'completed'),
           ('tx-2', 'card-b', '2026-06-05', 'Example Stream', 'Example Stream', -50, 'expense', 5, 'completed'),
           ('tx-3', 'card-a', '2026-07-05', 'Example Stream', 'Example Stream', -51, 'expense', 5, 'completed'),
