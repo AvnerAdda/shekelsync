@@ -669,32 +669,90 @@ const SummaryCards: React.FC<SummaryCardsProps> = ({
             }}
           >
             <Box sx={{ display: 'flex', alignItems: 'center', mb: 0.6 }}>
-              <Typography variant="body2" sx={{
-                color: "text.secondary"
-              }}>
+              <Typography variant="body2" sx={{ color: 'text.secondary' }}>
                 {t('summary.allocation.actual')}
               </Typography>
             </Box>
-            <Box sx={{ display: 'flex', height: 8, borderRadius: 4, overflow: 'hidden', bgcolor: theme.palette.divider }}>
-              {normalizedAllocation.map((item) => (
-                <Tooltip
-                  key={item.key}
-                  title={t('summary.allocation.tooltip', {
-                    label: item.label,
-                    actual: Math.round(item.actual),
-                    target: Math.round(item.target),
-                  })}
-                  placement="top"
-                >
-                  <Box
-                    sx={{
-                      width: `${item.width}%`,
-                      bgcolor: `${item.color}E6`,
-                      transition: 'width 0.2s ease',
-                    }}
-                  />
-                </Tooltip>
-              ))}
+            <Box sx={{ position: 'relative', pb: '10px' }}>
+              <Box sx={{ display: 'flex', height: 8, borderRadius: 4, overflow: 'hidden', bgcolor: theme.palette.divider }}>
+                {normalizedAllocation.map((item) => (
+                  <Tooltip
+                    key={item.key}
+                    title={t('summary.allocation.tooltip', {
+                      label: item.label,
+                      actual: Math.round(item.actual),
+                      target: Math.round(item.target),
+                    })}
+                    placement="top"
+                  >
+                    <Box
+                      sx={{
+                        width: `${item.width}%`,
+                        bgcolor: `${item.color}E6`,
+                        transition: 'width 0.2s ease',
+                      }}
+                    />
+                  </Tooltip>
+                ))}
+              </Box>
+              {(() => {
+                let cumulative = 0;
+                return (['essential', 'growth', 'stability'] as SpendingCategory[]).map((key) => {
+                  cumulative += allocationTargets[key] ?? 0;
+                  if (cumulative <= 0 || cumulative >= 100) return null;
+                  return (
+                    <Tooltip key={key} title={t('summary.allocation.target', {
+                      targets: (['essential', 'growth', 'stability', 'reward'] as SpendingCategory[])
+                        .map((k) => Math.round(allocationTargets[k])).join(' / '),
+                    })} placement="top">
+                      <Box
+                        sx={{
+                          position: 'absolute',
+                          top: -2,
+                          bottom: -2,
+                          left: `${cumulative}%`,
+                          width: '2px',
+                          background: `repeating-linear-gradient(to bottom, ${SPENDING_CATEGORY_COLORS[key]} 0px, ${SPENDING_CATEGORY_COLORS[key]} 3px, transparent 3px, transparent 5px)`,
+                          transform: 'translateX(-50%)',
+                          pointerEvents: 'none',
+                          opacity: 0.9,
+                        }}
+                      />
+                    </Tooltip>
+                  );
+                });
+              })()}
+              {/* Delta indicator dots — shown when actual deviates >10pp from target */}
+              {(() => {
+                let leftOffset = 0;
+                return normalizedAllocation.map((item) => {
+                  const center = leftOffset + item.width / 2;
+                  leftOffset += item.width;
+                  const diff = item.actual - item.target;
+                  if (Math.abs(diff) <= 10 || item.width < 2) return null;
+                  const dotColor = Math.abs(diff) < 20
+                    ? theme.palette.warning.main
+                    : theme.palette.error.main;
+                  const sign = diff > 0 ? '+' : '';
+                  return (
+                    <Tooltip key={`delta-${item.key}`}
+                      title={`${item.label}: ${sign}${Math.round(diff)}pp vs target`}
+                      placement="bottom">
+                      <Box sx={{
+                        position: 'absolute',
+                        bottom: -7,
+                        left: `${center}%`,
+                        transform: 'translateX(-50%)',
+                        width: 5,
+                        height: 5,
+                        borderRadius: '50%',
+                        bgcolor: dotColor,
+                        cursor: 'default',
+                      }} />
+                    </Tooltip>
+                  );
+                });
+              })()}
             </Box>
           </Box>}
 
@@ -704,47 +762,12 @@ const SummaryCards: React.FC<SummaryCardsProps> = ({
             data-testid="health-summary-row"
             sx={{
               display: 'grid',
-              gridTemplateColumns: hasAllocationData
-                ? 'minmax(96px, 1.8fr) repeat(4, minmax(42px, 1fr))'
-                : 'repeat(4, minmax(42px, 1fr))',
+              gridTemplateColumns: 'repeat(4, minmax(42px, 1fr))',
               alignItems: 'stretch',
               gap: 0.5,
               minWidth: 0,
             }}
           >
-            {hasAllocationData && (
-              <Tooltip
-                title={t('summary.allocation.target', {
-                  targets: (['essential', 'growth', 'stability', 'reward'] as SpendingCategory[])
-                    .map((key) => Math.round(allocationTargets[key]))
-                    .join(' / '),
-                })}
-                placement="top"
-              >
-                <Box
-                  sx={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    px: 0.6,
-                    minWidth: 0,
-                    borderRadius: 1.25,
-                    bgcolor: alpha(theme.palette.text.primary, 0.03),
-                  }}
-                >
-                  <Typography
-                    variant="caption"
-                    noWrap
-                    sx={{ color: 'text.secondary', fontSize: '0.62rem' }}
-                  >
-                    {t('summary.allocation.target', {
-                      targets: (['essential', 'growth', 'stability', 'reward'] as SpendingCategory[])
-                        .map((key) => Math.round(allocationTargets[key]))
-                        .join(' / '),
-                    })}
-                  </Typography>
-                </Box>
-              </Tooltip>
-            )}
             {healthMetrics.map((metric) => (
               <Tooltip key={metric.id} title={`${metric.label}: ${metric.value}`} placement="top">
                 <Box
@@ -756,7 +779,7 @@ const SummaryCards: React.FC<SummaryCardsProps> = ({
                     py: 0.45,
                     textAlign: 'center',
                     borderRadius: 1.25,
-                    bgcolor: alpha(theme.palette.text.primary, 0.03),
+                    bgcolor: alpha(theme.palette[getMetricColor(metric.value)].main, 0.07),
                   }}
                 >
                   <Typography
