@@ -16,6 +16,7 @@ try {
   app = null;
 }
 const { resolveAppPath } = require('./paths');
+const { redactSensitiveText } = require('./log-redaction');
 let logger = {
   getLogDirectory: () => '',
   getLogFilePath: () => '',
@@ -53,17 +54,6 @@ function getSanitizedMetricsSnapshot() {
   );
 }
 
-const EMAIL_REGEX = /[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi;
-const SECRET_REGEX = /(api[_-]?key|token|secret|password)\s*[:=]\s*['"]?([A-Za-z0-9._-]{8,})['"]?/gi;
-
-function redactSensitiveText(value) {
-  if (!value || typeof value !== 'string') {
-    return value;
-  }
-  return value
-    .replace(EMAIL_REGEX, '[redacted-email]')
-    .replace(SECRET_REGEX, (_match, key) => `${key}=[redacted]`);
-}
 
 function redactLogPayload(logPayload) {
   if (!logPayload) {

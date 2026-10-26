@@ -10,7 +10,9 @@ function ensureKeyBuffer() {
     return encryptionKeyBuffer;
   }
 
-  const envKey = process.env.SHEKELSYNC_ENCRYPTION_KEY;
+  // The Electron main process keeps the key in memory (see electron/master-key-store.js);
+  // standalone scripts and the dev API server still pass it through the environment.
+  const envKey = globalThis[Symbol.for('shekelsync.masterEncryptionKey')]?.key || process.env.SHEKELSYNC_ENCRYPTION_KEY;
   if (envKey) {
     const keyBuffer = Buffer.from(envKey, 'hex');
     if (keyBuffer.length !== 32) {

@@ -462,23 +462,14 @@ const CategoryHierarchyModal: React.FC<CategoryHierarchyModalProps> = ({
       return;
     }
     try {
-      const counts = new Map<number, number>();
+      const response = await apiClient.get('/api/categorization_rules/match_counts');
+      if (!response.ok) throw new Error('Failed to fetch rule match counts');
 
-      await Promise.all(
-        rulesToFetch.map(async (rule) => {
-          try {
-            const response = await apiClient.get(
-              `/api/categorization_rules/preview?ruleId=${rule.id}&limit=0`
-            );
-            if (response.ok) {
-              const data = response.data as any;
-              counts.set(rule.id, data.totalCount);
-            }
-          } catch (err) {
-            console.error(`Error fetching count for rule ${rule.id}:`, err);
-          }
-        })
-      );
+      const totals = ((response.data as any)?.counts ?? {}) as Record<string, number>;
+      const counts = new Map<number, number>();
+      rulesToFetch.forEach((rule) => {
+        counts.set(rule.id, totals[rule.id] ?? 0);
+      });
 
       setRuleTransactionCounts(counts);
     } catch (error) {
