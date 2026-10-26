@@ -73,7 +73,14 @@ const DashboardWelcome: React.FC = () => {
       <Stack
         direction={{ xs: 'column', sm: 'row' }}
         spacing={1}
-        sx={{ alignItems: { xs: 'stretch', sm: 'center' }, flexShrink: 0 }}
+        sx={{
+          alignItems: { xs: 'stretch', sm: 'center' },
+          flexShrink: 0,
+          position: 'sticky',
+          top: 8,
+          alignSelf: 'flex-start',
+          zIndex: 10,
+        }}
       >
         <DashboardPeriodSelector
           sx={{

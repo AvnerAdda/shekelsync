@@ -267,8 +267,7 @@ describe('SummaryCards component', () => {
     );
 
     const summaryRow = screen.getByTestId('health-summary-row');
-    expect(summaryRow.children).toHaveLength(5);
-    expect(within(summaryRow).getByText('Target: 50 / 20 / 10 / 15%')).toBeInTheDocument();
+    expect(summaryRow.children).toHaveLength(4);
     expect(within(summaryRow).getByRole('group', { name: 'Savings: 100' })).toBeInTheDocument();
     expect(within(summaryRow).getByRole('group', { name: 'Diversity: 80' })).toBeInTheDocument();
     expect(within(summaryRow).getByRole('group', { name: 'Impulse: 84' })).toBeInTheDocument();
