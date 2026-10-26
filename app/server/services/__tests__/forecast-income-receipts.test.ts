@@ -15,7 +15,7 @@ describe('received income with stale transaction types', () => {
       CREATE TABLE transactions (
         identifier TEXT, vendor TEXT, date TEXT, name TEXT, price REAL,
         account_number TEXT, is_pikadon_related INTEGER, category_type TEXT,
-        category_definition_id INTEGER, status TEXT
+        category_definition_id INTEGER, status TEXT, type TEXT, memo TEXT
       );
       CREATE TABLE category_definitions (
         id INTEGER PRIMARY KEY, name TEXT, name_en TEXT, parent_id INTEGER,
@@ -51,7 +51,7 @@ describe('received income with stale transaction types', () => {
   });
 
   function addReceipt(date: string, extra: { name?: string; type?: string; status?: string; category?: number } = {}) {
-    db.prepare('INSERT INTO transactions VALUES (?, ?, ?, ?, ?, NULL, 0, ?, ?, ?)')
+    db.prepare('INSERT INTO transactions VALUES (?, ?, ?, ?, ?, NULL, 0, ?, ?, ?, \'normal\', NULL)')
       .run(`${extra.name || 'Payroll'}-${date}`, 'bank', date, extra.name || 'Payroll', 1000,
         extra.type || 'income', extra.category ?? 1, extra.status || 'completed');
   }
