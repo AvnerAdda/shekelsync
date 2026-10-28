@@ -14,7 +14,7 @@ describe('log redaction', () => {
   it('redacts secrets in key=value and JSON forms and e-mail addresses', () => {
     expect(redactSensitiveText('{"password":"hunter2!","id_number":"123456782"}'))
       .toBe('{"password":"[redacted]","id_number":"[redacted]"}');
-    expect(redactSensitiveText('token=abcdefgh1234 user a.b@example.com'))
+    expect(redactSensitiveText('token=abcdefgh1234 user a.b@example.com')) // gitleaks:allow -- synthetic redaction fixture
       .toBe('token=[redacted] user [redacted-email]');
   });
 
