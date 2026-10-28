@@ -104,4 +104,19 @@ describe('automatic planning inputs', () => {
     expect(cards([charge], { cards: [{ vendor: 'max', credential_id: null }] }))
       .toEqual({ amount: 100, source: 'imported' });
   });
+  it('compares UTC-stored billing dates by the Israel calendar day', () => {
+    const originalTz = process.env.TZ;
+    process.env.TZ = 'Asia/Jerusalem';
+    try {
+      // Billed 10 Sep local (stored as 9 Sep 21:00 UTC); the balance snapshot is from 9 Sep,
+      // before the debit, so the bill is still owed.
+      const result = cards([{ ...charge, processed_date: '2026-09-09T21:00:00.000Z' }], {
+        banks: [{ ...bank, last_update_date: '2026-09-09' }],
+      });
+      expect(result).toEqual({ amount: 100, source: 'imported' });
+    } finally {
+      if (originalTz === undefined) delete process.env.TZ;
+      else process.env.TZ = originalTz;
+    }
+  });
 });

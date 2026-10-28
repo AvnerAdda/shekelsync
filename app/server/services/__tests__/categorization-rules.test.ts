@@ -412,6 +412,15 @@ describe('categorization rules service', () => {
     });
   });
 
+  describe('getRuleMatchCounts', () => {
+    it('returns every rule count from a single query', async () => {
+      querySequence({ rows: [{ id: 1, total: '3' }, { id: 2, total: 0 }] });
+
+      await expect(rulesService.getRuleMatchCounts()).resolves.toEqual({ 1: 3, 2: 0 });
+      expect(queryMock).toHaveBeenCalledTimes(1);
+    });
+  });
+
   describe('previewRuleMatches', () => {
     it('throws when no pattern or ruleId supplied', async () => {
       await expect(rulesService.previewRuleMatches({})).rejects.toMatchObject({ status: 400 });

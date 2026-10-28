@@ -105,6 +105,46 @@ describe('data-anonymizer', () => {
     });
   });
 
+  describe('anonymizeQueryRows', () => {
+    it('anonymizes merchants, redacts identifiers, and keeps category names and amounts', () => {
+      const anonymizer = createAnonymizer();
+      const rows = anonymizer.anonymizeQueryRows(
+        [
+          {
+            name: 'Shufersal Deal',
+            merchant: 'Shufersal Deal',
+            category_name: 'Groceries',
+            price: -250.5,
+            date: '2026-03-20',
+            account_number: '123456789',
+            vendor_nickname: 'Avner Max',
+            memo: 'transfer to account 9876543210',
+          },
+          { name: 'Groceries', total: 900 },
+        ],
+        { safeValues: new Set(['Groceries']) },
+      );
+
+      expect(rows[0]).toEqual({
+        name: 'Merchant_1',
+        merchant: 'Merchant_1',
+        category_name: 'Groceries',
+        price: -250.5,
+        date: '2026-03-20',
+        account_number: '[redacted]',
+        vendor_nickname: '[redacted]',
+        memo: 'Merchant_2',
+      });
+      expect(rows[1]).toEqual({ name: 'Groceries', total: 900 });
+    });
+
+    it('masks long digit runs in free-text columns and passes non-arrays through', () => {
+      const anonymizer = createAnonymizer();
+      expect(anonymizer.anonymizeQueryRows([{ note: 'card 4580123456781234' }])).toEqual([{ note: 'card ****1234' }]);
+      expect(anonymizer.anonymizeQueryRows({ total: 5 })).toEqual({ total: 5 });
+    });
+  });
+
   describe('anonymizeMerchants', () => {
     it('returns empty array for non-array input', () => {
       const anon = createAnonymizer();

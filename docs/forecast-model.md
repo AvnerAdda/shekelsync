@@ -1,9 +1,36 @@
-# Pattern forecast version 5
+# Pattern forecast version 6
 
 The application runs one pattern model. The retired model, background comparison runs,
-comparison API, and comparison UI have been removed. Prediction snapshots use `pattern-v5`
+comparison API, and comparison UI have been removed. Prediction snapshots use `pattern-v6`
 so accuracy observations from the previous implementation are not mixed with the new one.
 Existing snapshot schemas and historical records are retained.
+
+## Installment plans and lapsed patterns
+
+Card installment payments carry `type = 'installments'` and a memo such as "תשלום 2 מתוך 4".
+Like the card scrapers, the first two numbers are read as payment number and total. A plan is
+identified by bank, account, normalized merchant name, payment total and implied purchase month.
+After its latest observed payment, each remaining payment is scheduled on the purchase day of
+later months, clamped at month end, with the latest payment amount. Nothing is scheduled after
+the final payment. Each projected date uses the same stored UTC-day bucket as the imported charge.
+
+Later payments (number 2 onward) are removed from category spending history, because the plan
+schedules them. The first payment remains as evidence of new installment purchases. Installment
+transactions do not create automatic recurring patterns, which would otherwise continue a
+four-payment plan indefinitely. A saved category expectation keeps its category on the previous
+behaviour. Pending, future and refunded rows are ignored.
+
+An automatic recurring pattern stops projecting once more than 2.5 cycles have passed since its
+last observed charge, the same rule as detected income and investment schedules. Confirmed,
+overridden, imported legacy subscription and other user-backed patterns are unchanged. A lapsed
+pattern's history remains excluded from category averages: returning it let the older category
+model project long-stopped transfers again. See [the v6 evaluation](forecast-installments-evaluation-2026-10-26.md).
+
+A recurring pattern whose name matches a bank debit paired with an imported card (for example
+"חיוב לכרטיס ויזה 9144") is never projected, whatever its source. Paired debits are already
+excluded from history and actuals because the card's purchases record that spending; imported
+legacy subscriptions for these debits previously added it a second time. The replay removes
+legacy subscriptions, so this live-app double count did not appear in replay accuracy.
 
 ## Income and classification
 

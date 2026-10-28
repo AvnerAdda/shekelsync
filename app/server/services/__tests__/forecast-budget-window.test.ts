@@ -57,7 +57,7 @@ describe('monthly budget forecast coverage', () => {
         CREATE TABLE transactions (
           identifier TEXT, vendor TEXT, date TEXT, name TEXT, price REAL,
           account_number TEXT, is_pikadon_related INTEGER, category_type TEXT,
-          category_definition_id INTEGER, status TEXT
+          category_definition_id INTEGER, status TEXT, type TEXT, memo TEXT
         );
         CREATE TABLE transaction_pairing_exclusions (transaction_identifier TEXT, transaction_vendor TEXT);
         CREATE TABLE category_definitions (
@@ -70,7 +70,7 @@ describe('monthly budget forecast coverage', () => {
         );
         INSERT INTO category_definitions VALUES (1, 'Groceries', 'Groceries', 'Courses', 'cart', '#123456', NULL, 'expense', 0);
         INSERT INTO category_budgets VALUES (1, 1, 'monthly', 900, 1);
-        INSERT INTO transactions VALUES ('purchase', 'bank', '2026-10-12T18:00:00', 'Purchase', -360, NULL, 0, 'expense', 1, 'completed');
+        INSERT INTO transactions VALUES ('purchase', 'bank', '2026-10-12T18:00:00', 'Purchase', -360, NULL, 0, 'expense', 1, 'completed', 'normal', NULL);
       `);
       forecast.__setDatabaseCtor(function () {
         return { prepare: db.prepare.bind(db), close() {} };

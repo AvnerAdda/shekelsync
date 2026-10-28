@@ -15,6 +15,24 @@ interface ThemeContextType {
   actualTheme: 'light' | 'dark';
   fontSize: FontSize;
   setFontSize: (size: FontSize) => void;
+  healthScore: number | null;
+  setHealthScore: (score: number | null) => void;
+}
+
+function getPrimaryPalette(score: number | null, isDark: boolean) {
+  if (score === null || score >= 80) {
+    return isDark
+      ? { main: '#86D19A', light: '#B6E5C2', dark: '#5DAF75', contrastText: '#102218' }
+      : { main: '#2F6B4F', light: '#5A9274', dark: '#204B38', contrastText: '#FFFFFF' };
+  }
+  if (score >= 60) {
+    return isDark
+      ? { main: '#FCD34D', light: '#FDE68A', dark: '#F59E0B', contrastText: '#1C1100' }
+      : { main: '#B45309', light: '#D97706', dark: '#92400E', contrastText: '#FFFFFF' };
+  }
+  return isDark
+    ? { main: '#FCA5A5', light: '#FECACA', dark: '#F87171', contrastText: '#200A0A' }
+    : { main: '#B91C1C', light: '#DC2626', dark: '#991B1B', contrastText: '#FFFFFF' };
 }
 
 const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
@@ -39,6 +57,7 @@ export const ThemeContextProvider: React.FC<ThemeContextProviderProps> = ({
   const [mode, setMode] = useState<ThemeMode>('system');
   const [actualTheme, setActualTheme] = useState<'light' | 'dark'>('light');
   const [fontSize, setFontSizeState] = useState<FontSize>('medium');
+  const [healthScore, setHealthScore] = useState<number | null>(null);
   const ltrCache = useMemo(() => createCache({ key: 'mui-ltr', prepend: true }), []);
   const rtlCache = useMemo(
     () => createCache({ key: 'mui-rtl', stylisPlugins: [rtlPlugin], prepend: true }),
@@ -93,12 +112,7 @@ export const ThemeContextProvider: React.FC<ThemeContextProviderProps> = ({
       direction,
       palette: {
         mode: actualTheme,
-        primary: {
-          main: actualTheme === 'dark' ? '#86D19A' : '#2F6B4F',
-          light: actualTheme === 'dark' ? '#B6E5C2' : '#5A9274',
-          dark: actualTheme === 'dark' ? '#5DAF75' : '#204B38',
-          contrastText: actualTheme === 'dark' ? '#102218' : '#FFFFFF',
-        },
+        primary: getPrimaryPalette(healthScore, actualTheme === 'dark'),
         secondary: {
           main: actualTheme === 'dark' ? '#E7A174' : '#B96837',
           light: actualTheme === 'dark' ? '#F0BE9E' : '#D39167',
@@ -261,13 +275,20 @@ export const ThemeContextProvider: React.FC<ThemeContextProviderProps> = ({
             },
           },
         },
+        MuiCssBaseline: {
+          styleOverrides: {
+            '*, *::before, *::after': {
+              transition: 'background-color 400ms ease, border-color 400ms ease, color 400ms ease',
+            },
+          },
+        },
       },
     }),
-    [actualTheme, direction, fontSizeMultiplier],
+    [actualTheme, direction, fontSizeMultiplier, healthScore],
   );
 
   return (
-    <ThemeContext.Provider value={{ mode, setMode: handleSetMode, actualTheme, fontSize, setFontSize: handleSetFontSize }}>
+    <ThemeContext.Provider value={{ mode, setMode: handleSetMode, actualTheme, fontSize, setFontSize: handleSetFontSize, healthScore, setHealthScore }}>
       <CacheProvider value={direction === 'rtl' ? rtlCache : ltrCache}>
         <ThemeProvider theme={theme}>
           <CssBaseline />

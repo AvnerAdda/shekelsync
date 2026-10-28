@@ -1,6 +1,6 @@
 {
   "name": "shekelsync",
-  "version": "0.2.2",
+  "version": "0.2.3",
   "description": "Personal finance tracker for Israeli banks and credit cards",
   "author": "ShekelSync",
   "license": "AGPL-3.0-or-later",
@@ -35,6 +35,7 @@
     "test:coverage": "vitest run --coverage"
   },
   "dependencies": {
+    "@jitl/quickjs-wasmfile-release-sync": "0.32.0",
     "@supabase/supabase-js": "^2.117.2",
     "@xmldom/xmldom": "^0.9.12",
     "better-sqlite3": "^13.0.3",
@@ -47,6 +48,7 @@
     "israeli-bank-scrapers-core": "^6.12.1",
     "keytar": "^7.9.0",
     "openai": "^7.23.0",
+    "quickjs-emscripten-core": "0.32.0",
     "uuid": "^14.0.2",
     "yargs": "^18.2.0"
   },
@@ -80,7 +82,7 @@
     "@typescript-eslint/eslint-plugin": "^8.70.1",
     "@typescript-eslint/parser": "^8.70.1",
     "@typescript/native": "npm:typescript@^7.0.2",
-    "@vitest/coverage-v8": "^5.0.2",
+    "@vitest/coverage-v8": "^5.0.5",
     "autoprefixer": "^10.6.1",
     "concurrently": "^10.0.5",
     "d3": "^7.9.0",
@@ -108,7 +110,7 @@
     "tailwindcss": "^4.3.3",
     "ts-node": "^10.9.2",
     "typescript": "npm:@typescript/typescript6@^6.0.2",
-    "vitest": "^5.0.2",
+    "vitest": "^5.0.5",
     "wait-on": "^9.1.0"
   },
   "build": {
@@ -165,7 +167,8 @@
       "node_modules/keytar/**/*",
       "node_modules/puppeteer-core/**/*",
       "node_modules/israeli-bank-scrapers-core/**/*",
-      "node_modules/chromium-bidi/**/*"
+      "node_modules/chromium-bidi/**/*",
+      "node_modules/@jitl/**/*"
     ],
     "extraResources": [
       {

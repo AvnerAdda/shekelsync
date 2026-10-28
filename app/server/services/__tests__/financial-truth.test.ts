@@ -125,6 +125,7 @@ describe('Financial truth resolution', () => {
             transaction_vendor: vendor,
           })),
         };
+        if (sql.includes('JOIN transaction_pairing_exclusions')) return { all: () => [] };
         throw new Error(`Unexpected query: ${sql}`);
       }),
     };
@@ -133,7 +134,38 @@ describe('Financial truth resolution', () => {
 
     expect(snapshot.patterns[0].vendor).toBe(expected);
     expect(snapshot.excludedTransactionKeys.size).toBe(vendors.length);
-    expect(db.prepare).toHaveBeenCalledTimes(4);
+    expect(db.prepare).toHaveBeenCalledTimes(5);
+  });
+
+  it('never projects a pattern for a bank debit that settles an imported card', () => {
+    const db = {
+      prepare: vi.fn((sql: string) => {
+        if (sql.includes('FROM financial_truth_state')) return { get: () => ({ revision: 1 }) };
+        if (sql.includes('FROM financial_patterns ORDER BY')) return {
+          all: () => [
+            { id: 1, normalized_name: 'חיוב_לכרטיס_ויזה_9144', display_name: 'חיוב לכרטיס ויזה 9144',
+              direction: 'expense', detected_frequency: 'monthly', detected_amount: 5354.58,
+              next_expected_date: '2026-10-31', source: 'legacy_subscription' },
+            { id: 2, normalized_name: 'gym_plus', display_name: 'Gym Plus', direction: 'expense',
+              detected_frequency: 'monthly', detected_amount: 100, next_expected_date: '2026-11-05', source: 'manual' },
+          ],
+        };
+        if (sql.includes('FROM financial_corrections')) return {
+          all: () => [{ pattern_id: 1, action: 'override_pattern', overrides_json: '{"confirmed":true}' }],
+        };
+        if (sql.includes('FROM financial_pattern_transactions')) return { all: () => [] };
+        if (sql.includes('JOIN transaction_pairing_exclusions')) return {
+          all: () => [{ name: 'חיוב לכרטיס ויזה 9144', merchant_name: null }],
+        };
+        throw new Error(`Unexpected query: ${sql}`);
+      }),
+    };
+
+    const snapshot = service.getProjectionSnapshotFromDb(db, { materialize: false });
+
+    expect(snapshot.patterns.map((pattern: any) => pattern.settlesPairedCard)).toEqual([true, false]);
+    expect(service.buildRecurringOccurrences(snapshot, '2026-10-27', '2026-11-30')
+      .map((occurrence: any) => occurrence.patternId)).toEqual([2]);
   });
 
   it('emits stable occurrences and respects suppression/end state', () => {
@@ -202,6 +234,45 @@ describe('Financial truth resolution', () => {
       corrections: [{ action: 'override_pattern' }],
     };
     expect(service._internal.hasMinimumRecurringEvidence(userConfirmed)).toBe(true);
+  });
+
+  it('stops projecting automatic patterns after 2.5 missed cycles unless the user backs them', () => {
+    const detectedTransfer = {
+      id: 4,
+      displayName: 'Monthly transfer',
+      direction: 'expense',
+      categoryDefinitionId: 23,
+      frequency: 'monthly',
+      amount: 2700,
+      amountTolerance: 405,
+      confidence: 0.6,
+      occurrenceCount: 2,
+      source: 'detected',
+      lastSeenDate: '2025-12-30',
+      nextExpectedDate: '2026-01-30',
+      state: 'active',
+      endedAt: null,
+      skippedOccurrences: [],
+      corrections: [],
+    };
+    const { isLapsedDetectedPattern } = service._internal;
+
+    expect(isLapsedDetectedPattern(detectedTransfer, '2026-03-15')).toBe(false);
+    expect(isLapsedDetectedPattern(detectedTransfer, '2026-03-16')).toBe(true);
+    expect(service.buildRecurringOccurrences({ patterns: [detectedTransfer] }, '2026-03-01', '2026-03-31'))
+      .toHaveLength(1);
+    expect(service.buildRecurringOccurrences({ patterns: [detectedTransfer] }, '2026-04-01', '2026-06-30'))
+      .toEqual([]);
+
+    for (const userBacked of [
+      { ...detectedTransfer, confirmed: true },
+      { ...detectedTransfer, corrections: [{ action: 'override_pattern' }] },
+      { ...detectedTransfer, source: 'legacy_subscription' },
+    ]) {
+      expect(isLapsedDetectedPattern(userBacked, '2026-09-01')).toBe(false);
+      expect(service.buildRecurringOccurrences({ patterns: [userBacked] }, '2026-09-01', '2026-09-30'))
+        .toHaveLength(1);
+    }
   });
 
   it('validates category expectations and occurrence targets', () => {
@@ -439,6 +510,18 @@ describe('Financial truth resolution', () => {
         ['interest-1', 'bank-a', '2026-03-03', 'Deposit Interest', 58.14, 'Deposit Interest', null, 'income'],
         ['interest-2', 'bank-a', '2026-03-04', 'Deposit Interest', 58.93, 'Deposit Interest', null, 'income'],
       ].forEach((row) => insertTransaction.run(...row));
+      const insertInstallment = db.prepare(`
+        INSERT INTO transactions (
+          identifier, vendor, date, name, price, type, memo, status, merchant_name,
+          category_definition_id, category_type
+        ) VALUES (?, 'card-b', ?, 'Appliance Store', -4000, 'installments', ?, 'completed', 'Appliance Store', ?, 'expense')
+      `);
+      const otherCategoryId = Number(db.prepare(
+        "SELECT id FROM category_definitions WHERE category_type = 'expense' AND id != ? ORDER BY id LIMIT 1",
+      ).get(categoryId).id);
+      ['2026-01-03', '2026-02-03', '2026-03-03'].forEach((date, index) => {
+        insertInstallment.run(`appliance-${index + 1}`, date, `תשלום ${index + 1} מתוך 4`, otherCategoryId);
+      });
 
       expect(service.materializePatterns(db, { force: true })).toMatchObject({ changed: true });
       expect(service.materializePatterns(db)).toMatchObject({ changed: false });
@@ -448,6 +531,9 @@ describe('Financial truth resolution', () => {
       expect(snapshot.patterns.find((pattern: any) => pattern.normalizedName === 'employer'))
         .toMatchObject({ vendor: 'bank-a' });
       expect(snapshot.patterns.find((pattern: any) => pattern.normalizedName === 'deposit_interest'))
+        .toBeUndefined();
+      // Installment plans are scheduled from their payment count, not learned as an open-ended bill.
+      expect(snapshot.patterns.find((pattern: any) => pattern.normalizedName === 'appliance_store'))
         .toBeUndefined();
       expect(snapshot.excludedTransactionKeys.has('gym-1\u0000bank-a')).toBe(true);
 

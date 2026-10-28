@@ -2988,12 +2988,7 @@ const AnalysisPageNew: React.FC = () => {
           borderColor: (theme) => alpha(theme.palette.common.white, 0.1),
           boxShadow: (theme) => `0 8px 32px 0 ${alpha(theme.palette.common.black, 0.05)}`,
         }}>
-          <FinancialHealthScore
-            data={intelligence}
-            loading={loading && !intelligence}
-            error={error}
-            onRefresh={fetchIntelligence}
-          />
+          <FinancialHealthScore />
         </Paper>
       </TabPanel>
       <TabPanel value={currentTab} index={5}>

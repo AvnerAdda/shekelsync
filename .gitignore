@@ -19,6 +19,7 @@ yarn-error.log*
 .env.development.local
 .env.test.local
 .env.production.local
+.env*.bak
 
 # Package files (commented out - usually want to track these)
 # app/package-lock.json

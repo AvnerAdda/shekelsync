@@ -36,7 +36,8 @@ on Windows, `~/.config/ShekelSync` on Linux):
   (Keychain on macOS, Credential Manager on Windows, Secret Service/libsecret on
   Linux), not in the database.
 - **Application settings and logs** — including diagnostic logs kept locally for
-  troubleshooting.
+  troubleshooting. Account, card and ID numbers, balances, e-mail addresses and
+  secrets are masked before log lines are written.
 
 ShekelSync does not operate a backend that collects this data, and the app does
 not include analytics, tracking, or telemetry that reports your usage back to
@@ -90,8 +91,14 @@ ShekelSync does not receive or store your payment-card details.
 
 - Credentials are encrypted at rest using AES-256-GCM with an authenticated tag.
 - The master encryption key is stored in your OS keychain and is required for the
-  app to decrypt credentials. If the keychain is unavailable, the app fails
-  closed rather than falling back to weaker protection.
+  app to decrypt credentials. On macOS and Windows, if the keychain is
+  unavailable, the app fails closed rather than falling back to weaker
+  protection. On Linux without a working Secret Service, you can instead supply
+  the key through the `SHEKELSYNC_ENCRYPTION_KEY` environment variable; that key
+  is only as safe as the place you store it.
+- Your financial data (transactions, balances, account numbers) is **not**
+  encrypted at rest; it relies on your OS user account and disk encryption
+  (FileVault, BitLocker, LUKS).
 - The embedded local API server binds to `localhost` only and requires an
   auth token; it is not reachable from your network.
 
@@ -102,10 +109,13 @@ your own device and OS user account.
 
 - **Export:** you can export your data (CSV/JSON) from within the app.
 - **Backups:** the app creates a local backup of your database before applying
-  updates or schema migrations, stored in a `backups` folder next to the
-  database.
+  updates, schema migrations or a restore, stored in a `backups` folder next to
+  the database. Backups and exports you save elsewhere are unencrypted copies of
+  your financial data; store them accordingly.
 - **Deletion:** deleting the app's user-data directory removes your local data.
-  Removing stored credentials also removes them from the OS keychain.
+  Removing an account deletes its encrypted credentials from the database (the
+  OS keychain only holds the master key). Older encrypted copies can remain in
+  the `backups` folder until you delete it.
 
 ## Children
 

@@ -31,7 +31,8 @@ const FREQUENCY_MIN_OCCURRENCES = {
   yearly: 2,
   variable: 2,
 };
-const FINANCIAL_PATTERN_MATERIALIZER_VERSION = 'evidence-v2';
+const MISSED_CYCLES_BEFORE_LAPSE = 2.5;
+const FINANCIAL_PATTERN_MATERIALIZER_VERSION = 'evidence-v3';
 const AFFECTED_DOMAINS = [
   'forecast',
   'subscriptions',
@@ -297,6 +298,8 @@ function materializePatterns(db, { force = false } = {}) {
     WHERE t.status = 'completed'
       AND excluded.transaction_identifier IS NULL
       AND t.price != 0
+      -- Installment plans end after a known payment count; forecasts schedule them from the plan.
+      AND COALESCE(t.type, '') != 'installments'
       AND TRIM(COALESCE(NULLIF(t.merchant_name, ''), t.name, '')) != ''
     ORDER BY t.date, t.identifier
   `).all().map((row) => ({
@@ -547,14 +550,26 @@ function resolvePattern(pattern, correctionRows) {
   return resolved;
 }
 
-function hasMinimumRecurringEvidence(pattern) {
-  if (!pattern || pattern.frequency === 'variable') return false;
+function isUserBackedPattern(pattern) {
   const hasUserOverride = Array.isArray(pattern.corrections)
     && pattern.corrections.some((correction) => correction.action === 'override_pattern');
-  if (pattern.source !== 'detected' || pattern.confirmed || hasUserOverride) return true;
+  return pattern.source !== 'detected' || Boolean(pattern.confirmed) || hasUserOverride;
+}
+
+function hasMinimumRecurringEvidence(pattern) {
+  if (!pattern || pattern.frequency === 'variable') return false;
+  if (isUserBackedPattern(pattern)) return true;
 
   const minimumOccurrences = FREQUENCY_MIN_OCCURRENCES[pattern.frequency] || 2;
   return Number(pattern.occurrenceCount || 0) >= minimumOccurrences;
+}
+
+// Detected income and investment schedules stop after 2.5 missed cycles; automatic
+// patterns follow the same rule so a stopped charge is not projected indefinitely.
+function isLapsedDetectedPattern(pattern, asOfDate) {
+  if (isUserBackedPattern(pattern) || !pattern.lastSeenDate) return false;
+  const elapsedDays = Math.round((parseDate(asOfDate) - parseDate(pattern.lastSeenDate)) / 86400000);
+  return elapsedDays > FREQUENCY_DAYS[pattern.frequency] * MISSED_CYCLES_BEFORE_LAPSE;
 }
 
 function getProjectionSnapshotFromDb(db, { materialize = true } = {}) {
@@ -589,9 +604,19 @@ function getProjectionSnapshotFromDb(db, { materialize = true } = {}) {
       excludedTransactionKeys.add(`${row.transaction_identifier}\u0000${row.transaction_vendor}`);
     }
   });
+  // Bank debits paired with an imported card are excluded from history and actuals because the
+  // card's own purchases record that spending. A pattern for the same debit (for example, an
+  // imported legacy subscription) would count those purchases a second time.
+  const pairedSettlementNames = new Set(db.prepare(`
+    SELECT DISTINCT t.name, t.merchant_name
+    FROM transactions t
+    JOIN transaction_pairing_exclusions excluded
+      ON excluded.transaction_identifier = t.identifier AND excluded.transaction_vendor = t.vendor
+  `).all().map((row) => normalizeName(row.merchant_name || row.name)).filter(Boolean));
   resolvedPatterns.forEach((pattern) => {
     const vendors = vendorsByPattern.get(pattern.id);
     pattern.vendor = vendors?.size === 1 ? [...vendors][0] : null;
+    pattern.settlesPairedCard = pairedSettlementNames.has(pattern.normalizedName);
   });
   const categoryExpectations = corrections
     .filter((row) => row.action === 'set_category_expectation')
@@ -625,6 +650,8 @@ function buildRecurringOccurrences(snapshot, startDate, endDate) {
     if (!FREQUENCY_DAYS[pattern.frequency]) return;
     if (!hasMinimumRecurringEvidence(pattern)) return;
     if (pattern.state === 'suppressed' || pattern.state === 'paused') return;
+    if (pattern.settlesPairedCard) return;
+    if (isLapsedDetectedPattern(pattern, startDate)) return;
     let occurrence = pattern.nextExpectedDate
       ? parseDate(pattern.nextExpectedDate)
       : addFrequency(parseDate(pattern.lastSeenDate || startDate), pattern.frequency, pattern.billingDay);
@@ -1247,6 +1274,7 @@ module.exports = {
     openDb,
     parseDate,
     hasMinimumRecurringEvidence,
+    isLapsedDetectedPattern,
     resolvePattern,
     transactionSignature,
   },
