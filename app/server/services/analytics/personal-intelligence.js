@@ -26,8 +26,10 @@ async function getPersonalIntelligence(params = {}) {
   const monthsInt = Math.max(parseInt(params.months, 10) || 1, 1);
   let endDate, startDate;
   if (params.startDate && params.endDate) {
-    startDate = new Date(params.startDate + 'T00:00:00');
-    endDate = new Date(params.endDate + 'T23:59:59');
+    // Transactions are stored and bucketed as UTC days, so the period bounds are UTC days too;
+    // local midnight in Israel is the previous UTC day and would pull it into the period.
+    startDate = new Date(params.startDate + 'T00:00:00.000Z');
+    endDate = new Date(params.endDate + 'T23:59:59.999Z');
   } else {
     endDate = new Date();
     startDate = daysInt > 0 ? subDays(endDate, daysInt) : subMonths(endDate, monthsInt);
@@ -85,7 +87,7 @@ async function getPersonalIntelligence(params = {}) {
     );
 
     const transactions = Array.isArray(transactionsResult.rows) ? transactionsResult.rows : [];
-    const endMonthStr = String(endDate.getMonth() + 1).padStart(2, '0');
+    const endMonthStr = String(endDate.getUTCMonth() + 1).padStart(2, '0');
 
     const metricsResult = await client.query(
       `
@@ -421,7 +423,7 @@ async function getPersonalIntelligence(params = {}) {
     const savingsRate = monthlyIncome > 0 ? monthlySavings / monthlyIncome : 0;
 
     const currentDayOfMonth = new Date().getDate();
-    const daysInMonth = new Date(endDate.getFullYear(), endDate.getMonth() + 1, 0).getDate();
+    const daysInMonth = new Date(Date.UTC(endDate.getUTCFullYear(), endDate.getUTCMonth() + 1, 0)).getUTCDate();
     const spendingVelocity = currentMonthSpend / (currentDayOfMonth || 1);
     const forecastEndMonth = Math.round(spendingVelocity * daysInMonth);
 
