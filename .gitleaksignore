@@ -8,3 +8,5 @@ de767ae16b4919fa3b163eb893d737a23e089bcc:renderer/src/features/dashboard/compone
 de767ae16b4919fa3b163eb893d737a23e089bcc:renderer/src/features/dashboard/components/TransactionHistorySection.tsx:generic-api-key:818
 de767ae16b4919fa3b163eb893d737a23e089bcc:renderer/src/features/dashboard/components/TransactionHistorySection.tsx:generic-api-key:829
 982c980fada304ec227963aae1be8cb68fe25492:.env.example:generic-api-key:14
+# Synthetic token in the original log-redaction regression test.
+5ce1f03043aff46342ee3edfbbc53dba0b4074c2:electron/__tests__/log-redaction.test.js:generic-api-key:17
