@@ -12,6 +12,50 @@ Release binaries are published at
 
 ## [Unreleased]
 
+## [0.2.3] - 2026-10-28
+
+### Security
+- Run chatbot calculations in an isolated QuickJS (WebAssembly) interpreter instead
+  of Node's `vm` module, with a 5-second timeout and 32 MB memory limit, and block
+  chatbot queries against stored bank credentials.
+- Anonymize chatbot query results before they are sent to the model: merchant names
+  become generic labels, identifiers are redacted, and account/card/ID numbers are masked.
+- Keep the master encryption key in memory only, so child processes (Chromium helpers,
+  the scraper's browser) no longer inherit it through the environment.
+- Mask account, card and ID numbers, balances, e-mail addresses and secrets in log
+  files and diagnostics exports.
+- Stop returning decrypted bank credentials from the credentials API.
+- Pin CI workflow actions to commit SHAs and keep them current with Dependabot.
+
+### Added
+- Financial Health: choose month-to-date, 30-day or 60-day periods, see target lines
+  and deviation markers on the allocation bar, and get a theme accent that reflects
+  the overall score.
+- Forecasts schedule the remaining payments of card installment plans
+  ("payment N of M") and stop after the last one.
+
+### Fixed
+- Restoring a database now checks the file's integrity and that its saved credentials
+  match this installation's key, backs up the current database first, and swaps the
+  file in atomically.
+- Card refunds are stored as credits; refunds that earlier versions recorded as
+  charges are corrected on the next sync.
+- Pending transactions the bank no longer reports (released holds, charges that
+  completed with a different amount) are removed, and pending foreign-currency
+  authorizations are no longer counted as shekels.
+- Distinct same-day transactions to the same payee without a bank identifier are no
+  longer merged, and a single sync no longer merges two of its own transactions.
+- Forecasts no longer project recurring patterns that stopped (after 2.5 missed
+  cycles) or bank debits that settle an imported card, which double-counted card
+  purchases.
+- Planning automation compares card billing dates by local calendar day.
+
+### Changed
+- Forecast model `pattern-v6`; replay evaluation in
+  `docs/forecast-installments-evaluation-2026-10-26.md`.
+- Update application dependencies.
+- Keep the existing database schema; no migration is required for this release.
+
 ## [0.2.2] - 2026-10-21
 
 ### Added
@@ -252,7 +296,9 @@ Initial public release series. Highlights across these versions:
 - Numerous scraping-reliability, double-counting, and schema-safety fixes,
   including guarding against unsafe SQLite schema reinitialization.
 
-[Unreleased]: https://github.com/AvnerAdda/shekelsync/compare/v0.2.1...HEAD
+[Unreleased]: https://github.com/AvnerAdda/shekelsync/compare/v0.2.3...HEAD
+[0.2.3]: https://github.com/AvnerAdda/shekelsync/compare/v0.2.2...v0.2.3
+[0.2.2]: https://github.com/AvnerAdda/shekelsync/compare/v0.2.1...v0.2.2
 [0.2.1]: https://github.com/AvnerAdda/shekelsync/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/AvnerAdda/shekelsync/compare/v0.1.35...v0.2.0
 [0.1.35]: https://github.com/AvnerAdda/shekelsync/releases/tag/v0.1.35

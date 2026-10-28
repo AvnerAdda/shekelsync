@@ -1,17 +1,73 @@
 /**
  * Code Sandbox Module
- * Provides safe execution of AI-generated JavaScript code using Node's vm module
+ * Provides safe execution of AI-generated JavaScript code in a QuickJS WASM interpreter.
+ * Node's vm module is not a security boundary (host-realm objects leak into the context),
+ * so calculations run in a separate engine that has no Node APIs at all.
  *
  * Security constraints:
  * - No file system access
  * - No network access
  * - No process spawning
  * - No require/import
- * - Execution timeout: 5 seconds
+ * - Execution timeout: 5 seconds, memory limit: 32 MB
  * - Read-only database access only
  */
 
-const vm = require('vm');
+const { newQuickJSWASMModuleFromVariant, shouldInterruptAfterDeadline } = require('quickjs-emscripten-core');
+const quickjsReleaseVariant = require('@jitl/quickjs-wasmfile-release-sync');
+
+const MEMORY_LIMIT_BYTES = 32 * 1024 * 1024;
+const MAX_STACK_BYTES = 1024 * 1024;
+const TIMEOUT_MESSAGE = 'Calculation took too long. Try a simpler operation.';
+
+// Utility functions defined inside the guest, so no host function is ever exposed
+const GUEST_HELPERS = `
+  const sum = (arr) => Array.isArray(arr) ? arr.reduce((a, b) => a + (Number(b) || 0), 0) : 0;
+  const avg = (arr) => Array.isArray(arr) && arr.length ? arr.reduce((a, b) => a + (Number(b) || 0), 0) / arr.length : 0;
+  const min = (arr) => Array.isArray(arr) && arr.length ? Math.min(...arr.map(Number).filter(n => !isNaN(n))) : 0;
+  const max = (arr) => Array.isArray(arr) && arr.length ? Math.max(...arr.map(Number).filter(n => !isNaN(n))) : 0;
+  const round = (n, decimals = 2) => {
+    const factor = Math.pow(10, decimals);
+    return Math.round(Number(n) * factor) / factor;
+  };
+  const groupBy = (arr, key) => {
+    if (!Array.isArray(arr)) return {};
+    return arr.reduce((acc, item) => {
+      const k = item[key];
+      if (!acc[k]) acc[k] = [];
+      acc[k].push(item);
+      return acc;
+    }, {});
+  };
+  const sortBy = (arr, key, desc = false) => {
+    if (!Array.isArray(arr)) return [];
+    return [...arr].sort((a, b) => {
+      const va = a[key], vb = b[key];
+      if (va < vb) return desc ? 1 : -1;
+      if (va > vb) return desc ? -1 : 1;
+      return 0;
+    });
+  };
+  const calculateGrowthRate = (initial, final) => {
+    if (!initial || initial === 0) return 0;
+    return ((final - initial) / Math.abs(initial)) * 100;
+  };
+  const calculateCompoundGrowth = (principal, rate, periods) => {
+    return principal * Math.pow(1 + rate / 100, periods);
+  };
+`;
+
+let quickjsModulePromise = null;
+function loadQuickJS() {
+  if (!quickjsModulePromise) {
+    quickjsModulePromise = newQuickJSWASMModuleFromVariant(quickjsReleaseVariant.default || quickjsReleaseVariant)
+      .catch((error) => {
+        quickjsModulePromise = null;
+        throw error;
+      });
+  }
+  return quickjsModulePromise;
+}
 
 // SQL patterns for validation
 const READ_ONLY_PATTERNS = [
@@ -20,6 +76,7 @@ const READ_ONLY_PATTERNS = [
 ];
 
 const DANGEROUS_PATTERNS = [
+  /\bvendor_credentials\b/i,
   /\binsert\b/i,
   /\bupdate\b/i,
   /\bdelete\b/i,
@@ -142,7 +199,9 @@ function createSandbox(dbQueryFn) {
     },
 
     /**
-     * Execute JavaScript code in a sandboxed VM context
+     * Execute JavaScript code in an isolated QuickJS (WASM) interpreter.
+     * The guest has no access to Node, the host realm, the file system or the network;
+     * data crosses the boundary only as JSON strings.
      * @param {string} code - The JavaScript code to execute
      * @param {Object} data - Data to make available in the sandbox
      * @param {Object} options - Execution options
@@ -151,121 +210,77 @@ function createSandbox(dbQueryFn) {
     async executeCode(code, data = {}, options = {}) {
       const timeout = options.timeout || 5000;
 
-      // Validate code first
+      // Validate code first (defense in depth; isolation does not rely on it)
       const validation = validateJS(code);
       if (!validation.isValid) {
         return { success: false, error: validation.error };
       }
 
+      let runtime;
+      let context;
       try {
-        // Create a safe context with only allowed globals
-        const safeContext = {
-          // Data from queries
-          data: JSON.parse(JSON.stringify(data)), // Deep copy to isolate
+        const quickjs = await loadQuickJS();
+        runtime = quickjs.newRuntime();
+        runtime.setMemoryLimit(MEMORY_LIMIT_BYTES);
+        runtime.setMaxStackSize(MAX_STACK_BYTES);
+        const deadline = Date.now() + timeout;
+        runtime.setInterruptHandler(shouldInterruptAfterDeadline(deadline));
+        context = runtime.newContext();
 
-          // Safe Math utilities
-          Math,
-          Number,
-          parseInt,
-          parseFloat,
-          isNaN,
-          isFinite,
-          NaN,
-          Infinity,
+        const dataJson = context.newString(JSON.stringify(data ?? {}) ?? '{}');
+        context.setProp(context.global, '__dataJson', dataJson);
+        dataJson.dispose();
 
-          // Safe array/object utilities
-          Array,
-          Object,
-          JSON,
-          String,
-          Date,
-
-          // Custom utility functions
-          sum: (arr) => Array.isArray(arr) ? arr.reduce((a, b) => a + (Number(b) || 0), 0) : 0,
-          avg: (arr) => Array.isArray(arr) && arr.length ? arr.reduce((a, b) => a + (Number(b) || 0), 0) / arr.length : 0,
-          min: (arr) => Array.isArray(arr) && arr.length ? Math.min(...arr.map(Number).filter(n => !isNaN(n))) : 0,
-          max: (arr) => Array.isArray(arr) && arr.length ? Math.max(...arr.map(Number).filter(n => !isNaN(n))) : 0,
-          round: (n, decimals = 2) => {
-            const factor = Math.pow(10, decimals);
-            return Math.round(Number(n) * factor) / factor;
-          },
-          groupBy: (arr, key) => {
-            if (!Array.isArray(arr)) return {};
-            return arr.reduce((acc, item) => {
-              const k = item[key];
-              if (!acc[k]) acc[k] = [];
-              acc[k].push(item);
-              return acc;
-            }, {});
-          },
-          sortBy: (arr, key, desc = false) => {
-            if (!Array.isArray(arr)) return [];
-            return [...arr].sort((a, b) => {
-              const va = a[key], vb = b[key];
-              if (va < vb) return desc ? 1 : -1;
-              if (va > vb) return desc ? -1 : 1;
-              return 0;
-            });
-          },
-          // Financial utilities
-          calculateGrowthRate: (initial, final) => {
-            if (!initial || initial === 0) return 0;
-            return ((final - initial) / Math.abs(initial)) * 100;
-          },
-          calculateCompoundGrowth: (principal, rate, periods) => {
-            return principal * Math.pow(1 + rate / 100, periods);
-          },
-
-          // Result container
-          __result: undefined,
-        };
-
-        // Create VM context
-        const context = vm.createContext(safeContext);
-
-        // Wrap code to capture result
         const wrappedCode = `
+          ${GUEST_HELPERS}
+          const data = JSON.parse(__dataJson);
+          let __out;
           try {
-            __result = (function() {
+            const __value = (function() {
               ${code}
             })();
+            __out = { ok: true, value: __value === undefined ? null : __value };
           } catch (e) {
-            __result = { __error: e.message };
+            __out = { ok: false, error: String(e && e.message !== undefined ? e.message : e) };
           }
+          JSON.stringify(__out);
         `;
 
-        // Execute with timeout
-        const script = new vm.Script(wrappedCode);
-        script.runInContext(context, { timeout });
-
-        // Check for execution error
-        const result = context.__result;
-        if (result && typeof result === 'object' && result.__error) {
-          return { success: false, error: result.__error };
+        const evaluation = context.evalCode(wrappedCode, 'calculation.js');
+        if (evaluation.error) {
+          const failure = context.dump(evaluation.error);
+          evaluation.error.dispose();
+          const message = failure && typeof failure === 'object' ? failure.message : String(failure);
+          if (Date.now() >= deadline || /interrupted/i.test(message || '')) {
+            return { success: false, error: TIMEOUT_MESSAGE };
+          }
+          return { success: false, error: `Execution error: ${message}` };
         }
 
-        return { success: true, result };
+        const serialized = context.getString(evaluation.value);
+        evaluation.value.dispose();
+        const outcome = JSON.parse(serialized);
+        if (!outcome.ok) {
+          return { success: false, error: outcome.error };
+        }
+
+        return { success: true, result: outcome.value };
 
       } catch (error) {
-        if (error.message.includes('Script execution timed out')) {
-          return {
-            success: false,
-            error: 'Calculation took too long. Try a simpler operation.',
-          };
-        }
         return {
           success: false,
           error: `Execution error: ${error.message}`,
         };
+      } finally {
+        if (context) context.dispose();
+        if (runtime) runtime.dispose();
       }
     },
 
     /**
-     * Dispose of resources (no-op for vm-based sandbox)
+     * Dispose of resources (each execution disposes its own QuickJS runtime)
      */
-    dispose() {
-      // Nothing to clean up with vm module
-    },
+    dispose() {},
   };
 }
 

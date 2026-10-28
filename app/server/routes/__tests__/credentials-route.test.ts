@@ -70,6 +70,26 @@ describe('Shared /api/credentials routes', () => {
     expect(spy).toHaveBeenCalledWith({ id: 42, password: 'new-secret' });
   });
 
+  it('never returns decrypted secrets from create or update', async () => {
+    const decrypted = {
+      id: 42,
+      vendor: 'isracard',
+      nickname: 'Card',
+      username: 'user',
+      password: 'secret',
+      id_number: '123456789',
+      identification_code: '778899',
+    };
+    vi.spyOn(credentialsService, 'updateCredential').mockResolvedValue(decrypted);
+    vi.spyOn(credentialsService, 'createCredential').mockResolvedValue(decrypted);
+
+    const updated = await request(app).put('/api/credentials/42').send({ password: 'secret' }).expect(200);
+    expect(updated.body).toEqual({ id: 42, vendor: 'isracard', nickname: 'Card' });
+
+    const created = await request(app).post('/api/credentials').send({ vendor: 'isracard' }).expect(201);
+    expect(created.body).toEqual({ id: 42, vendor: 'isracard', nickname: 'Card' });
+  });
+
   it('updates a credential with AccountsModal edit payload fields', async () => {
     const payload = { id: 42, vendor: 'visaCal' };
     const spy = vi.spyOn(credentialsService, 'updateCredential').mockResolvedValue(payload);

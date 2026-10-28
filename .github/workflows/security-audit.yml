@@ -18,10 +18,9 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v7
-
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - name: Set up Node.js ${{ matrix.node-version }}
-        uses: actions/setup-node@v7
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
         with:
           node-version: ${{ matrix.node-version }}
           cache: 'npm'
@@ -43,7 +42,7 @@ jobs:
           NODE_ENV: test
 
       - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v7
+        uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5 # v7
         with:
           files: ./app/coverage/coverage-final.json
           flags: security-tests
@@ -55,10 +54,9 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v7
-
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - name: Set up Node.js
-        uses: actions/setup-node@v7
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
         with:
           node-version: '24'
           cache: 'npm'
@@ -112,10 +110,9 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v7
-
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - name: Set up Node.js
-        uses: actions/setup-node@v7
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
         with:
           node-version: '24'
           cache: 'npm'
@@ -190,8 +187,7 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v7
-
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - name: Verify security headers implementation
         run: |
           echo "Checking for security headers in server code..."
@@ -228,8 +224,7 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v7
-
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - name: Verify authentication middleware exists
         run: |
           echo "Checking for authentication implementation..."
@@ -276,8 +271,7 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v7
-
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - name: Verify secure key manager exists
         run: |
           echo "Checking for secure key manager..."
@@ -324,8 +318,7 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v7
-
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - name: Verify input validation exists
         run: |
           echo "Checking for input validation..."
@@ -369,8 +362,7 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v7
-
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - name: Verify error sanitization exists
         run: |
           echo "Checking for error sanitization..."
@@ -425,8 +417,7 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v7
-
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - name: Generate security summary
         run: |
           echo "# Security Audit Summary" > security-report.md
@@ -448,7 +439,7 @@ jobs:
           cat security-report.md
 
       - name: Upload security report
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: security-report
           path: security-report.md

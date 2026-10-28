@@ -7,6 +7,18 @@
  * - Replace: merchant names with generic labels (Merchant_1, Merchant_2, etc.)
  */
 
+// Columns whose values are never sent to the model
+const SENSITIVE_QUERY_FIELDS = [
+  /username/, /password/, /id_number/, /identification_code/, /card6/, /card_number/,
+  /account_number/, /nickname/, /identifier/, /email/, /phone/, /token/, /secret/,
+];
+// Columns that carry merchant / payee names
+const MERCHANT_QUERY_FIELDS = [/name/, /merchant/, /payee/, /description/, /memo/];
+
+function maskLongDigitRuns(value) {
+  return value.replace(/\d{6,}/g, (digits) => `****${digits.slice(-4)}`);
+}
+
 /**
  * Create a new anonymizer instance
  * Each conversation should use its own anonymizer to maintain consistent mappings
@@ -85,6 +97,38 @@ function createAnonymizer() {
         visits: m.visits || m.visit_count,
         total: m.total || m.total_spent,
       }));
+    },
+
+    /**
+     * Anonymize rows returned by the chatbot's SQL tool before they are sent to the model.
+     * Merchant-like text columns become Merchant_N labels, identifiers are redacted, and long
+     * digit runs (account / card / ID numbers) are masked wherever they appear.
+     * @param {Array} rows - Query result rows
+     * @param {Object} options
+     * @param {Set<string>} options.safeValues - Values that may pass through (e.g. category names)
+     * @returns {Array} Anonymized rows
+     */
+    anonymizeQueryRows(rows, { safeValues = new Set() } = {}) {
+      if (!Array.isArray(rows)) return rows;
+      return rows.map((row) => {
+        if (!row || typeof row !== 'object') return row;
+        const result = {};
+        for (const [key, value] of Object.entries(row)) {
+          const lowerKey = key.toLowerCase();
+          if (SENSITIVE_QUERY_FIELDS.some((pattern) => pattern.test(lowerKey))) {
+            result[key] = value === null || value === undefined ? value : '[redacted]';
+          } else if (typeof value !== 'string') {
+            result[key] = value;
+          } else if (safeValues.has(value.trim())) {
+            result[key] = value;
+          } else if (MERCHANT_QUERY_FIELDS.some((pattern) => pattern.test(lowerKey)) && !/categor/.test(lowerKey)) {
+            result[key] = this.anonymizeMerchant(value) || value;
+          } else {
+            result[key] = maskLongDigitRuns(value);
+          }
+        }
+        return result;
+      });
     },
 
     /**

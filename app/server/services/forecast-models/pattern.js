@@ -1,8 +1,14 @@
-const MODEL_ID = 'pattern-v5';
+const MODEL_ID = 'pattern-v6';
 const { loadProjectionCategories, prepareProjectionPolicy } = require('./projection-policy.js');
 const { buildIncomeSchedule, applyIncomeSchedule } = require('./income-schedule.js');
 const { buildInvestmentSchedule, applyInvestmentSchedule } = require('./investment-schedule.js');
 const { buildInfrequentExpenseEstimates, applyInfrequentExpenseEstimates } = require('./infrequent-expenses.js');
+const {
+  expectationCategoryIds,
+  isScheduledInstallmentPayment,
+  buildInstallmentSchedule,
+  applyInstallmentSchedule,
+} = require('./installment-schedule.js');
 
 function withCumulative(scenario) {
   if (!scenario) return null; // Daily-only callers intentionally skip simulations.
@@ -65,7 +71,9 @@ function generateForecast({
   const policy = prepareProjectionPolicy(historicalTransactions, truthSnapshot, engine, categoryDefinitions);
   const originalTruthSnapshot = truthSnapshot;
   truthSnapshot = policy.truthSnapshot;
-  allTransactions = policy.transactions.filter(transaction => !originalTruthSnapshot.excludedTransactionKeys.has(`${transaction.identifier}\u0000${transaction.vendor}`));
+  const evidenceTransactions = policy.transactions.filter(transaction => !originalTruthSnapshot.excludedTransactionKeys.has(`${transaction.identifier}\u0000${transaction.vendor}`));
+  const expectationCategories = expectationCategoryIds(truthSnapshot);
+  allTransactions = evidenceTransactions.filter(transaction => !isScheduledInstallmentPayment(transaction, expectationCategories));
 
   // Investments require source-level timing; category averages mix standing orders and one-off transfers.
   const patterns = analyzeCategoryPatterns(allTransactions.filter(transaction => transaction.category_type !== 'investment'));
@@ -98,6 +106,9 @@ function generateForecast({
   const infrequentExpenses = (engine.buildInfrequentExpenseEstimates || buildInfrequentExpenseEstimates)(allTransactions, patterns,
     dailyForecasts.map(day => day.date), now, engine, originalTruthSnapshot);
   applyInfrequentExpenseEstimates(dailyForecasts, simulationEntriesByDay, infrequentExpenses, engine);
+  const installmentSchedule = (engine.buildInstallmentSchedule || buildInstallmentSchedule)(evidenceTransactions,
+    dailyForecasts.map(day => day.date), now, truthSnapshot);
+  applyInstallmentSchedule(dailyForecasts, simulationEntriesByDay, installmentSchedule, engine);
   injectResolvedRecurringPredictions(dailyForecasts, simulationEntriesByDay, truthSnapshot);
   const incomeSchedule = buildIncomeSchedule(historicalTransactions, dailyForecasts.map(day => day.date), now, engine, originalTruthSnapshot);
   applyIncomeSchedule(dailyForecasts, simulationEntriesByDay, incomeSchedule, engine);

@@ -29,6 +29,11 @@ describe('code-sandbox', () => {
         error: 'Query contains forbidden keywords',
       });
 
+      expect(validateSQL('SELECT password FROM vendor_credentials')).toEqual({
+        isValid: false,
+        error: 'Query contains forbidden keywords',
+      });
+
       expect(validateSQL('SELECT 1; SELECT 2')).toEqual({
         isValid: false,
         error: 'Multiple statements are not allowed',
@@ -198,6 +203,28 @@ describe('code-sandbox', () => {
         success: false,
         error: 'Calculation took too long. Try a simpler operation.',
       });
+    });
+
+    it('does not expose the host realm through helper or global constructors', async () => {
+      const sandbox = createSandbox(async () => []);
+
+      const viaHelper = await sandbox.executeCode(
+        "const G = sum.constructor('return this')(); return typeof G['pro' + 'cess'];",
+      );
+      expect(viaHelper).toEqual({ success: true, result: 'undefined' });
+
+      const viaGlobal = await sandbox.executeCode(
+        "const G = this.constructor.constructor('return this')(); return [typeof G['pro' + 'cess'], typeof G['requ' + 'ire']];",
+      );
+      expect(viaGlobal).toEqual({ success: true, result: ['undefined', 'undefined'] });
+    });
+
+    it('enforces a memory limit', async () => {
+      const sandbox = createSandbox(async () => []);
+      const result = await sandbox.executeCode(
+        'const parts = []; for (let i = 0; i < 1e7; i++) { parts.push("x".repeat(1024)); } return parts.length;',
+      );
+      expect(result.success).toBe(false);
     });
 
     it('provides no-op dispose', () => {

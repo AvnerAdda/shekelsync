@@ -228,9 +228,11 @@ function writeEnvFile(envPath, values) {
     const backupPath = `${envPath}.bak`;
     if (fs.existsSync(envPath)) {
       fs.copyFileSync(envPath, backupPath);
+      fs.chmodSync(backupPath, 0o600);
       logInfo(`Existing ${path.relative(rootDir, envPath)} backed up to ${path.relative(rootDir, backupPath)}`);
     }
-    fs.writeFileSync(envPath, content);
+    fs.writeFileSync(envPath, content, { mode: 0o600 });
+    fs.chmodSync(envPath, 0o600);
   }
   return Object.keys(values);
 }

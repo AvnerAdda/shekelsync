@@ -404,6 +404,21 @@ async function previewRuleMatches(params = {}) {
   };
 }
 
+// One query for every rule's match count, instead of one preview request per rule.
+async function getRuleMatchCounts() {
+  const result = await database.query(
+    `SELECT r.id, COUNT(t.identifier) AS total
+       FROM categorization_rules r
+       LEFT JOIN transactions t
+         ON ${likeInsensitive('t.name', "'%' || r.name_pattern || '%'")}
+      GROUP BY r.id`,
+  );
+
+  return Object.fromEntries(
+    result.rows.map((row) => [row.id, Number.parseInt(row.total, 10) || 0]),
+  );
+}
+
 async function applyCategorizationRules() {
   const client = await database.getClient();
 
@@ -564,6 +579,7 @@ module.exports = {
   deleteRule,
   createAutoRule,
   previewRuleMatches,
+  getRuleMatchCounts,
   applyCategorizationRules,
   mergeCategories,
   __setDatabase(mock) {

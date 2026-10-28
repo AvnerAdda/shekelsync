@@ -3,6 +3,7 @@ const fs = require('fs');
 const crypto = require('crypto');
 const app = globalThis.__SHEKELSYNC_ELECTRON_APP__ || require('electron').app;
 const { atomicWriteFileSync } = require('./durable-file');
+const { getMasterKey } = require('./master-key-store');
 
 class ConfigManager {
   constructor() {
@@ -18,10 +19,10 @@ class ConfigManager {
   }
 
   getEncryptionKey() {
-    // Use the same encryption key from the environment (set by secure key manager)
-    const envKey = process.env.SHEKELSYNC_ENCRYPTION_KEY;
-    if (envKey) {
-      return Buffer.from(envKey, 'hex');
+    // Use the master key resolved by the secure key manager
+    const masterKey = getMasterKey();
+    if (masterKey) {
+      return Buffer.from(masterKey, 'hex');
     }
 
     throw new Error('SHEKELSYNC_ENCRYPTION_KEY must be set before encrypting config.');

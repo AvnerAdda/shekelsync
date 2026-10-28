@@ -1,5 +1,6 @@
 const secureKeyManager = require('../secure-key-manager');
 const realSecurityLogger = require('../security-logger');
+const { getMasterKeySource } = require('../master-key-store');
 
 // Lazy-load the credentials service to avoid a hard require cycle at module
 // load time, and to allow tests to inject a mock the same way keytar/logger
@@ -64,7 +65,7 @@ class SecurityStatusManager {
   async getEncryptionStatus() {
     try {
       const hasKey = await secureKeyManager.getKey();
-      const usesEnvKey = Boolean(process.env.SHEKELSYNC_ENCRYPTION_KEY) &&
+      const usesEnvKey = getMasterKeySource() === 'environment' &&
         (process.platform === 'linux' ||
           !secureKeyManager.keytarAvailable ||
           process.env.ALLOW_INSECURE_ENV_KEY === 'true');
