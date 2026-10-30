@@ -3,12 +3,13 @@ import { Link as RouterLink } from 'react-router-dom';
 import {
   Dialog, DialogTitle, DialogContent, IconButton, Box, Typography,
   CircularProgress, Grid, Paper, useTheme, Alert, Button, alpha,
-  Table, TableBody, TableCell, TableHead, TableRow,
+  Table, TableBody, TableCell, TableHead, TableRow, ToggleButton, ToggleButtonGroup,
 } from '@mui/material';
 import CloseIcon from '@mui/icons-material/Close';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import { ComposedChart, Area, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, ReferenceLine } from 'recharts';
 import { useTranslation } from 'react-i18next';
+import { format, subMonths } from 'date-fns';
 import { apiClient } from '@renderer/lib/api-client';
 import { useFinancePrivacy } from '@app/contexts/FinancePrivacyContext';
 
@@ -18,6 +19,8 @@ interface PersonalizedFutureModalProps {
 }
 
 const CACHE_DURATION_MS = 60 * 1000;
+const HISTORY_RANGES = ['3', '6', 'all'] as const;
+type HistoryRange = typeof HISTORY_RANGES[number];
 const finite = (value: unknown): value is number => typeof value === 'number' && Number.isFinite(value);
 
 const PersonalizedFutureModal: React.FC<PersonalizedFutureModalProps> = ({ open, onClose }) => {
@@ -28,6 +31,8 @@ const PersonalizedFutureModal: React.FC<PersonalizedFutureModalProps> = ({ open,
   const [data, setData] = useState<any>(null);
   const [error, setError] = useState<string | null>(null);
   const [lastFetch, setLastFetch] = useState(0);
+  const [investmentBasis, setInvestmentBasis] = useState<'before' | 'after'>('after');
+  const [historyRange, setHistoryRange] = useState<HistoryRange>('3');
   const requestSequence = useRef(0);
 
   const fetchData = useCallback(async (force = false) => {
@@ -74,7 +79,13 @@ const PersonalizedFutureModal: React.FC<PersonalizedFutureModalProps> = ({ open,
       month: 'short', day: 'numeric', ...(full ? { year: 'numeric' as const } : {}),
     }) : date;
   };
-  const chartData = (data?.combinedData || []).map((day: any) => ({
+  // Older payloads carry a single basis at the top level.
+  const view = (data?.hasInvestments && data.investmentBases?.[investmentBasis]) || data;
+  // History is anchored backwards from today, so trimming its start changes no value.
+  const historyStart = historyRange === 'all' ? null : format(subMonths(new Date(), Number(historyRange)), 'yyyy-MM-dd');
+  const chartData = (view?.combinedData || [])
+    .filter((day: any) => !historyStart || day.historicalCumulative === null || day.date >= historyStart)
+    .map((day: any) => ({
     ...day,
     forecastRange: finite(day.p10Cumulative) && finite(day.p90Cumulative)
       ? [day.p10Cumulative, day.p90Cumulative] : null,
@@ -129,8 +140,33 @@ const PersonalizedFutureModal: React.FC<PersonalizedFutureModalProps> = ({ open,
           {data.hasCurrentBalance === false && <Grid size={{ xs: 12 }}><Alert severity="info">{t(balanceWarning)}</Alert></Grid>}
           <Grid size={{ xs: 12 }}>
             <Paper variant="outlined" sx={{ p: 2, borderRadius: 2 }}>
-              <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>{t(data.hasCurrentBalance === false ? 'cashFlowChange' : 'netPosition.title')}</Typography>
-              <Typography variant="caption" color="text.secondary">{t('netPosition.subtitle')}</Typography>
+              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 1 }}>
+                <Box>
+                  <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>{t(data.hasCurrentBalance === false ? 'cashFlowChange' : 'netPosition.title')}</Typography>
+                  <Typography variant="caption" color="text.secondary">{t('netPosition.subtitle')}</Typography>
+                </Box>
+                <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
+                  <ToggleButtonGroup
+                    value={historyRange}
+                    exclusive
+                    size="small"
+                    aria-label={t('historyRange.label')}
+                    onChange={(_, range: HistoryRange | null) => range && setHistoryRange(range)}
+                  >
+                    {HISTORY_RANGES.map(range => <ToggleButton key={range} value={range}>{t(`historyRange.${range}`)}</ToggleButton>)}
+                  </ToggleButtonGroup>
+                  {data.hasInvestments && data.investmentBases && <ToggleButtonGroup
+                    value={investmentBasis}
+                    exclusive
+                    size="small"
+                    aria-label={t('investmentBasis.label')}
+                    onChange={(_, basis: 'before' | 'after' | null) => basis && setInvestmentBasis(basis)}
+                  >
+                    <ToggleButton value="before">{t('investmentBasis.before')}</ToggleButton>
+                    <ToggleButton value="after">{t('investmentBasis.after')}</ToggleButton>
+                  </ToggleButtonGroup>}
+                </Box>
+              </Box>
               <ResponsiveContainer width="100%" height={300} minHeight={300}>
                 <ComposedChart data={chartData} margin={{ top: 15, right: 12, bottom: 5, left: 10 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke={alpha(theme.palette.divider, 0.5)} vertical={false} />
@@ -148,7 +184,7 @@ const PersonalizedFutureModal: React.FC<PersonalizedFutureModalProps> = ({ open,
             </Paper>
           </Grid>
           {summaries.map(({ key, title, description, color }) => {
-            const summary = data.summaries?.[key];
+            const summary = view.summaries?.[key];
             return <Grid key={key} size={{ xs: 12, md: 4 }}>
               <Paper variant="outlined" sx={{ p: 2.5, height: '100%', boxSizing: 'border-box', borderRadius: 2,
                 borderColor: key === 'base' ? theme.palette.primary.main : theme.palette.divider,

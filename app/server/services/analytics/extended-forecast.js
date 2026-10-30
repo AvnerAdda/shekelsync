@@ -73,15 +73,14 @@ async function getExtendedForecast(params = {}) {
     noCache: skipCache
   });
 
-  // Get historical net position data (last 6 months)
-  const sixMonthsAgo = new Date();
-  sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
-
+  // Whole history: positions are anchored backwards from today's balance, so
+  // clients can trim the window without changing any value.
   const historyResult = await database.query(
     `SELECT
       DATE(t.date) as date,
       SUM(CASE WHEN COALESCE(cd.category_type, t.category_type) = 'income' THEN t.price ELSE 0 END) as income,
-      SUM(CASE WHEN COALESCE(cd.category_type, t.category_type) = 'expense' THEN -t.price ELSE 0 END) as expenses
+      SUM(CASE WHEN COALESCE(cd.category_type, t.category_type) = 'expense' THEN -t.price ELSE 0 END) as expenses,
+      SUM(CASE WHEN COALESCE(cd.category_type, t.category_type) = 'investment' THEN -t.price ELSE 0 END) as investments
     FROM transactions t
     LEFT JOIN (SELECT DISTINCT transaction_identifier, transaction_vendor FROM transaction_pairing_exclusions) tpe
       ON t.identifier = tpe.transaction_identifier
@@ -90,11 +89,10 @@ async function getExtendedForecast(params = {}) {
     WHERE t.status IN ('completed', 'pending')
       AND tpe.transaction_identifier IS NULL
       AND COALESCE(cd.name, '') NOT IN ('החזר קרן', 'ריבית מהשקעות', 'פיקדונות')
-      AND t.date >= $1
-      AND substr(t.date, 1, 10) <= $2
+      AND substr(t.date, 1, 10) <= $1
     GROUP BY DATE(t.date)
     ORDER BY date`,
-    [sixMonthsAgo.toISOString(), formatLocalDate(new Date())]
+    [formatLocalDate(new Date())]
   );
 
   const history = historyResult.rows || [];
@@ -143,7 +141,8 @@ async function getExtendedForecast(params = {}) {
         filledHistory.push({
           date: dateStr,
           income: 0,
-          expenses: 0
+          expenses: 0,
+          investments: 0
         });
       }
 
@@ -151,38 +150,27 @@ async function getExtendedForecast(params = {}) {
     }
   }
 
-  // Calculate cumulative net position for history
+  // The bank balance already reflects money moved to investments, so both
+  // bases meet at today's balance and differ only in which flows they count.
   const normalizedCurrentBalance = Number(currentBalance) || 0;
-  const totalHistoricalNetFlow = filledHistory.reduce((sum, day) => {
-    const income = Number(day.income) || 0;
-    const expenses = Number(day.expenses) || 0;
-    return sum + (income - expenses);
-  }, 0);
+  const bases = Object.fromEntries(['before', 'after'].map(basis => {
+    const includeInvestments = basis === 'after';
+    const historicalData = buildHistoricalPositions(filledHistory, normalizedCurrentBalance, includeInvestments);
+    const startingBalance = historicalData.length
+      ? historicalData[historicalData.length - 1].historicalCumulative
+      : normalizedCurrentBalance;
+    return [basis, buildExtendedForecastPayload(forecastData, historicalData, startingBalance, { includeInvestments })];
+  }));
 
-  // Anchor historical series so it ends at the current balance (today).
-  let historicalCumulative = normalizedCurrentBalance - totalHistoricalNetFlow;
-  const historicalData = filledHistory.map(day => {
-    const income = Number(day.income) || 0;
-    const expenses = Number(day.expenses) || 0;
-    const netFlow = income - expenses;
-    historicalCumulative += netFlow;
-    return {
-      date: day.date,
-      income,
-      expenses,
-      netFlow,
-      historicalCumulative,
-      forecastCumulative: null
-    };
-  });
-
-  // Get starting balance for forecast (last historical cumulative)
-  // Track cumulative separately for each scenario
-  const lastHistoricalCumulative = historicalData.length
-    ? historicalData[historicalData.length - 1].historicalCumulative
-    : normalizedCurrentBalance;
-
-  const response = buildExtendedForecastPayload(forecastData, historicalData, lastHistoricalCumulative);
+  // Top-level fields stay the default (after investing): the real bank path.
+  const response = {
+    ...bases.after,
+    hasInvestments: filledHistory.some(day => (Number(day.investments) || 0) !== 0)
+      || (forecastData.dailyForecasts || []).some(day => (Number(day.expectedInvestments) || 0) !== 0),
+    investmentBases: Object.fromEntries(Object.entries(bases).map(([basis, payload]) => [basis, {
+      combinedData: payload.combinedData, scenarios: payload.scenarios, summaries: payload.summaries,
+    }])),
+  };
   response.hasCurrentBalance = balance.status === 'ready';
   response.balanceStatus = balance.status;
   let currentTruthRevision = response.truthRevision;
@@ -203,13 +191,34 @@ async function getExtendedForecast(params = {}) {
   return response;
 }
 
-function buildExtendedForecastPayload(forecastData, history, startingBalance) {
+// Anchor the historical series so it ends at the current balance (today).
+function buildHistoricalPositions(filledHistory, currentBalance, includeInvestments) {
+  const number = value => Number(value) || 0;
+  const flow = day => number(day.income) - number(day.expenses) - (includeInvestments ? number(day.investments) : 0);
+  let historicalCumulative = currentBalance - filledHistory.reduce((sum, day) => sum + flow(day), 0);
+  return filledHistory.map(day => {
+    const netFlow = flow(day);
+    historicalCumulative += netFlow;
+    return {
+      date: day.date,
+      income: number(day.income),
+      expenses: number(day.expenses),
+      investments: number(day.investments),
+      netFlow,
+      historicalCumulative,
+      forecastCumulative: null
+    };
+  });
+}
+
+function buildExtendedForecastPayload(forecastData, history, startingBalance, { includeInvestments = false } = {}) {
   const number = value => Number.isFinite(Number(value)) ? Number(value) : 0;
   const intervals = new Map((forecastData.predictionIntervals?.daily || []).map(day => [day.date, day]));
   const days = forecastData.dailyForecasts || [];
   let expected = startingBalance;
   let income = 0;
   let expenses = 0;
+  let investments = 0;
   const combinedData = history.map(day => ({ ...day, expectedCumulative: null,
     p10Cumulative: null, p50Cumulative: null, p90Cumulative: null }));
   if (!combinedData.length) combinedData.push({ date: formatLocalDate(new Date()),
@@ -221,17 +230,22 @@ function buildExtendedForecastPayload(forecastData, history, startingBalance) {
   for (const day of days) {
     const dayIncome = number(day.expectedIncome);
     const dayExpenses = number(day.expectedExpenses);
+    // Intervals cover income and expenses only; planned investments shift every path equally.
+    const dayInvestments = includeInvestments ? number(day.expectedInvestments) : 0;
     income += dayIncome;
     expenses += dayExpenses;
-    expected += dayIncome - dayExpenses;
+    investments += dayInvestments;
+    expected += dayIncome - dayExpenses - dayInvestments;
     const range = intervals.get(day.date)?.cumulativeCashFlow;
     const validRange = range && ['p10', 'p50', 'p90'].every(key => Number.isFinite(range[key]))
       && range.p10 <= range.p50 && range.p50 <= range.p90;
+    const rangeBase = startingBalance - investments;
     const entry = { date: day.date, income: dayIncome, expenses: dayExpenses,
-      netFlow: dayIncome - dayExpenses, historicalCumulative: null, expectedCumulative: expected,
-      p10Cumulative: validRange ? startingBalance + range.p10 : null,
-      p50Cumulative: validRange ? startingBalance + range.p50 : null,
-      p90Cumulative: validRange ? startingBalance + range.p90 : null };
+      ...(includeInvestments ? { investments: dayInvestments } : {}),
+      netFlow: dayIncome - dayExpenses - dayInvestments, historicalCumulative: null, expectedCumulative: expected,
+      p10Cumulative: validRange ? rangeBase + range.p10 : null,
+      p50Cumulative: validRange ? rangeBase + range.p50 : null,
+      p90Cumulative: validRange ? rangeBase + range.p90 : null };
     combinedData.push(entry);
     for (const key of ['p10', 'p50', 'p90']) scenarios[key].push({
       date: day.date, forecastCumulative: entry[`${key}Cumulative`], historicalCumulative: null,
@@ -279,7 +293,8 @@ function buildExtendedForecastPayload(forecastData, history, startingBalance) {
     incomeDrivers: [...incomeDrivers.values()].sort((left, right) => right.amount - left.amount),
     summaries: {
       pessimistic: tailSummary('p10Cumulative'),
-      base: { income, expenses, netCashFlow: income - expenses, endingBalance: expected },
+      base: { income, expenses, ...(includeInvestments ? { investments } : {}),
+        netCashFlow: income - expenses - investments, endingBalance: expected },
       optimistic: tailSummary('p90Cumulative'),
     },
   };
@@ -287,7 +302,7 @@ function buildExtendedForecastPayload(forecastData, history, startingBalance) {
 
 module.exports = {
   getExtendedForecast,
-  _internal: { buildExtendedForecastPayload },
+  _internal: { buildExtendedForecastPayload, buildHistoricalPositions },
   __setDependencies(dependencies) {
     database = dependencies.database || defaultDatabase;
     forecastService = dependencies.forecast || defaultForecastService;

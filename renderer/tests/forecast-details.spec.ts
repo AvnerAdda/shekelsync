@@ -40,7 +40,7 @@ for (const mode of ['light', 'dark'] as const) {
     });
     await goHome(page);
     if (mode === 'dark') await page.getByRole('button', { name: 'Switch to Dark Mode' }).click();
-    await page.getByRole('button', { name: 'Net Position', exact: true }).click();
+    await page.getByRole('button', { name: 'Projection', exact: true }).click();
     const rangeLegend = page.getByText('Estimated range (P10–P90)', { exact: true });
     await expect(rangeLegend).toBeVisible();
     // Visibility alone allows transparent text. Check the actual paint colour.

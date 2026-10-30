@@ -640,6 +640,15 @@ describe('Financial truth resolution', () => {
         target: { kind: 'category', categoryDefinitionId: categoryId },
         overrides: { monthlyAmount: 1000 },
       }, { db }).impact).toMatchObject({ monthlyDelta: 600, sixMonthDelta: 600 });
+      const incomeCategoryId = Number(db.prepare("SELECT id FROM category_definitions WHERE category_type = 'income' ORDER BY id LIMIT 1").get().id);
+      for (const run of [service.previewCorrection, service.createCorrection]) {
+        expect(() => run({
+          action: 'set_category_expectation',
+          scope: 'current_month',
+          target: { kind: 'category', categoryDefinitionId: incomeCategoryId },
+          overrides: { monthlyAmount: 17500 },
+        }, { db })).toThrow(expect.objectContaining({ status: 400, code: 'EXPENSE_CATEGORY_REQUIRED' }));
+      }
 
       db.prepare(`
         INSERT INTO subscriptions (

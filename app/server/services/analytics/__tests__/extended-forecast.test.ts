@@ -93,6 +93,39 @@ describe('extended forecast', () => {
     expect(result.startingBalance).toBe(1000);
   });
 
+  it('deducts planned investments from every path after investing', () => {
+    const input = forecast();
+    (input.dailyForecasts[0] as any).expectedInvestments = 50;
+    const result = build(input, history, 1000, { includeInvestments: true });
+    expect(result.combinedData.map((day: any) => day.expectedCumulative)).toEqual([1000, 1020, 970]);
+    expect(result.combinedData.map((day: any) => day.p10Cumulative)).toEqual([1000, 940, 890]);
+    expect(result.summaries.base).toEqual({ income: 100, expenses: 80, investments: 50, netCashFlow: -30, endingBalance: 970 });
+    expect(result.summaries.pessimistic).toEqual({ netCashFlow: -110, endingBalance: 890 });
+    expect(build(input, history, 1000).summaries.base.endingBalance).toBe(1020);
+  });
+
+  it('returns both investment views, defaulting to after investing, anchored at the same balance', async () => {
+    const input = forecast();
+    (input.dailyForecasts[0] as any).expectedInvestments = 50;
+    generate.mockResolvedValue(input);
+    query.mockImplementation(async (sql: string) => ({ rows: sql.includes('FROM transactions')
+      ? [{ date: '2026-09-29', income: '100', expenses: '30', investments: 0 }, { date: '2026-09-30', income: 0, expenses: 0, investments: '50' }]
+      : [bank('1000')] }));
+    const result = await service.getExtendedForecast();
+    const history = (basis: string) => result.investmentBases[basis].combinedData.slice(0, 3).map((day: any) => day.historicalCumulative);
+    expect(history('after')).toEqual([1050, 1000, 1000]);
+    expect(history('before')).toEqual([1000, 1000, 1000]);
+    expect(result.investmentBases.after.summaries.base.endingBalance).toBe(970);
+    expect(result.investmentBases.before.summaries.base.endingBalance).toBe(1020);
+    expect(result.summaries).toEqual(result.investmentBases.after.summaries);
+    expect(result.combinedData).toEqual(result.investmentBases.after.combinedData);
+    expect(result).toMatchObject({ hasInvestments: true, startingBalance: 1000 });
+  });
+
+  it('reports no investment activity when neither history nor forecast moves money', async () => {
+    expect((await service.getExtendedForecast()).hasInvestments).toBe(false);
+  });
+
   it('anchors history to the current balance including expense refunds', async () => {
     query.mockImplementation(async (sql: string) => ({ rows: sql.includes('FROM transactions')
       ? [{ date: '2026-09-29', income: '100', expenses: '30' }, { date: '2026-09-30', income: 0, expenses: -20 }]

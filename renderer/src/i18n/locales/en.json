@@ -1107,26 +1107,33 @@
     },
     "tabs": {
       "history": "Daily Income vs Expenses",
-      "calendar": "Calendar",
-      "netPosition": "Net Position",
+      "netPosition": "Projection",
       "allocation": "Rolling Allocation",
       "scenarios": "End of Month Scenarios"
     },
-    "calendar": {
-      "subtitle": "Click a day to inspect its transactions.",
-      "today": "Today",
-      "retry": "Retry",
-      "error": "Failed to load calendar",
-      "emptyMonth": "No income or expense activity in this month.",
-      "monthIncome": "Month income",
-      "monthExpenses": "Month expenses",
-      "monthNet": "Month net",
-      "previousMonth": "Previous month",
-      "nextMonth": "Next month"
+    "projection": {
+      "toolbar": "Projection controls",
+      "basisLabel": "Investments",
+      "basis": {
+        "before": "Before investing",
+        "after": "After investing"
+      },
+      "horizon": {
+        "eom": "EOM",
+        "30": "30D",
+        "custom": "Custom"
+      },
+      "until": "Projection until:",
+      "customDate": "Project until",
+      "cancel": "Cancel",
+      "apply": "Apply",
+      "forecastUntil": "forecast until {{date}}",
+      "today": "Today"
     },
     "forecast": {
       "beforeInvesting": "Forecast before investing",
       "afterInvesting": "Forecast after investing",
+      "actualAfterInvesting": "Actual after investing",
       "loading": "Loading forecast...",
       "error": "Failed to load forecast",
       "noData": "No forecast data available",
@@ -1606,6 +1613,17 @@
         "noData": "No data available"
       },
       "future": {
+        "historyRange": {
+          "label": "History",
+          "3": "3M",
+          "6": "6M",
+          "all": "All"
+        },
+        "investmentBasis": {
+          "label": "Investments",
+          "before": "Before investing",
+          "after": "After investing"
+        },
         "title": "Cash-flow outlook",
         "scenarios": {
           "bad": "Lower estimate",
