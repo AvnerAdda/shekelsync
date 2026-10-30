@@ -667,12 +667,13 @@ function getProjectionSnapshotFromDb(db, { materialize = true } = {}) {
     .filter((row) => row.action === 'set_category_expectation')
     .map((row) => {
       const correction = normalizeCorrection(row);
-      const category = db.prepare('SELECT name, name_en, name_fr FROM category_definitions WHERE id = ?')
+      const category = db.prepare('SELECT name, name_en, name_fr, category_type FROM category_definitions WHERE id = ?')
         .get(correction.categoryDefinitionId);
       return {
         ...correction,
         categoryName: category?.name_en || category?.name_fr || category?.name
           || `Category ${correction.categoryDefinitionId}`,
+        categoryType: category?.category_type || null,
       };
     });
   return { truthRevision, patterns: resolvedPatterns, excludedTransactionKeys, merchantPatternRules, categoryExpectations };
@@ -855,10 +856,21 @@ function monthlyAmount(pattern) {
   return pattern.amount * multiplier;
 }
 
+// Monthly expectations model category spending; an income or investment
+// category would otherwise be forecast as a matching expense.
+function assertExpenseCategoryExpectation(db, draft) {
+  if (draft.action !== 'set_category_expectation') return;
+  const category = db.prepare('SELECT category_type FROM category_definitions WHERE id = ?').get(draft.categoryDefinitionId);
+  if (category?.category_type && category.category_type !== 'expense') {
+    throw Object.assign(new Error('Monthly expectations apply to spending categories only'), { status: 400, code: 'EXPENSE_CATEGORY_REQUIRED' });
+  }
+}
+
 function previewCorrection(payload, options = {}) {
   const draft = validateDraft(payload);
   const db = options.db || openDb();
   try {
+    assertExpenseCategoryExpectation(db, draft);
     const snapshot = getProjectionSnapshotFromDb(db);
     const pattern = draft.patternId ? snapshot.patterns.find((item) => item.id === draft.patternId) : null;
     if (draft.patternId && !pattern) throw Object.assign(new Error('Financial pattern not found'), { status: 404, code: 'PATTERN_NOT_FOUND' });
@@ -1031,6 +1043,7 @@ function createCorrection(payload, options = {}) {
   const draft = validateDraft(payload);
   const db = options.db || openDb();
   try {
+    assertExpenseCategoryExpectation(db, draft);
     materializePatterns(db);
     const existing = db.prepare('SELECT * FROM financial_corrections WHERE request_id = ?').get(draft.requestId);
     if (existing) {

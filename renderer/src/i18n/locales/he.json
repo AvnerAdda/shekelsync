@@ -1109,26 +1109,33 @@
     },
     "tabs": {
       "history": "הכנסות והוצאות יומיות",
-      "calendar": "לוח שנה",
-      "netPosition": "מצב נטו",
+      "netPosition": "תחזית נטו",
       "allocation": "הקצאה מתגלגלת",
       "scenarios": "תרחישי סוף חודש"
     },
-    "calendar": {
-      "subtitle": "לחצו על יום כדי לראות את העסקאות שלו.",
-      "today": "היום",
-      "retry": "נסה שוב",
-      "error": "טעינת לוח השנה נכשלה",
-      "emptyMonth": "אין פעילות של הכנסות או הוצאות בחודש הזה.",
-      "monthIncome": "הכנסות החודש",
-      "monthExpenses": "הוצאות החודש",
-      "monthNet": "נטו חודשי",
-      "previousMonth": "החודש הקודם",
-      "nextMonth": "החודש הבא"
+    "projection": {
+      "toolbar": "פקדי תחזית",
+      "basisLabel": "השקעות",
+      "basis": {
+        "before": "לפני השקעות",
+        "after": "אחרי השקעות"
+      },
+      "horizon": {
+        "eom": "סוף חודש",
+        "30": "30 י׳",
+        "custom": "מותאם"
+      },
+      "until": "תחזית עד:",
+      "customDate": "תחזית עד תאריך",
+      "cancel": "ביטול",
+      "apply": "החל",
+      "forecastUntil": "תחזית עד {{date}}",
+      "today": "היום"
     },
     "forecast": {
       "beforeInvesting": "תחזית לפני השקעות",
       "afterInvesting": "תחזית אחרי השקעות",
+      "actualAfterInvesting": "בפועל אחרי השקעות",
       "loading": "טוען תחזית...",
       "error": "נכשל בטעינת תחזית",
       "noData": "אין נתוני תחזית זמינים",
@@ -1608,6 +1615,17 @@
         "noData": "אין נתונים זמינים"
       },
       "future": {
+        "historyRange": {
+          "label": "היסטוריה",
+          "3": "3 ח׳",
+          "6": "6 ח׳",
+          "all": "הכול"
+        },
+        "investmentBasis": {
+          "label": "השקעות",
+          "before": "לפני השקעות",
+          "after": "אחרי השקעות"
+        },
         "title": "תחזית תזרים המזומנים",
         "scenarios": {
           "bad": "אומדן תחתון",

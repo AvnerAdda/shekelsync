@@ -7,7 +7,8 @@ import { getLogScaleData } from '../transaction-history-axis';
 
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
-    t: (key: string, options?: { defaultValue?: string }) => options?.defaultValue ?? key,
+    t: (key: string, options?: Record<string, unknown> & { defaultValue?: string }) => (options?.defaultValue ?? key)
+      .replace(/\{\{(\w+)\}\}/g, (match, name) => (options?.[name] === undefined ? match : String(options[name]))),
     i18n: { language: 'en' },
   }),
 }));
@@ -80,7 +81,6 @@ vi.mock('recharts', async () => {
   };
 });
 
-vi.mock('../IncomeExpenseCalendar', () => ({ default: () => null }));
 vi.mock('../RollingAllocationPanel', () => ({ default: () => <div>Rolling allocation panel</div> }));
 const { rollingResult } = vi.hoisted(() => ({ rollingResult: { history: [] as Record<string, unknown>[], aggregation: 'daily', loading: false, error: false, refresh: vi.fn(), end: '2026-09-03' } }));
 vi.mock('../../hooks/useRollingCashflow', () => ({ useRollingCashflow: () => rollingResult }));
@@ -126,6 +126,14 @@ function getChartData() {
   return JSON.parse(screen.getByTestId('composed-chart').getAttribute('data-chart-data') || '[]');
 }
 
+// Scenario P10/P50/P90 lines also render for band-less fixtures; only the
+// expected path names its investment basis.
+function forecastLineNames() {
+  return screen.getAllByTestId('line-series')
+    .filter((line) => !/^p\d0Cumulative$/.test(line.getAttribute('data-key') || ''))
+    .map((line) => line.getAttribute('data-name'));
+}
+
 function getVisibleSegments(row: Record<string, unknown>, stack: string) {
   return screen.getAllByTestId('bar-series')
     .filter((bar) => bar.getAttribute('data-stack') === stack)
@@ -168,7 +176,7 @@ describe('TransactionHistorySection income, expense, and investment chart', () =
     vi.useRealTimers();
   });
 
-  it.each([false, true])('adds the after-investing line only in Net Position (paired cards: %s)', paired => {
+  it.each([false, true])('switches Net Position between after- and before-investing views (paired cards: %s)', paired => {
     renderHistory({
       data: { history: [{
         date: '2026-09-03', income: 1500, expenses: 500,
@@ -188,23 +196,24 @@ describe('TransactionHistorySection income, expense, and investment chart', () =
     expect(screen.queryAllByTestId('line-series').some(line => line.getAttribute('data-key') === 'forecastAfterInvesting')).toBe(false);
 
     fireEvent.click(screen.getByRole('button', { name: 'tabs.netPosition' }));
-    const rows = getChartData();
     const start = paired ? 1250 : 1000;
     const surplus = paired ? 9000 : 8000;
+    const basis = screen.getByRole('group', { name: 'Investments' });
+    expect(within(basis).getByRole('button', { name: 'After investing' })).toHaveAttribute('aria-pressed', 'true');
+    let rows = getChartData();
     expect(rows).toHaveLength(3);
-    expect(rows[0]).toMatchObject({ forecastCumulative: start, forecastAfterInvesting: start });
-    expect(rows[1]).toMatchObject({ forecastCumulative: start + surplus, forecastAfterInvesting: start + surplus - 5000 });
-    expect(rows[2]).toMatchObject({ forecastCumulative: start + surplus, forecastAfterInvesting: start + surplus - 3000 });
-    const lines = screen.getAllByTestId('line-series');
-    expect(lines.find(line => line.getAttribute('data-key') === 'forecastAfterInvesting'))
-      .toHaveAttribute('data-name', 'Forecast after investing');
-    expect(lines.find(line => line.getAttribute('data-key') === 'forecastCumulative'))
-      .toHaveAttribute('data-name', 'Forecast before investing');
+    expect(rows.map((row: any) => row.forecastCumulative)).toEqual([start, start + surplus - 5000, start + surplus - 3000]);
+    expect(forecastLineNames()).toEqual(['Forecast after investing']);
+
+    fireEvent.click(within(basis).getByRole('button', { name: 'Before investing' }));
+    rows = getChartData();
+    expect(rows.map((row: any) => row.forecastCumulative)).toEqual([start, start + surplus, start + surplus]);
+    expect(forecastLineNames()).toEqual(['Forecast before investing']);
     fireEvent.click(screen.getByRole('button', { name: 'tabs.history' }));
     expect(screen.queryAllByTestId('line-series').some(line => line.getAttribute('data-key') === 'forecastAfterInvesting')).toBe(false);
   });
 
-  it('stops the cumulative investment line at missing investment data', () => {
+  it('keeps the last known investments deducted past missing investment data', () => {
     renderHistory({ data: { history: [{ date: '2026-09-03', income: 1000, expenses: 200 }] },
       forecastData: { dailyForecasts: [
         { date: '2026-09-04', cashFlow: 0, investments: 0 },
@@ -215,7 +224,9 @@ describe('TransactionHistorySection income, expense, and investment chart', () =
     fireEvent.click(screen.getByRole('button', { name: 'tabs.netPosition' }));
     const rows = getChartData();
     expect(rows.map((row: any) => row.forecastAfterInvesting)).toEqual([800, 800, -400, undefined, undefined]);
-    expect(rows.map((row: any) => row.forecastCumulative)).toEqual([800, 800, 800, 900, 1000]);
+    expect(rows.map((row: any) => row.forecastCumulative)).toEqual([800, 800, -400, -300, -200]);
+    fireEvent.click(screen.getByRole('button', { name: 'Before investing' }));
+    expect(getChartData().map((row: any) => row.forecastCumulative)).toEqual([800, 800, 800, 900, 1000]);
   });
 
   it.each([false, true])('uses cumulative quantiles and shades their actual range (operating: %s)', operating => {
@@ -268,14 +279,97 @@ describe('TransactionHistorySection income, expense, and investment chart', () =
     expect(screen.queryByText('100% probability')).not.toBeInTheDocument();
   });
 
-  it('omits the additional line when investment forecasts are unavailable', () => {
+  it('omits the investment switch when investment forecasts are unavailable', () => {
     renderHistory({ data: { history: [{ date: '2026-09-03', income: 1000, expenses: 200 }] },
       forecastData: { dailyForecasts: [{ date: '2026-09-04', cashFlow: 100 }] } });
     fireEvent.click(screen.getByRole('button', { name: 'tabs.netPosition' }));
-    expect(screen.getAllByTestId('line-series').some(line => line.getAttribute('data-key') === 'forecastAfterInvesting')).toBe(false);
+    expect(screen.queryByRole('group', { name: 'Investments' })).not.toBeInTheDocument();
+    expect(forecastLineNames()).toEqual(['Forecast before investing']);
   });
 
-  it('opens rolling allocation as the fourth view', () => {
+  describe('projection view', () => {
+    const projectionHistory = [
+      { date: '2026-09-01', income: 5000, expenses: 1000, investments: 500 },
+      { date: '2026-09-02', income: 0, expenses: 0, investments: 0 },
+      { date: '2026-09-03', income: 0, expenses: 200, investments: 0 },
+    ];
+    const projectionForecast = {
+      dailyForecasts: [
+        { date: '2026-09-04', cashFlow: -100, investments: 1000 },
+        { date: '2026-09-30', cashFlow: 2000, investments: 0 },
+        { date: '2026-10-02', cashFlow: 50, investments: 0 },
+        { date: '2026-11-15', cashFlow: 10, investments: 0 },
+      ],
+      predictionIntervals: { level: 0.8, daily: [
+        { date: '2026-09-04', cumulativeCashFlow: { p10: -300, p50: -100, p90: 100 } },
+        { date: '2026-09-30', cumulativeCashFlow: { p10: 1200, p50: 1900, p90: 2600 } },
+      ] },
+    };
+    const openProjection = () => {
+      renderHistory({ data: { history: projectionHistory }, forecastData: projectionForecast });
+      fireEvent.click(screen.getByRole('button', { name: 'tabs.netPosition' }));
+    };
+
+    it('replaces the calendar view', () => {
+      renderHistory();
+      expect(screen.queryByRole('button', { name: 'tabs.calendar' })).not.toBeInTheDocument();
+      expect(screen.getAllByRole('button', { name: /^tabs\./ }).map(button => button.getAttribute('aria-label')))
+        .toEqual(['tabs.history', 'tabs.netPosition', 'tabs.allocation']);
+    });
+
+    it('projects to month end by default, then 30 days or a confirmed custom date', () => {
+      openProjection();
+      const horizons = screen.getByRole('group', { name: 'Projection until:' });
+      expect(within(horizons).getAllByRole('button').map(button => button.textContent)).toEqual(['EOM', '30D', 'Custom']);
+      expect(within(horizons).getByRole('button', { name: 'EOM' })).toHaveAttribute('aria-pressed', 'true');
+      expect(getChartData().map((row: any) => row.date).at(-1)).toBe('2026-09-30');
+
+      fireEvent.click(within(horizons).getByRole('button', { name: '30D' }));
+      expect(getChartData().map((row: any) => row.date).at(-1)).toBe('2026-10-02');
+
+      // Custom waits for a confirmed date; cancelling keeps the current horizon.
+      fireEvent.click(within(horizons).getByRole('button', { name: 'Custom' }));
+      expect(screen.getByRole('button', { name: 'Apply' })).toBeEnabled();
+      fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+      expect(within(horizons).getByRole('button', { name: '30D' })).toHaveAttribute('aria-pressed', 'true');
+      expect(getChartData().map((row: any) => row.date).at(-1)).toBe('2026-10-02');
+
+      // The picker opens on the current end date, so applying it selects Custom.
+      fireEvent.click(within(horizons).getByRole('button', { name: 'Custom' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Apply' }));
+      expect(within(horizons).getByRole('button', { name: 'Custom' })).toHaveAttribute('aria-pressed', 'true');
+      expect(getChartData().map((row: any) => row.date).at(-1)).toBe('2026-10-02');
+    });
+
+    it('carries the investment position from history into the forecast in either view', () => {
+      openProjection();
+      let rows = getChartData();
+      expect(rows.slice(0, 4).map((row: any) => row.historicalCumulative ?? row.forecastCumulative))
+        .toEqual([3500, 3500, 3300, 2200]);
+      expect(rows[2].forecastCumulative).toBe(3300);
+      expect(rows[3].forecastRange).toEqual([2000, 2400]);
+      expect(screen.getAllByTestId('line-series').map(line => line.getAttribute('data-key'))).toEqual(['forecastCumulative']);
+      expect(screen.getAllByTestId('area-series').map(area => [area.getAttribute('data-key'), area.getAttribute('data-name')]))
+        .toEqual([['forecastRange', null], ['historicalCumulative', null]]);
+
+      fireEvent.click(screen.getByRole('button', { name: 'Before investing' }));
+      rows = getChartData();
+      expect(rows.slice(0, 4).map((row: any) => row.historicalCumulative ?? row.forecastCumulative))
+        .toEqual([4000, 4000, 3800, 3700]);
+      expect(rows[3].forecastRange).toEqual([3500, 3900]);
+    });
+
+    it('hides the investment switch when nothing is invested', () => {
+      renderHistory({
+        data: { history: [{ date: '2026-09-03', income: 1000, expenses: 200 }] },
+        forecastData: { dailyForecasts: [{ date: '2026-09-04', cashFlow: 100, investments: 0 }] },
+      });
+      fireEvent.click(screen.getByRole('button', { name: 'tabs.netPosition' }));
+      expect(screen.queryByRole('group', { name: 'Investments' })).not.toBeInTheDocument();
+    });
+  });
+
+  it('opens rolling allocation as the third view', () => {
     renderHistory();
     expect(screen.queryByText('Rolling allocation panel')).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'tabs.allocation' }));
@@ -811,6 +905,20 @@ describe('TransactionHistorySection income, expense, and investment chart', () =
     expect(within(expenses).getByText('₪250.00')).toBeInTheDocument();
     expect(within(screen.getByTestId('chart-tooltip-2026-09-04'))
       .getByText('legend.expenses: ₪250.00')).toBeInTheDocument();
+  });
+
+  it('offers a monthly expectation correction only for spending predictions without a pattern', () => {
+    renderHistory({
+      forecastData: { dailyForecasts: [{ date: '2026-09-04', income: 17500, expenses: 300, predictions: [
+        { transactionName: 'Payroll', categoryType: 'income', categoryDefinitionId: 90, amount: 17500, probability: 1 },
+        { category: 'Groceries', categoryType: 'expense', categoryDefinitionId: 12, amount: 300, probability: 1 },
+      ] }] },
+      hoveredDate: '2026-09-04',
+    });
+    const income = screen.getByRole('region', { name: 'legend.income' });
+    expect(within(income).queryByRole('button', { name: 'Not accurate' })).not.toBeInTheDocument();
+    const expenses = screen.getByRole('region', { name: 'legend.expenses' });
+    expect(within(expenses).getByRole('button', { name: 'Not accurate' })).toBeInTheDocument();
   });
 
   it('respects an explicitly empty full prediction list instead of showing stale top predictions', () => {

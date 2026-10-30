@@ -1102,26 +1102,33 @@
     },
     "tabs": {
       "history": "Revenus et dépenses quotidiens",
-      "calendar": "Calendrier",
-      "netPosition": "Position nette",
+      "netPosition": "Projection",
       "allocation": "Répartition glissante",
       "scenarios": "Scénarios de fin de mois"
     },
-    "calendar": {
-      "subtitle": "Cliquez sur un jour pour afficher ses transactions.",
-      "today": "Aujourd'hui",
-      "retry": "Réessayer",
-      "error": "Échec du chargement du calendrier",
-      "emptyMonth": "Aucune activité de revenus ou de dépenses ce mois-ci.",
-      "monthIncome": "Revenus du mois",
-      "monthExpenses": "Dépenses du mois",
-      "monthNet": "Net du mois",
-      "previousMonth": "Mois précédent",
-      "nextMonth": "Mois suivant"
+    "projection": {
+      "toolbar": "Contrôles de projection",
+      "basisLabel": "Investissements",
+      "basis": {
+        "before": "Avant investissements",
+        "after": "Après investissements"
+      },
+      "horizon": {
+        "eom": "Fin de mois",
+        "30": "30 j",
+        "custom": "Personnalisé"
+      },
+      "until": "Projection jusqu'au :",
+      "customDate": "Projeter jusqu'au",
+      "cancel": "Annuler",
+      "apply": "Appliquer",
+      "forecastUntil": "prévision jusqu'au {{date}}",
+      "today": "Aujourd'hui"
     },
     "forecast": {
       "beforeInvesting": "Prévision avant investissements",
       "afterInvesting": "Prévision après investissements",
+      "actualAfterInvesting": "Réel après investissements",
       "loading": "Chargement des prévisions...",
       "error": "Échec du chargement des prévisions",
       "noData": "Aucune donnée de prévision disponible",
@@ -1601,6 +1608,17 @@
         "noData": "Aucune donnée disponible"
       },
       "future": {
+        "historyRange": {
+          "label": "Historique",
+          "3": "3 mois",
+          "6": "6 mois",
+          "all": "Tout"
+        },
+        "investmentBasis": {
+          "label": "Investissements",
+          "before": "Avant investissements",
+          "after": "Après investissements"
+        },
         "title": "Perspectives de trésorerie",
         "scenarios": {
           "bad": "Estimation basse",

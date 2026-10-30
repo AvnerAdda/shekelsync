@@ -1391,6 +1391,20 @@ describe('forecast service internals', () => {
     });
   });
 
+  it('never turns an income or investment category expectation into an expense', () => {
+    const { applyCategoryExpectations } = forecastModule._internal;
+    const result = applyCategoryExpectations({}, ['income', 'investment'].map((categoryType, index) => ({
+      action: 'set_category_expectation',
+      scope: 'ongoing',
+      categoryDefinitionId: 90 + index,
+      categoryName: 'Salary',
+      categoryType,
+      overrides: { monthlyAmount: 17500 },
+    })), '2026-10');
+
+    expect(result).toEqual({});
+  });
+
   it('summarizes realized forecast error, bias, and uncertainty coverage', () => {
     const { summarizeAccuracyRows } = forecastModule._internal;
     const summary = summarizeAccuracyRows([

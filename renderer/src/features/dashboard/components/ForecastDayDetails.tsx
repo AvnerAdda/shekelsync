@@ -159,7 +159,8 @@ export default function ForecastDayDetails({ day, predictions, formatCurrency, o
                   <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
                     {t('forecast.contribution', { defaultValue: 'Included in forecast' })}
                   </Typography>
-                  {(prediction.patternId || prediction.categoryDefinitionId) && (
+                  {/* Without a pattern the only correction is a monthly spending expectation. */}
+                  {(prediction.patternId || (prediction.categoryDefinitionId && (prediction.categoryType || 'expense') === 'expense')) && (
                     <Button size="small" variant="text" onClick={() => onCorrect({
                       kind: prediction.patternId ? 'occurrence' : 'category',
                       patternId: prediction.patternId || undefined,

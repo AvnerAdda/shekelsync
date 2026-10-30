@@ -2,6 +2,7 @@ import React from 'react';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { format, subMonths } from 'date-fns';
 import translations from '../../../../i18n/locales/en.json';
 import PersonalizedFutureModal from '../PersonalizedFutureModal';
 
@@ -100,6 +101,58 @@ describe('cash-flow outlook', () => {
     expect(await screen.findByText(warning)).toBeVisible();
     expect(screen.getByTestId('forecast-closing-base')).toHaveTextContent('ILS 20');
     expect(screen.getByText(`${t('startingPosition')}:`)).toHaveTextContent('Not available');
+  });
+
+  it('switches the chart and scenarios between after- and before-investing views', async () => {
+    const after = payload();
+    after.summaries.base.endingBalance = 970;
+    after.combinedData[1].expectedCumulative = 970;
+    const before = payload();
+    get.mockResolvedValue({ ok: true, data: { ...after, hasInvestments: true, investmentBases: {
+      after: { combinedData: after.combinedData, summaries: after.summaries },
+      before: { combinedData: before.combinedData, summaries: before.summaries },
+    } } });
+    show();
+    expect(await screen.findByTestId('forecast-closing-base')).toHaveTextContent('ILS 970');
+    const basis = screen.getByRole('group', { name: 'Investments' });
+    expect(screen.getByRole('button', { name: 'After investing' })).toHaveAttribute('aria-pressed', 'true');
+    expect(JSON.parse(screen.getByTestId('chart').getAttribute('data-chart-data')!).at(-1).expectedCumulative).toBe(970);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Before investing' }));
+    expect(screen.getByTestId('forecast-closing-base')).toHaveTextContent('ILS 1020');
+    expect(JSON.parse(screen.getByTestId('chart').getAttribute('data-chart-data')!).at(-1).expectedCumulative).toBe(1020);
+    expect(basis).toBeVisible();
+  });
+
+  it('shows the last three months of history by default, with 6 months and whole history on request', async () => {
+    const monthsAgo = (months: number) => format(subMonths(new Date(), months), 'yyyy-MM-dd');
+    const input: any = payload();
+    input.combinedData = [
+      { date: monthsAgo(8), historicalCumulative: 700, expectedCumulative: null },
+      { date: monthsAgo(5), historicalCumulative: 800, expectedCumulative: null },
+      { date: monthsAgo(1), historicalCumulative: 900, expectedCumulative: null },
+      { ...input.combinedData[0], date: monthsAgo(0) },
+      input.combinedData[1],
+    ];
+    get.mockResolvedValue({ ok: true, data: input });
+    show();
+    await screen.findByTestId('forecast-closing-base');
+    const historyValues = () => JSON.parse(screen.getByTestId('chart').getAttribute('data-chart-data')!)
+      .map((day: any) => day.historicalCumulative).filter((value: any) => value !== null);
+    expect(screen.getByRole('button', { name: '3M' })).toHaveAttribute('aria-pressed', 'true');
+    expect(historyValues()).toEqual([900, 1000]);
+    fireEvent.click(screen.getByRole('button', { name: '6M' }));
+    expect(historyValues()).toEqual([800, 900, 1000]);
+    fireEvent.click(screen.getByRole('button', { name: 'All' }));
+    expect(historyValues()).toEqual([700, 800, 900, 1000]);
+    // Forecast rows are never trimmed.
+    expect(JSON.parse(screen.getByTestId('chart').getAttribute('data-chart-data')!).at(-1).expectedCumulative).toBe(1020);
+  });
+
+  it('omits the investment switch without investment activity', async () => {
+    show();
+    await screen.findByTestId('forecast-closing-base');
+    expect(screen.queryByRole('group', { name: 'Investments' })).not.toBeInTheDocument();
   });
 
   it('provides a retry after a failed request', async () => {

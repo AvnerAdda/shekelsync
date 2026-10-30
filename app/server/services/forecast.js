@@ -1975,6 +1975,8 @@ function applyCategoryExpectations(monthlyBaselines, categoryExpectations, month
       || (correction.scope === 'current_month'
         && monthKey === String(correction.effectiveDate || correction.createdAt || '').slice(0, 7));
     if (!appliesToMonth) return;
+    // Expectations describe spending; never turn an income or investment category into an expense.
+    if (correction.categoryType && correction.categoryType !== 'expense') return;
     const amount = Number(correction.overrides?.monthlyAmount);
     if (!Number.isFinite(amount) || amount < 0) return;
     let matched = false;
