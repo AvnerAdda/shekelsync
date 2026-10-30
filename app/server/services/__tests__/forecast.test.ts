@@ -817,6 +817,47 @@ describe('forecast service internals', () => {
     expect(dailyForecasts[1].expectedIncome).toBe(0);
   });
 
+  it('projects a bi-monthly bill once per month window instead of on every likely day', () => {
+    const { adjustBiMonthlyPatternForecasts } = forecastModule._internal;
+    const dates = ['2026-10-11', '2026-10-14', '2026-10-18', '2026-10-21', '2026-10-25', '2026-10-28'];
+    const probabilities = [0.95, 0.6, 0.95, 0.95, 0.6, 0.95];
+    const prediction = (probability: number) => ({ patternKey: 'category:26', monthlyKey: 'category:26', category: 'Electricity',
+      categoryType: 'expense', expenseType: 'operating', probability, expectedAmount: 625, probabilityWeightedAmount: probability * 625 });
+    const monthForecasts = Array.from({ length: 22 }, (_, index) => {
+      const date = `2026-10-${String(10 + index).padStart(2, '0')}`;
+      const probability = probabilities[dates.indexOf(date)];
+      return { date, predictions: probability ? [prediction(probability)] : [], expectedIncome: 0,
+        expectedExpenses: probability ? probability * 625 : 0, topPredictions: [] };
+    });
+    const simulationEntriesByDay = monthForecasts.map(day => ({ date: day.date, monthKey: '2026-10',
+      entries: day.predictions.map(item => ({ monthlyKey: 'category:26', patternType: 'bi-monthly', categoryType: 'expense',
+        probability: item.probability, avgAmount: 625, stdDev: 0 })) }));
+    const patterns = { 'category:26': { patternKey: 'category:26', patternType: 'bi-monthly', category: 'Electricity',
+      categoryType: 'expense', avgOccurrencesPerMonth: 0.86 } };
+
+    adjustBiMonthlyPatternForecasts(monthForecasts, simulationEntriesByDay, patterns);
+
+    // 22 of October's 31 days are forecast, so 0.86 occurrences a month become 0.61.
+    const expected = 0.86 * 22 / 31;
+    const total = monthForecasts.reduce((sum, day) => sum + day.expectedExpenses, 0);
+    expect(total).toBeCloseTo(625 * expected);
+    expect(monthForecasts.filter(day => day.expectedExpenses > 0).map(day => day.date)).toEqual(['2026-10-11']);
+    expect(monthForecasts[1].expectedOperatingExpenses).toBeCloseTo(625 * expected);
+    const simulated = simulationEntriesByDay.flatMap(day => day.entries.map(entry => [day.date, entry.probability]));
+    expect(simulated.filter(([, probability]) => probability > 0)).toEqual([['2026-10-11', expected]]);
+  });
+
+  it('keeps a bi-monthly pattern small when its recent occurrence already made every day unlikely', () => {
+    const { adjustBiMonthlyPatternForecasts } = forecastModule._internal;
+    // 20 forecast days at 0.005 sum to 0.1, below the 0.32 share of the monthly rate.
+    const monthForecasts = Array.from({ length: 20 }, (_, index) => ({ date: `2026-10-${String(index + 10)}`,
+      expectedIncome: 0, expectedExpenses: 0.6, predictions: [{ monthlyKey: 'water', categoryType: 'expense',
+        probability: 0.005, expectedAmount: 120, probabilityWeightedAmount: 0.6 }] }));
+    adjustBiMonthlyPatternForecasts(monthForecasts, [], { water: { patternKey: 'water', patternType: 'bi-monthly',
+      categoryType: 'expense', avgOccurrencesPerMonth: 0.5 } });
+    expect(monthForecasts.reduce((sum, day) => sum + day.expectedExpenses, 0)).toBeCloseTo(12);
+  });
+
   it('places the full monthly investment forecast only on its chosen occurrence', () => {
     const { adjustMonthlyPatternForecasts } = forecastModule._internal;
     const dailyForecasts = [0.7, 0.2].map((probability, index) => ({

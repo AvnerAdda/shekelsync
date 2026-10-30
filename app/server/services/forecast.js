@@ -1790,6 +1790,7 @@ function forecastDay(date, patterns, adjustments, patternEntries, simulationEntr
         expenseType,
         parentCategory: pattern.parentCategory,
         probability: effectiveProb,
+        patternConfidence: Number.isFinite(pattern.confidence) ? pattern.confidence : null,
         expectedAmount: expectedAmount,
         amountRange: {
           low: Math.max(0, expectedAmount - stdDev),
@@ -1919,6 +1920,54 @@ function adjustMonthlyPatternForecasts(dailyForecasts, patterns, adjustments) {
   dailyForecasts.forEach(refreshForecastDayPredictions);
 }
 
+// Bi-monthly patterns are due less than once a month, yet every likely day of
+// the month passes the probability threshold on its own. Keep only the most
+// likely day, weighted by the occurrences expected in this month's forecast
+// window, so one bill is not projected on every matching day.
+function adjustBiMonthlyPatternForecasts(monthForecasts, monthSimulationEntriesByDay, patterns) {
+  if (!monthForecasts.length) return;
+  const firstDate = parseLocalDate(monthForecasts[0].date);
+  const daysInMonth = new Date(firstDate.getFullYear(), firstDate.getMonth() + 1, 0).getDate();
+  const simulationByDate = new Map((monthSimulationEntriesByDay || []).map(day => [day.date, day]));
+
+  Object.entries(patterns).forEach(([key, pattern]) => {
+    if (pattern.patternType !== 'bi-monthly') return;
+    const monthlyKey = pattern._cache?.monthlyKey || pattern.patternKey || pattern.transactionName || pattern.category || key;
+    const candidates = [];
+    monthForecasts.forEach(day => (day.predictions || []).forEach(prediction => {
+      if ((prediction.monthlyKey || prediction.transactionName || prediction.category) === monthlyKey) {
+        candidates.push({ day, prediction });
+      }
+    }));
+    if (!candidates.length) return;
+
+    const totalProbability = candidates.reduce((sum, { prediction }) => sum + (Number(prediction.probability) || 0), 0);
+    const expectedOccurrences = Math.min(
+      1,
+      totalProbability,
+      (Number(pattern.avgOccurrencesPerMonth) || 0) * monthForecasts.length / daysInMonth,
+    );
+    const chosen = candidates.reduce((best, current) => (
+      current.prediction.probability > best.prediction.probability ? current : best
+    ));
+
+    candidates.forEach(({ day, prediction }) => {
+      const probability = prediction === chosen.prediction ? expectedOccurrences : 0;
+      const weightedAmount = probability * (Number(prediction.expectedAmount) || 0);
+      const delta = weightedAmount - (Number(prediction.probabilityWeightedAmount) || 0);
+      if (prediction.categoryType === 'income') day.expectedIncome += delta;
+      else if (prediction.categoryType === 'expense') day.expectedExpenses += delta;
+      prediction.probability = probability;
+      prediction.probabilityWeightedAmount = weightedAmount;
+      simulationByDate.get(day.date)?.entries.forEach(entry => {
+        if (entry.monthlyKey === monthlyKey && entry.patternType === 'bi-monthly') entry.probability = probability;
+      });
+    });
+  });
+
+  monthForecasts.forEach(refreshForecastDayPredictions);
+}
+
 function applyCategoryExpectations(monthlyBaselines, categoryExpectations, monthKey) {
   const resolved = Object.fromEntries(Object.entries(monthlyBaselines || {}).map(([key, value]) => [key, { ...value }]));
   (categoryExpectations || []).forEach((correction) => {
@@ -1997,6 +2046,7 @@ function generateForecastAcrossMonths(patterns, patternEntries, db, startDate, e
     }
 
     adjustMonthlyPatternForecasts(monthForecasts, patterns, monthAdjustments);
+    adjustBiMonthlyPatternForecasts(monthForecasts, monthSimulationEntriesByDay, patterns);
     const resolvedMonthlyBaselines = applyCategoryExpectations(monthlyBaselines, categoryExpectations, monthKey);
     reconcileVariableExpenseForecasts(monthForecasts, monthSimulationEntriesByDay, resolvedMonthlyBaselines, monthTransactions, now, patterns);
     log(`  ↳ Adjusted monthly patterns for ${monthKey}: ${monthForecasts.length} day(s)`);
@@ -2480,9 +2530,8 @@ async function generateDailyForecastLocal(options = {}) {
     const historicalTransactions = allTransactions;
     // Explicit recurring evidence is forecast once through the shared pattern
     // layer, never a second time through the residual category baseline.
-    allTransactions = allTransactions.filter((transaction) => (
-      !truthSnapshot.excludedTransactionKeys.has(`${transaction.identifier}\u0000${transaction.vendor}`)
-    ));
+    const isRecurringEvidence = financialTruthService.createRecurringEvidenceFilter(truthSnapshot, allTransactions);
+    allTransactions = allTransactions.filter(transaction => !isRecurringEvidence(transaction));
 
     historicalTransactionSummary.historySince = historySince;
 
@@ -2971,6 +3020,7 @@ module.exports = {
     analyzeCategoryPatterns,
     adjustProbabilitiesForCurrentMonth,
     adjustMonthlyPatternForecasts,
+    adjustBiMonthlyPatternForecasts,
     applyCategoryExpectations,
     buildBudgetOutlook,
     buildChosenMonthlyOccurrenceDateByMonth,

@@ -868,4 +868,94 @@ describe('TransactionHistorySection income, expense, and investment chart', () =
     expect(within(screen.getByTestId('chart-tooltip-2026-09-03'))
       .getByText(`legend.investments: ${investments < 0 ? '-' : ''}₪${Math.abs(investments)}`)).toBeInTheDocument();
   });
+
+  it('summarizes tiny daily spending shares in one row while keeping them in the total', () => {
+    const small = ['Repairs', 'Cash withdrawal', 'Books'].map((category, index) => ({ category, categoryType: 'expense',
+      timingBasis: 'daily_average', amount: 60, probability: 0.04, probabilityWeightedAmount: [2, 1.5, 3][index] }));
+    renderHistory({
+      forecastData: { dailyForecasts: [{ date: '2026-09-04', income: 0, expenses: 1291.5, predictions: [
+        { transactionName: 'Arnona', categoryType: 'expense', amount: 1190, probability: 1, probabilityWeightedAmount: 1190 },
+        { category: 'Groceries', categoryType: 'expense', timingBasis: 'daily_average', amount: 95, probability: 1, probabilityWeightedAmount: 95 },
+        ...small,
+      ] }] },
+      hoveredDate: '2026-09-04',
+      formatCurrency: formatForecastCurrency,
+    });
+    const expenses = screen.getByRole('region', { name: 'legend.expenses' });
+    expect(within(expenses).getByText('Groceries')).toBeInTheDocument();
+    for (const { category } of small) expect(within(expenses).queryByText(category)).not.toBeInTheDocument();
+    const other = within(expenses).getByText('Other typical daily spending (3)').closest('div')!.parentElement!;
+    expect(within(other).getByText('₪6.50')).toBeInTheDocument();
+    expect(within(expenses).getByText('₪1,291.50')).toBeInTheDocument();
+    expect(within(expenses).queryByText('Rounding')).not.toBeInTheDocument();
+    expect(within(expenses).queryByText('Other forecast contributions')).not.toBeInTheDocument();
+  });
+
+  describe('forecast confidence tiers', () => {
+    const tieredForecast = { dailyForecasts: [{
+      date: '2026-09-04', income: 0, expenses: 1430, investments: 0,
+      confidenceBreakdown: {
+        income: { sure: 0, likely: 0, uncertain: 0 },
+        expenses: { sure: 500, likely: 600, uncertain: 330 },
+        investments: { sure: 0, likely: 0, uncertain: 0 },
+      },
+      predictions: [
+        { category: 'Groceries', categoryType: 'expense', amount: 300, probability: 1, probabilityWeightedAmount: 300,
+          timingBasis: 'daily_average', confidenceTier: 'uncertain', amountRange: { low: 200, high: 400 } },
+        { transactionName: 'Electricity', categoryType: 'expense', amount: 600, probability: 1, probabilityWeightedAmount: 600,
+          timingBasis: 'estimated', confidenceTier: 'likely', amountRange: { low: 450, high: 750 } },
+        { transactionName: 'Sofa installment', categoryType: 'expense', amount: 500, probability: 1, probabilityWeightedAmount: 500,
+          timingBasis: 'scheduled', confidenceTier: 'sure', amountRange: { low: 500, high: 500 } },
+      ],
+    }] };
+
+    it('stacks sure, likely and uncertain segments to the unchanged forecast total', () => {
+      renderHistory({ forecastData: tieredForecast });
+      const expenseKeys = screen.getAllByTestId('bar-series')
+        .filter(bar => bar.getAttribute('data-stack') === 'expenses')
+        .map(bar => bar.getAttribute('data-key'));
+      expect(expenseKeys).toEqual(['expenses', 'forecastExpensesSure', 'forecastExpensesLikely', 'forecastExpensesUncertain']);
+      const forecastRow = getChartData().find((row: Record<string, unknown>) => row.date === '2026-09-04');
+      expect(getStackTotal(forecastRow, 'expenses')).toBe(1430);
+      const opacities = ['Sure', 'Likely', 'Uncertain'].map(tier => screen.getAllByTestId('bar-series')
+        .find(bar => bar.getAttribute('data-key') === `forecastExpenses${tier}`)!.getAttribute('data-color'));
+      expect(opacities).toEqual([0.75, 0.45, 0.18].map(opacity => alpha(chartTheme.palette.error.main, opacity)));
+      expect(within(screen.getByTestId('chart-tooltip-2026-09-04')).getByText(
+        'forecast.confidenceTier.sure ₪500 · forecast.confidenceTier.likely ₪600 · forecast.confidenceTier.uncertain ₪330',
+      )).toBeInTheDocument();
+    });
+
+    it('splits the log-scale bar height by tier share and keeps original amounts in the tooltip', () => {
+      renderHistory({ forecastData: tieredForecast, yAxisScale: 'log' });
+      const keys = screen.getAllByTestId('bar-series').map(bar => bar.getAttribute('data-key'));
+      expect(keys).toEqual(expect.arrayContaining(['forecastExpensesSure', 'forecastExpensesLikely', 'forecastExpensesUncertain']));
+      expect(keys).not.toContain('forecastExpenses');
+      const forecastRow = getChartData().find((row: Record<string, unknown>) => row.date === '2026-09-04');
+      expect(getStackTotal(forecastRow, 'expenses')).toBeCloseTo(Math.log10(1430));
+      expect(forecastRow.forecastExpensesLikely / forecastRow.forecastExpensesSure).toBeCloseTo(600 / 500);
+      expect(within(screen.getByTestId('chart-tooltip-2026-09-04')).getByText(
+        'forecast.confidenceTier.sure ₪500 · forecast.confidenceTier.likely ₪600 · forecast.confidenceTier.uncertain ₪330',
+      )).toBeInTheDocument();
+    });
+
+    it('keeps a single forecast bar for responses without a confidence split', () => {
+      renderHistory({ forecastData });
+      const keys = screen.getAllByTestId('bar-series').map(bar => bar.getAttribute('data-key'));
+      expect(keys).toContain('forecastExpenses');
+      expect(keys).not.toContain('forecastExpensesSure');
+    });
+
+    it('labels each predicted item with its tier, sorts certain items first and shows variable ranges', () => {
+      renderHistory({ forecastData: tieredForecast, hoveredDate: '2026-09-04' });
+      const expenses = screen.getByRole('region', { name: 'legend.expenses' });
+      const names = within(expenses).getAllByText(/^(Groceries|Electricity|Sofa installment)$/).map(node => node.textContent);
+      expect(names).toEqual(['Sofa installment', 'Electricity', 'Groceries']);
+      const electricity = within(expenses).getByText('Electricity').parentElement!;
+      expect(within(electricity).getByText('forecast.confidenceTier.likely')).toBeInTheDocument();
+      expect(within(electricity).getByText(/forecast\.amountRange/)).toBeInTheDocument();
+      const sofa = within(expenses).getByText('Sofa installment').parentElement!;
+      expect(within(sofa).getByText('forecast.confidenceTier.sure')).toBeInTheDocument();
+      expect(within(sofa).queryByText(/forecast\.amountRange/)).not.toBeInTheDocument();
+    });
+  });
 });

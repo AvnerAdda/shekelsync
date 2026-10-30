@@ -25,7 +25,7 @@ function paymentDate(value, engine) {
 
 function inferBill(payments, rows, today) {
   const dates = [...payments.keys()].sort();
-  if (dates.length < 3) return null;
+  if (dates.length < 2) return null;
   // Category aggregation is safe only with one merchant and bank. Multiple
   // accounts paid on the same date are combined into their actual daily total.
   const identities = new Set(rows.map(row => JSON.stringify([normalizeName(row.name), row.vendor || ''])));
@@ -35,6 +35,9 @@ function inferBill(payments, rows, today) {
   const gap = median(intervals);
   const months = [1, 2, 3, 6, 12].reduce((best, candidate) =>
     Math.abs(candidate * 30.4375 - gap) < Math.abs(best * 30.4375 - gap) ? candidate : best);
+  // Two payments are enough for a monthly to quarterly bill, so a new utility
+  // account is not missed; confidence reflects the thinner evidence.
+  if (dates.length === 2 && months > 3) return null;
   const period = months * 30.4375;
   const tolerance = Math.max(7, period * 0.12);
   // Require every recent interval to support the calendar cadence. Occasional
@@ -56,8 +59,32 @@ function inferBill(payments, rows, today) {
     months, period, phase: monthNumber(dates.at(-1)), anchor, atMonthEnd, dates,
     amount, stdDev: Math.max(amount * 0.03, deviation * 1.4826),
     inactive: distance(today, dates.at(-1)) > period * 2.5,
+    evidenceCount: dates.length,
   };
 }
+
+function scheduleBill(bill, dates) {
+  const daily = new Map();
+  if (bill.inactive) return daily;
+  for (const date of dates) {
+    if (((monthNumber(date) - bill.phase) % bill.months + bill.months) % bill.months !== 0) continue;
+    const parsed = parse(date);
+    const length = new Date(parsed.getFullYear(), parsed.getMonth() + 1, 0).getDate();
+    const day = bill.atMonthEnd ? length : Math.min(bill.anchor, length);
+    if (parsed.getDate() !== day) continue;
+    if (bill.dates.some(paid => Math.abs(distance(paid, date)) <= Math.min(10, bill.period * 0.35))) continue;
+    daily.set(date, { probability: 1, amount: bill.amount, stdDev: bill.stdDev, timingBasis: 'estimated',
+      evidenceCount: bill.evidenceCount });
+  }
+  return daily;
+}
+
+const merchantIdentity = row => JSON.stringify([normalizeName(row.name), row.vendor || '']);
+const paymentsByDate = debits => {
+  const payments = new Map();
+  debits.forEach(row => payments.set(row.paymentDate, (payments.get(row.paymentDate) || 0) - row.price));
+  return payments;
+};
 
 function buildInfrequentExpenseEstimates(transactions, patterns, dates, now, engine, truthSnapshot = {}) {
   const result = new Map();
@@ -92,62 +119,77 @@ function buildInfrequentExpenseEstimates(transactions, patterns, dates, now, eng
     const rows = (byCategory.get(key) || []).sort((left, right) => left.paymentDate.localeCompare(right.paymentDate));
     const debits = rows.filter(row => row.price < 0);
     if (!debits.length) continue;
-    const payments = new Map();
-    debits.forEach(row => payments.set(row.paymentDate, (payments.get(row.paymentDate) || 0) - row.price));
-    const bill = inferBill(payments, debits, today);
-    const daily = new Map();
-    if (bill) {
-      for (const date of dates) {
-        if (bill.inactive) continue;
-        if (((monthNumber(date) - bill.phase) % bill.months + bill.months) % bill.months !== 0) continue;
-        const parsed = parse(date);
-        const length = new Date(parsed.getFullYear(), parsed.getMonth() + 1, 0).getDate();
-        const day = bill.atMonthEnd ? length : Math.min(bill.anchor, length);
-        if (parsed.getDate() !== day) continue;
-        if (bill.dates.some(paid => Math.abs(distance(paid, date)) <= Math.min(10, bill.period * 0.35))) continue;
-        daily.set(date, { probability: 1, amount: bill.amount, stdDev: bill.stdDev, timingBasis: 'estimated' });
-      }
-    } else {
-      // Irregular infrequent spending has no dependable payment date. Include
-      // zero-spend days and refunds; do not repeat a full purchase every likely weekday.
+    // Irregular infrequent spending has no dependable payment date. Include
+    // zero-spend days and refunds; do not repeat a full purchase every likely weekday.
+    // Returns null when the feed is too short to know the spending rate.
+    const allowance = allowanceRows => {
+      const daily = new Map();
       const end = dayNumber(today) - 1;
       const start = Math.max(historyStart, end - 179);
-      if (end - start + 1 < 90) continue;
+      if (end - start + 1 < 90) return null;
       const days = Math.max(1, end - start + 1);
-      const net = rows.filter(row => dayNumber(row.paymentDate) >= start && dayNumber(row.paymentDate) <= end)
+      const net = allowanceRows.filter(row => dayNumber(row.paymentDate) >= start && dayNumber(row.paymentDate) <= end)
         .reduce((sum, row) => sum - row.price, 0);
       const rate = Math.max(0, net / days);
-      const activeDays = [...payments.keys()].filter(date => dayNumber(date) >= start && dayNumber(date) <= end).length;
+      const activeDays = new Set(allowanceRows.filter(row => row.price < 0
+        && dayNumber(row.paymentDate) >= start && dayNumber(row.paymentDate) <= end).map(row => row.paymentDate)).size;
       const probability = Math.min(1, activeDays / days);
       if (probability > 0 && rate > 0) dates.forEach(date => daily.set(date, {
         probability, amount: rate / probability, stdDev: pattern.stdDev || 0, timingBasis: 'daily_average',
       }));
+      return daily;
+    };
+    const bill = inferBill(paymentsByDate(debits), debits, today);
+    if (bill) {
+      result.set(key, { pattern, categoryKey: key, daily: scheduleBill(bill, dates), basis: 'recurring_bill' });
+      continue;
     }
-    result.set(key, { pattern, daily, basis: bill ? 'recurring_bill' : 'irregular_allowance' });
+    // A category can mix several bills (electricity and gas). Schedule each
+    // merchant that pays on its own calendar cadence; the rest of the category
+    // stays an allowance.
+    const merchants = new Map();
+    debits.forEach(row => {
+      if (!merchants.has(merchantIdentity(row))) merchants.set(merchantIdentity(row), []);
+      merchants.get(merchantIdentity(row)).push(row);
+    });
+    const merchantBills = merchants.size > 1 ? [...merchants].map(([identity, merchantRows]) => ({
+      identity, merchantRows, bill: normalizeName(merchantRows[0].name) && inferBill(paymentsByDate(merchantRows), merchantRows, today),
+    })).filter(item => item.bill) : [];
+    merchantBills.forEach(({ identity, merchantRows, bill: merchantBill }) => {
+      result.set(`${key}:merchant:${identity}`, { pattern, categoryKey: key, daily: scheduleBill(merchantBill, dates),
+        basis: 'recurring_bill', transactionName: merchantRows.at(-1).name, vendor: merchantRows.at(-1).vendor || null });
+    });
+    const billMerchants = new Set(merchantBills.map(item => item.identity));
+    const daily = allowance(rows.filter(row => !billMerchants.has(merchantIdentity(row))));
+    // Without enough history for an allowance or a bill, the category keeps its pattern forecast.
+    if (daily || merchantBills.length) {
+      result.set(key, { pattern, categoryKey: key, daily: daily || new Map(), basis: 'irregular_allowance' });
+    }
   }
   return result;
 }
 
 function applyInfrequentExpenseEstimates(dailyForecasts, simulationEntriesByDay, estimates, engine) {
   const simulationByDate = new Map(simulationEntriesByDay.map(day => [day.date, day]));
+  const replacedKeys = new Set([...estimates].map(([key, entry]) => entry.categoryKey || key));
   for (const day of dailyForecasts) {
     day.predictions = day.predictions.filter(prediction => prediction.categoryType !== 'expense'
-      || !estimates.has(prediction.patternKey));
+      || !replacedKeys.has(prediction.patternKey));
     const simulation = simulationByDate.get(day.date);
     if (simulation) simulation.entries = simulation.entries.filter(entry => entry.categoryType !== 'expense'
-      || !estimates.has(entry.patternKey));
-    for (const [key, { pattern, daily, basis }] of estimates) {
+      || !replacedKeys.has(entry.patternKey));
+    for (const [key, { pattern, daily, basis, transactionName, vendor }] of estimates) {
       const estimate = daily.get(day.date);
       if (!estimate) continue;
-      const { probability, amount, stdDev, timingBasis } = estimate;
+      const { probability, amount, stdDev, timingBasis, evidenceCount } = estimate;
       const expenseType = engine.isOperatingExpensePattern(pattern) ? 'operating' : 'non_operating';
       const prediction = {
         patternKey: key, monthlyKey: key, categoryType: 'expense', category: pattern.category,
         categoryDefinitionId: pattern.categoryDefinitionId ?? null, expenseType,
-        transactionName: pattern.sourceTransactionName || null, vendor: pattern.vendor || null,
+        transactionName: transactionName || pattern.sourceTransactionName || null, vendor: vendor || pattern.vendor || null,
         probability, expectedAmount: amount, probabilityWeightedAmount: probability * amount,
         amountRange: { low: Math.max(0, amount - stdDev), high: amount + stdDev }, timingBasis,
-        forecastBasis: basis,
+        forecastBasis: basis, ...(evidenceCount ? { evidenceCount } : {}),
         isBaselineForecast: timingBasis === 'daily_average',
         ...(timingBasis === 'estimated' ? { predictionKind: 'recurring_expense' } : {}),
       };

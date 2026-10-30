@@ -194,6 +194,86 @@ describe('Financial truth resolution', () => {
     expect(service.buildRecurringOccurrences({ patterns: [{ ...basePattern, state: 'ended', endedAt: '2026-09-01' }] }, '2026-08-01', '2026-10-01')).toHaveLength(1);
   });
 
+  it('projects a merchant bill once when an imported pattern and a detected cadence both describe it', () => {
+    const shared = {
+      normalizedName: 'israel_electric', direction: 'expense', categoryDefinitionId: 26, amountTolerance: 70,
+      state: 'active', endedAt: null, skippedOccurrences: [], corrections: [],
+    };
+    const imported = { ...shared, id: 15, displayName: 'Israel Electric', source: 'legacy_subscription',
+      frequency: 'bimonthly', amount: 463, confidence: 0.96, lastSeenDate: '2026-08-23', nextExpectedDate: '2026-10-22' };
+    const detected = { ...shared, id: 134, displayName: 'Israel Electric', source: 'detected', occurrenceCount: 3,
+      frequency: 'quarterly', amount: 456, confidence: 0.31, lastSeenDate: '2026-04-26', nextExpectedDate: '2026-07-26' };
+    const otherMerchant = { ...detected, id: 159, normalizedName: 'dorgaz', displayName: 'Dorgaz',
+      lastSeenDate: '2026-08-30', nextExpectedDate: '2026-10-30' };
+
+    const occurrences = service.buildRecurringOccurrences({ patterns: [imported, detected, otherMerchant] }, '2026-10-10', '2026-11-09');
+    expect(occurrences.map((item: any) => item.occurrenceId)).toEqual(['pattern:15:2026-10-22', 'pattern:159:2026-10-30']);
+
+    // A different charge from the same merchant, or one the imported pattern does not
+    // project in this window, stays visible: the forecast must never drop a bill.
+    const otherCharge = { ...imported, amount: 95 };
+    const otherTiming = { ...imported, frequency: 'quarterly', nextExpectedDate: '2026-12-22' };
+    for (const managed of [otherCharge, otherTiming]) {
+      const ids = service.buildRecurringOccurrences({ patterns: [managed, { ...detected, nextExpectedDate: '2026-10-26' }] },
+        '2026-10-10', '2026-11-09').map((item: any) => item.patternId);
+      expect(ids).toContain(134);
+    }
+  });
+
+  it('keeps a bill that is a few days late in the outlook as awaiting payment', () => {
+    const gas = { id: 68, normalizedName: 'dorgaz', displayName: 'Dorgaz', direction: 'expense', source: 'legacy_subscription',
+      frequency: 'bimonthly', amount: 181, amountTolerance: 27, confidence: 0.88, state: 'active', endedAt: null,
+      skippedOccurrences: [], corrections: [], lastSeenDate: '2026-03-04', nextExpectedDate: '2026-05-04' };
+    const [late] = service.buildRecurringOccurrences({ patterns: [gas] }, '2026-05-05', '2026-06-04');
+    expect(late).toMatchObject({ date: '2026-05-05', awaitingReceipt: true, expectedPaymentDate: '2026-05-04',
+      occurrenceId: 'pattern:68:2026-05-04' });
+
+    // Already paid, skipped by the user, or long stopped: no carried occurrence.
+    const paid = { ...gas, lastSeenDate: '2026-05-03' };
+    const skipped = { ...gas, skippedOccurrences: ['pattern:68:2026-05-04'] };
+    const stopped = { ...gas, lastSeenDate: '2025-11-04' };
+    for (const pattern of [paid, skipped, stopped]) {
+      expect(service.buildRecurringOccurrences({ patterns: [pattern] }, '2026-05-05', '2026-06-04')
+        .filter((item: any) => item.awaitingReceipt)).toEqual([]);
+    }
+  });
+
+  it('keeps unlinked payments of a managed bill out of the residual category evidence', () => {
+    const electric = service.normalizeName('חברת החשמל לישראל בע"מ');
+    const snapshot = {
+      excludedTransactionKeys: new Set(['linked\u0000max']),
+      merchantPatternRules: new Map([[`expense\u0000${electric}`, [{ amount: 463, frequencyDays: 60 }]]]),
+    };
+    const payment = (identifier: string, date: string, price: number, overrides: Record<string, unknown> = {}) => ({
+      identifier, vendor: 'max', date, category_type: 'expense', category_definition_id: 26,
+      name: 'חברת החשמל לישראל בע"מ', price, ...overrides,
+    });
+    const transactions = [
+      payment('linked', '2025-12-22', -435.7, { name: 'Other' }),
+      payment('feb', '2026-02-22', -526.14),
+      // Recategorized after import: still the managed bill.
+      payment('jun', '2026-06-22', -333.18, { category_definition_id: 40 }),
+      payment('aug', '2026-08-23', -581.15),
+      payment('one-off', '2026-05-27', -2000),
+      payment('gas', '2026-08-30', -263.02, { name: 'דורגז החדשה' }),
+    ];
+    const isEvidence = service.createRecurringEvidenceFilter(snapshot, transactions);
+    expect(transactions.filter(isEvidence).map(row => row.identifier)).toEqual(['linked', 'feb', 'jun', 'aug']);
+  });
+
+  it('leaves a frequently visited shop in its category even when an imported pattern names it', () => {
+    const shop = service.normalizeName('שופרסל דיל בת ים');
+    const snapshot = { excludedTransactionKeys: new Set(),
+      merchantPatternRules: new Map([[`expense\u0000${shop}`, [{ amount: 63, frequencyDays: 30 }]]]) };
+    // Fifteen similar purchases in six months against one claimed charge a month.
+    const transactions = Array.from({ length: 15 }, (_, index) => ({
+      identifier: `trip-${index}`, vendor: 'max', category_type: 'expense', category_definition_id: 3,
+      name: 'שופרסל דיל בת ים', price: -(50 + index * 3),
+      date: new Date(Date.UTC(2026, 2, 1 + index * 12)).toISOString().slice(0, 10),
+    }));
+    expect(transactions.filter(service.createRecurringEvidenceFilter(snapshot, transactions))).toEqual([]);
+  });
+
   it('does not turn two consecutive transactions into an automatic daily forecast', () => {
     const weakDetectedDaily = {
       id: 3,

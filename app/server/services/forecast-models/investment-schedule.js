@@ -35,7 +35,10 @@ function isMortgagePayment(name) {
 
 function inferCadence(dates, mortgage) {
   if (dates.length < 3) {
-    if (!mortgage || (dates.length === 2 && Math.abs(distance(dates[1], dates[0]) - 30.4375) > 10)) return null;
+    // Two contributions a month apart already define a standing order; a
+    // mortgage's first debit or two may drift further from its payment day.
+    const gap = dates.length === 2 ? Math.abs(distance(dates[1], dates[0]) - 30.4375) : null;
+    if (gap === null ? !mortgage : gap > (mortgage ? 10 : 4)) return null;
     return { period: 30.4375, months: 1 };
   }
   const recent = dates.slice(-6);
@@ -59,44 +62,57 @@ function inferCadence(dates, mortgage) {
 
 function buildInvestmentSchedule(transactions, dates, now, truthSnapshot = {}) {
   if (!dates.length) return [];
-  const protectedCategories = new Set((truthSnapshot.patterns || [])
-    .filter(isProtectedInvestmentPattern)
-    .map(pattern => pattern.categoryDefinitionId == null ? null : `category:${pattern.categoryDefinitionId}`));
+  // A saved decision about one source (confirming a property payment) protects
+  // that source; other sources in its category, such as a mortgage, are still
+  // learned. A decision without a source name protects the whole category.
+  const protectedPatterns = (truthSnapshot.patterns || []).filter(isProtectedInvestmentPattern);
+  const protectedKey = pattern => pattern.categoryDefinitionId == null ? null : `category:${pattern.categoryDefinitionId}`;
+  const protectedCategories = new Set(protectedPatterns.filter(pattern => !normalizeName(pattern.displayName)).map(protectedKey));
+  const protectedSources = new Set(protectedPatterns.filter(pattern => normalizeName(pattern.displayName))
+    .map(pattern => `${protectedKey(pattern)}\u0000${normalizeName(pattern.displayName)}`));
   const today = formatDate(now);
   const groups = new Map();
   for (const row of transactions) {
-    if (row.category_type !== 'investment' || Number(row.is_pikadon_related) === 1
-      || (row.status && row.status !== 'completed')) continue;
+    if (row.category_type !== 'investment' || (row.status && row.status !== 'completed')) continue;
     const price = Number(row.price);
     const date = transactionDate(row.date);
     const name = normalizeName(row.name);
     if (!Number.isFinite(price) || price === 0 || !date || date > today || !name) continue;
     const key = categoryKey(row);
     if (protectedCategories.has(key) || (row.category_definition_id == null && protectedCategories.has(null))) continue;
+    if (protectedSources.has(`${row.category_definition_id == null ? null : key}\u0000${name}`)) continue;
     const direction = price < 0 ? 1 : -1;
     const sourceKey = JSON.stringify([key, row.vendor || '', row.account_number || '', name, direction]);
-    if (!groups.has(sourceKey)) groups.set(sourceKey, { row, direction, payments: new Map() });
+    if (!groups.has(sourceKey)) groups.set(sourceKey, { row, direction, payments: new Map(), pikadon: false });
     const group = groups.get(sourceKey);
     group.payments.set(date, (group.payments.get(date) || 0) + Math.abs(price));
+    if (Number(row.is_pikadon_related) === 1) group.pikadon = true;
   }
 
   const dateSet = new Set(dates);
   const first = [...dates].sort()[0];
   const last = [...dates].sort().at(-1);
   const events = [];
-  for (const [sourceKey, { row, direction, payments }] of groups) {
+  for (const [sourceKey, { row, direction, payments, pikadon }] of groups) {
     const historyDates = [...payments.keys()].sort();
     const mortgage = direction > 0 && isMortgagePayment(row.name);
     const cadence = inferCadence(historyDates, mortgage);
     if (!cadence || distance(today, historyDates.at(-1)) > cadence.period * 2.5) continue;
+    // A standing monthly deposit placement is a real outflow; a rolling short
+    // deposit re-places the same balance every week and is not new saving.
+    if (pikadon && cadence.period < 28) continue;
 
     const recentDates = historyDates.slice(-3);
     const amounts = recentDates.map(date => payments.get(date));
-    const amount = median(amounts);
+    // A new mortgage's first debit usually covers a partial month; until a
+    // third payment confirms the amount, the latest debit is the installment.
+    const newMortgage = mortgage && historyDates.length < 3;
+    const amount = newMortgage ? amounts.at(-1) : median(amounts);
     const deviation = median(amounts.map(value => Math.abs(value - amount)));
     // A single large transfer should not reset a standing order; unstable transfers have no dependable amount.
-    if (amount <= 0 || deviation / amount > 0.35) continue;
-    const stdDev = Math.min(amount * 0.35, deviation * 1.4826);
+    if (amount <= 0 || (!newMortgage && deviation / amount > 0.35)) continue;
+    // The partial first month is not variation in a contractual installment.
+    const stdDev = newMortgage ? amount * 0.03 : Math.min(amount * 0.35, deviation * 1.4826);
     const occurrences = [];
     if (cadence.months) {
       const days = recentDates.map(date => Number(date.slice(8, 10)));
