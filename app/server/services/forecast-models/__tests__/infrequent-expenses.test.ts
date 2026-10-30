@@ -76,6 +76,26 @@ describe('infrequent expense estimates', () => {
     expect(estimate([feed, ...bills.map((payment, i) => ({ ...payment, vendor: `bank ${i}` }))]).basis).toBe('irregular_allowance');
   });
 
+  it('schedules each bill in a category that mixes merchants, keeping one-off purchases as an allowance', () => {
+    const electric = ['2026-04-22', '2026-06-22', '2026-08-22'].map(date => row(date, -450, { name: 'Israel Electric' }));
+    const gas = ['2026-03-04', '2026-05-04', '2026-07-04', '2026-09-04'].map(date => row(date, -200, { name: 'Dorgaz' }));
+    const result = build([feed, ...electric, ...gas, row('2026-05-27', -2000, { name: 'Marble' })], patterns, dates, now, engine, {});
+    const bills = [...result.values()].filter((entry: any) => entry.basis === 'recurring_bill');
+    expect(bills.map((entry: any) => [entry.transactionName, [...entry.daily.keys()][0]]).sort()).toEqual([
+      ['Dorgaz', '2026-11-04'], ['Israel Electric', '2026-10-22'],
+    ]);
+    // The marble purchase stays a spread allowance, not a bill.
+    expect(total(result.get('category:2'))).toBeCloseTo(2000 / 180 * dates.length);
+  });
+
+  it('accepts two regular payments of a monthly to quarterly bill with their evidence count', () => {
+    const twice = estimate([row('2026-06-15'), row('2026-08-15')]);
+    expect(twice.basis).toBe('recurring_bill');
+    expect(twice.daily.get('2026-10-15')).toMatchObject({ amount: 600, evidenceCount: 2 });
+    // Six months apart is not enough to know the schedule.
+    expect(estimate([feed, row('2026-03-15'), row('2026-09-15')]).basis).toBe('irregular_allowance');
+  });
+
   it.each([
     { patterns: [{ categoryDefinitionId: 2, source: 'manual' }] },
     { patterns: [{ categoryDefinitionId: 2, source: 'detected', confirmed: true }] },

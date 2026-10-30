@@ -181,3 +181,71 @@ for (const period of [
     expect(pageErrors).toEqual([]);
   });
 }
+
+const tieredPredictions = [
+  { category: 'Groceries', category_name: 'Groceries', amount: 300, probability: 1, probabilityWeightedAmount: 300,
+    timingBasis: 'daily_average', confidenceTier: 'uncertain', amountRange: { low: 200, high: 400 } },
+  { transactionName: 'Electricity', amount: 600, probability: 1, probabilityWeightedAmount: 600,
+    timingBasis: 'estimated', confidenceTier: 'likely', amountRange: { low: 450, high: 750 } },
+  { transactionName: 'Sofa installment', amount: 500, probability: 1, probabilityWeightedAmount: 500,
+    timingBasis: 'scheduled', confidenceTier: 'sure', amountRange: { low: 500, high: 500 } },
+].map((prediction, index) => ({ ...prediction, occurrenceId: `tiered-${index + 1}`, categoryType: 'expense' }));
+
+for (const mode of ['light', 'dark'] as const) {
+  test(`forecast bars separate sure, likely and uncertain amounts in ${mode} mode`, async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 1100 });
+    await page.clock.setFixedTime(new Date('2026-09-23T12:00:00+03:00'));
+    const pageErrors: string[] = [];
+    page.on('pageerror', error => pageErrors.push(error.message));
+    await setupRendererTest(page, {
+      'GET /api/analytics/dashboard': async ({ route }) => route.fulfill({ json: {
+        summary: { totalIncome: 2000, totalExpenses: 300, netBalance: 1700, netInvestments: 0 },
+        history: [{ date: '2026-09-23', income: 2000, expenses: 300, investments: 0 }],
+        breakdowns: { byCategory: [], byVendor: [], byMonth: [] },
+      } }),
+      'GET /api/forecast/daily': async ({ route }) => route.fulfill({ json: {
+        dailyForecasts: [{
+          date: '2026-09-24', income: 0, expenses: 1430, investments: 0, cashFlow: -1430,
+          confidenceBreakdown: {
+            income: { sure: 0, likely: 0, uncertain: 0 },
+            expenses: { sure: 500, likely: 600, uncertain: 330 },
+            investments: { sure: 0, likely: 0, uncertain: 0 },
+          },
+          predictions: tieredPredictions, topPredictions: tieredPredictions,
+        }],
+      } }),
+    });
+    await goHome(page);
+    if (mode === 'dark') await page.getByRole('button', { name: 'Switch to Dark Mode' }).click();
+    const chart = page.locator('.recharts-wrapper').filter({ has: page.locator('.recharts-bar') }).first();
+    await chart.scrollIntoViewIfNeeded();
+    const segments = chart.locator('.recharts-bar-rectangle .recharts-rectangle[stroke-dasharray]').filter({ visible: true });
+    await expect(segments).toHaveCount(3);
+    const fills = await segments.evaluateAll(nodes => nodes.map(node => node.getAttribute('fill')));
+    expect(new Set(fills).size).toBe(3);
+    for (const tier of ['Sure', 'Likely', 'Uncertain']) {
+      const label = chart.getByText(tier, { exact: true });
+      await expect(label).toBeVisible();
+      expect(await label.evaluate(element => getComputedStyle(element).color)).not.toBe('rgba(0, 0, 0, 0)');
+    }
+
+    // The logarithmic axis keeps the same three segments, sized by tier share.
+    await page.locator('button[value="log"]').click();
+    await expect(segments).toHaveCount(3);
+    expect(new Set(await segments.evaluateAll(nodes => nodes.map(node => node.getAttribute('fill')))).size).toBe(3);
+
+    await segments.first().hover();
+    const tooltip = chart.locator('.recharts-tooltip-wrapper');
+    await expect(tooltip).toContainText('Expenses: ₪1,430.00');
+    await expect(tooltip).toContainText('Sure ₪500.00 · Likely ₪600.00 · Uncertain ₪330.00');
+
+    await segments.first().click();
+    const expenses = page.getByRole('region', { name: 'Expenses', exact: true });
+    await expect(expenses.getByText('Sure', { exact: true })).toBeVisible();
+    await expect(expenses.getByText('Likely', { exact: true })).toBeVisible();
+    await expect(expenses.getByText('Uncertain', { exact: true })).toBeVisible();
+    await expect(expenses.getByText(/Usually ₪450\.00–₪750\.00/)).toBeVisible();
+    await page.screenshot({ path: `/tmp/shekelsync-forecast-tiers-${mode}.png`, fullPage: true });
+    expect(pageErrors).toEqual([]);
+  });
+}

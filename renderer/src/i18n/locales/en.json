@@ -1150,6 +1150,20 @@
       "scheduledPayment": "Scheduled payment",
       "dailyAverage": "Typical daily spending",
       "dailyEstimate": "Daily estimate: {{amount}}",
+      "otherDailySpending": "Other typical daily spending ({{count}})",
+      "otherDailySpendingHint": "Small daily shares of categories you spend on occasionally",
+      "confidenceTier": {
+        "sure": "Sure",
+        "likely": "Likely",
+        "uncertain": "Uncertain"
+      },
+      "confidenceTierHint": {
+        "sure": "Known date and amount",
+        "likely": "Regular, but the date or amount varies",
+        "uncertain": "Estimated from typical spending"
+      },
+      "amountRange": "Usually {{low}}–{{high}}",
+      "confidenceLegendHint": "Darker segments are more certain. Sure: known date and amount. Likely: regular, but the date or amount varies. Uncertain: estimated from typical spending.",
       "probability": "{{percent}}% probability",
       "remainingForecast": "Other forecast contributions",
       "roundingAdjustment": "Rounding",

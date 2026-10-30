@@ -80,6 +80,47 @@ function getForecastInvestments(item: any): number | undefined {
     : undefined;
 }
 
+const CONFIDENCE_TIERS = ['sure', 'likely', 'uncertain'] as const;
+type ConfidenceTier = typeof CONFIDENCE_TIERS[number];
+const FORECAST_FLOWS = [
+  { flow: 'income', key: 'Income' },
+  { flow: 'expenses', key: 'Expenses' },
+  { flow: 'investments', key: 'Investments' },
+] as const;
+const tierDataKey = (key: string, tier: ConfidenceTier) => `forecast${key}${tier[0].toUpperCase()}${tier.slice(1)}`;
+const originalTierDataKey = (key: string, tier: ConfidenceTier) => `originalF${tierDataKey(key, tier).slice(1)}`;
+
+// Chart fields for the server's per-day confidence split. Tiers add up to the
+// day total, so the stacked segments keep the height of the single bar.
+function getForecastTierFields(item: any): Record<string, number> {
+  const breakdown = item?.confidenceBreakdown;
+  if (!breakdown) return {};
+  const fields: Record<string, number> = {};
+  for (const { flow, key } of FORECAST_FLOWS) {
+    if (flow === 'investments' && getForecastInvestments(item) === undefined) continue;
+    for (const tier of CONFIDENCE_TIERS) {
+      const value = Number(breakdown[flow]?.[tier]);
+      fields[tierDataKey(key, tier)] = Number.isFinite(value) ? value : 0;
+    }
+  }
+  return fields;
+}
+
+// Log bars cannot stack raw logarithms (log a + log b ≠ log(a + b)). Keep the
+// bar's log height and divide it by each tier's share of the day total; the
+// original amounts stay available to the tooltip.
+function getLogForecastTierFields(item: any, key: string, logTotal: number | undefined): Record<string, number> {
+  const values = CONFIDENCE_TIERS.map(tier => item[tierDataKey(key, tier)]);
+  if (values.some(value => typeof value !== 'number') || logTotal === undefined) return {};
+  const magnitude = values.reduce((sum, value) => sum + Math.abs(value), 0);
+  const fields: Record<string, number> = {};
+  CONFIDENCE_TIERS.forEach((tier, index) => {
+    fields[tierDataKey(key, tier)] = magnitude ? logTotal * Math.abs(values[index]) / magnitude : 0;
+    fields[originalTierDataKey(key, tier)] = values[index];
+  });
+  return fields;
+}
+
 function getNetFlowForHistory(item: any, useOperatingBasis: boolean): number {
   if (!useOperatingBasis) {
     return grossNumber(item?.income) - grossNumber(item?.expenses);
@@ -249,6 +290,9 @@ const TransactionHistorySection: React.FC<TransactionHistorySectionProps> = ({
     );
   }, [aggregationPeriod, forecastData, rangeEndsToday]);
   const hasInvestmentForecastSeries = investmentForecastDays.length > 0;
+  // Older responses have no confidence split and keep the single forecast bar.
+  const showConfidenceTiers = hasForecastSeries
+    && Boolean(forecastData?.dailyForecasts?.some((item: any) => item?.confidenceBreakdown));
   const hasInvestmentWithdrawals = chartHistory.some((item: any) => item.investments < 0)
     || (showForecast && investmentForecastDays.some((item: any) => item.investments < 0));
 
@@ -517,6 +561,7 @@ const TransactionHistorySection: React.FC<TransactionHistorySectionProps> = ({
         originalForecastIncome: d.income || 0,
         originalForecastExpenses: d.expenses || 0,
         originalForecastInvestments: getForecastInvestments(d),
+        ...getForecastTierFields(d),
       }));
 
     const combinedData = [...historicalData, ...forecastEntries];
@@ -528,13 +573,19 @@ const TransactionHistorySection: React.FC<TransactionHistorySectionProps> = ({
 
         if (item.isForecast) {
           // Forecast items - transform forecast values
+          const forecastIncome = toLog(item.forecastIncome);
+          const forecastExpenses = toLog(item.forecastExpenses);
+          const forecastInvestments = item.forecastInvestments === undefined
+            ? undefined
+            : Math.sign(item.forecastInvestments) * toLog(Math.abs(item.forecastInvestments));
           return {
             ...item,
-            forecastIncome: toLog(item.forecastIncome),
-            forecastExpenses: toLog(item.forecastExpenses),
-            forecastInvestments: item.forecastInvestments === undefined
-              ? undefined
-              : Math.sign(item.forecastInvestments) * toLog(Math.abs(item.forecastInvestments)),
+            forecastIncome,
+            forecastExpenses,
+            forecastInvestments,
+            ...getLogForecastTierFields(item, 'Income', forecastIncome),
+            ...getLogForecastTierFields(item, 'Expenses', forecastExpenses),
+            ...getLogForecastTierFields(item, 'Investments', forecastInvestments),
             originalForecastIncome: item.originalForecastIncome,
             originalForecastExpenses: item.originalForecastExpenses,
           };
@@ -604,6 +655,51 @@ const TransactionHistorySection: React.FC<TransactionHistorySectionProps> = ({
     const shade = series.colorIndex % 8;
     return shade % 2 ? lighten(base, 0.15 + Math.floor(shade / 2) * 0.13)
       : darken(base, Math.floor(shade / 2) * 0.14);
+  };
+  const tieredForecastBars = showForecast && showConfidenceTiers && !splitBars && incomeExpenseChartType === 'bar';
+  const forecastTierOpacity: Record<ConfidenceTier, number> = theme.palette.mode === 'dark'
+    ? { sure: 0.8, likely: 0.5, uncertain: 0.24 }
+    : { sure: 0.75, likely: 0.45, uncertain: 0.18 };
+  // One dashed bar per flow, or three stacked confidence segments that share its stack.
+  const renderForecastBars = (flow: BarFlow) => {
+    const { key } = FORECAST_FLOWS.find(item => item.flow === flow)!;
+    const color = flowColor(flow);
+    const name = `${t(`forecast.${flow}`)} (${t('forecast.expected')})`;
+    const segments = tieredForecastBars
+      ? CONFIDENCE_TIERS.map(tier => ({ dataKey: tierDataKey(key, tier), opacity: forecastTierOpacity[tier],
+        name: `${name} · ${t(`forecast.confidenceTier.${tier}`)}`, top: tier === 'uncertain' }))
+      : [{ dataKey: `forecast${key}`, opacity: 0.38, name, top: true }];
+    return segments.map(segment => (
+      <Bar isAnimationActive={false}
+        key={segment.dataKey}
+        dataKey={segment.dataKey}
+        stackId={flow}
+        fill={alpha(color, segment.opacity)}
+        stroke={color}
+        strokeDasharray="4 2"
+        radius={segment.top ? [2, 2, 0, 0] : 0}
+        maxBarSize={36}
+        name={segment.name}
+        {...(tieredForecastBars ? { legendType: 'none' as const } : {})}
+      />
+    ));
+  };
+  const renderForecastTierDetails = (row: any, flow: BarFlow) => {
+    const { key } = FORECAST_FLOWS.find(item => item.flow === flow)!;
+    if (!row.isForecast || splitBars || row[tierDataKey(key, 'sure')] === undefined) return null;
+    const amount = (tier: ConfidenceTier) => row[originalTierDataKey(key, tier)] ?? row[tierDataKey(key, tier)];
+    const tiers = CONFIDENCE_TIERS.filter(tier => Math.abs(amount(tier)) >= 0.005);
+    if (tiers.length === 0) return null;
+    return (
+      <Typography variant="caption" color="text.secondary" sx={{ display: 'block', pl: 1, mb: 0.5 }}>
+        {tiers.map(tier => {
+          const value = amount(tier);
+          return `${t(`forecast.confidenceTier.${tier}`)} ${value < 0 ? '-' : ''}${formatCurrency(Math.abs(value), {
+            minimumFractionDigits: 2, maximumFractionDigits: 2,
+          })}`;
+        }).join(' · ')}
+      </Typography>
+    );
   };
   const renderSplitDetails = (row: any, flow: BarFlow) => splitBars && (
     <Box sx={{ pl: 1, mb: 0.5 }}>
@@ -1205,16 +1301,19 @@ const TransactionHistorySection: React.FC<TransactionHistorySectionProps> = ({
                     {t('legend.income')}: {formatAmount(income)}{isInGap ? ` (${t('legend.noData')})` : ''}
                   </Typography>
                   {renderSplitDetails(data, 'income')}
+                  {renderForecastTierDetails(data, 'income')}
                   <Typography variant="body2" color={isInGap ? 'text.secondary' : 'error.main'}>
                     {t('legend.expenses')}: {formatAmount(expenses)}{isInGap ? ` (${t('legend.noData')})` : ''}
                   </Typography>
                   {renderSplitDetails(data, 'expenses')}
+                  {renderForecastTierDetails(data, 'expenses')}
                   {investments !== undefined && (
                     <Typography variant="body2" color={isInGap ? 'text.secondary' : 'info.main'}>
                       {t('legend.investments')}: {investments < 0 ? '-' : ''}{formatAmount(Math.abs(investments))}{isInGap ? ` (${t('legend.noData')})` : ''}
                     </Typography>
                   )}
                   {renderSplitDetails(data, 'investments')}
+                  {renderForecastTierDetails(data, 'investments')}
                   {hasRollingAverages && data.rolling && <Box sx={{ mt: 1, pt: 1, borderTop: 1, borderColor: 'divider' }}>
                     <Typography variant="caption" sx={{ fontWeight: 600 }}>{t('rolling.title')}</Typography>
                     <Typography variant="caption" sx={{ display: 'block' }}>
@@ -1228,7 +1327,7 @@ const TransactionHistorySection: React.FC<TransactionHistorySectionProps> = ({
               );
             }}
           />
-          <Legend content={splitBars ? () => (
+          <Legend content={splitBars || tieredForecastBars ? () => (
             <Box sx={{ display: 'flex', justifyContent: 'center', flexWrap: 'wrap', gap: 2, pt: 1 }}>
               {(['income', 'expenses', 'investments'] as BarFlow[]).map(flow => (
                 <Box key={flow} sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
@@ -1236,7 +1335,19 @@ const TransactionHistorySection: React.FC<TransactionHistorySectionProps> = ({
                   <Typography variant="caption" color={flowColor(flow)}>{t(`legend.${flow}`)}</Typography>
                 </Box>
               ))}
-              {showForecast && hasForecastSeries && (
+              {tieredForecastBars ? (
+                <MuiTooltip title={t('forecast.confidenceLegendHint')}>
+                  <Box aria-label={t('forecast.confidenceLegendHint')} sx={{ display: 'flex', alignItems: 'center', gap: 1.5, cursor: 'help' }}>
+                    {CONFIDENCE_TIERS.map(tier => (
+                      <Box key={tier} sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
+                        <Box sx={{ width: 12, height: 12, border: '1px dashed', borderColor: 'text.secondary',
+                          bgcolor: alpha(theme.palette.text.primary, forecastTierOpacity[tier]) }} />
+                        <Typography variant="caption" color="text.secondary">{t(`forecast.confidenceTier.${tier}`)}</Typography>
+                      </Box>
+                    ))}
+                  </Box>
+                </MuiTooltip>
+              ) : showForecast && hasForecastSeries && (
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
                   <Box sx={{ width: 12, height: 12, border: '1px dashed', borderColor: 'text.secondary', bgcolor: 'action.hover' }} />
                   <Typography variant="caption" color="text.secondary">{t('forecast.expected')}</Typography>
@@ -1287,42 +1398,9 @@ const TransactionHistorySection: React.FC<TransactionHistorySectionProps> = ({
                 maxBarSize={36}
                 name={t('legend.investments')}
               />
-              {showForecast && hasForecastSeries && (
-                <Bar isAnimationActive={false}
-                  dataKey="forecastIncome"
-                  stackId="income"
-                  fill={alpha(theme.palette.success.main, 0.38)}
-                  stroke={theme.palette.success.main}
-                  strokeDasharray="4 2"
-                  radius={[2, 2, 0, 0]}
-                  maxBarSize={36}
-                  name={`${t('forecast.income')} (${t('forecast.expected')})`}
-                />
-              )}
-              {showForecast && hasForecastSeries && (
-                <Bar isAnimationActive={false}
-                  dataKey="forecastExpenses"
-                  stackId="expenses"
-                  fill={alpha(theme.palette.error.main, 0.38)}
-                  stroke={theme.palette.error.main}
-                  strokeDasharray="4 2"
-                  radius={[2, 2, 0, 0]}
-                  maxBarSize={36}
-                  name={`${t('forecast.expenses')} (${t('forecast.expected')})`}
-                />
-              )}
-              {showForecast && hasInvestmentForecastSeries && (
-                <Bar isAnimationActive={false}
-                  dataKey="forecastInvestments"
-                  stackId="investments"
-                  fill={alpha(theme.palette.info.main, 0.38)}
-                  stroke={theme.palette.info.main}
-                  strokeDasharray="4 2"
-                  radius={[2, 2, 0, 0]}
-                  maxBarSize={36}
-                  name={`${t('forecast.investments')} (${t('forecast.expected')})`}
-                />
-              )}
+              {showForecast && hasForecastSeries && renderForecastBars('income')}
+              {showForecast && hasForecastSeries && renderForecastBars('expenses')}
+              {showForecast && hasInvestmentForecastSeries && renderForecastBars('investments')}
             </>
           ) : (
             <>

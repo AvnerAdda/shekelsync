@@ -572,6 +572,38 @@ function isLapsedDetectedPattern(pattern, asOfDate) {
   return elapsedDays > FREQUENCY_DAYS[pattern.frequency] * MISSED_CYCLES_BEFORE_LAPSE;
 }
 
+const merchantEvidenceKey = (direction, normalizedName) => `${direction}\u0000${normalizedName}`;
+const transactionKey = transaction => `${transaction.identifier}\u0000${transaction.vendor}`;
+const isSimilarAmount = (amount, expected) => amount >= expected * 0.5 && amount <= expected * 2;
+
+// Explicit recurring evidence is forecast once through the shared pattern layer,
+// never a second time through the residual category baseline. Linked evidence is
+// always excluded. Unlinked patterns claim their merchant's payments of a similar
+// amount only when those payments follow the pattern's cadence; a shop visited
+// far more often than its pattern claims keeps that spending in its category.
+function createRecurringEvidenceFilter(snapshot, transactions = []) {
+  const excluded = new Set(snapshot?.excludedTransactionKeys || []);
+  const rules = snapshot?.merchantPatternRules;
+  if (rules?.size) {
+    const asOf = transactions.reduce((latest, row) => (String(row.date).slice(0, 10) > latest ? String(row.date).slice(0, 10) : latest), '');
+    const byMerchant = new Map();
+    transactions.forEach((row) => {
+      const key = merchantEvidenceKey(row.category_type, normalizeName(row.merchant_name || row.name));
+      if (!rules.has(key)) return;
+      if (!byMerchant.has(key)) byMerchant.set(key, []);
+      byMerchant.get(key).push(row);
+    });
+    byMerchant.forEach((rows, key) => rules.get(key).forEach(({ amount, frequencyDays }) => {
+      const matches = rows.filter(row => isSimilarAmount(Math.abs(Number(row.price)), amount));
+      if (!matches.length) return;
+      const first = matches.reduce((earliest, row) => (String(row.date).slice(0, 10) < earliest ? String(row.date).slice(0, 10) : earliest), asOf);
+      const expected = Math.round((parseDate(asOf) - parseDate(first)) / 86400000) / frequencyDays + 1;
+      if (matches.length <= expected * 1.5) matches.forEach(row => excluded.add(transactionKey(row)));
+    }));
+  }
+  return transaction => excluded.has(transactionKey(transaction));
+}
+
 function getProjectionSnapshotFromDb(db, { materialize = true } = {}) {
   if (materialize) materializePatterns(db);
   const truthRevision = readTruthRevision(db);
@@ -618,6 +650,19 @@ function getProjectionSnapshotFromDb(db, { materialize = true } = {}) {
     pattern.vendor = vendors?.size === 1 ? [...vendors][0] : null;
     pattern.settlesPairedCard = pairedSettlementNames.has(pattern.normalizedName);
   });
+  // Imported and manual patterns have no evidence links, so their merchant's
+  // payments are matched by name instead (in any category, since payments are
+  // often recategorized after import), while the pattern itself projects them. Detected patterns keep their exact links, and
+  // a suppressed or paused merchant's payments belong to its category again.
+  const merchantPatternRules = new Map();
+  resolvedPatterns.forEach((pattern) => {
+    if (!pattern.normalizedName || !(pattern.amount > 0) || pattern.settlesPairedCard) return;
+    if (vendorsByPattern.has(pattern.id) || !FREQUENCY_DAYS[pattern.frequency]) return;
+    if (pattern.state !== 'active' || !hasMinimumRecurringEvidence(pattern)) return;
+    const key = merchantEvidenceKey(pattern.direction, pattern.normalizedName);
+    merchantPatternRules.set(key, [...(merchantPatternRules.get(key) || []),
+      { amount: pattern.amount, frequencyDays: FREQUENCY_DAYS[pattern.frequency] }]);
+  });
   const categoryExpectations = corrections
     .filter((row) => row.action === 'set_category_expectation')
     .map((row) => {
@@ -630,7 +675,7 @@ function getProjectionSnapshotFromDb(db, { materialize = true } = {}) {
           || `Category ${correction.categoryDefinitionId}`,
       };
     });
-  return { truthRevision, patterns: resolvedPatterns, excludedTransactionKeys, categoryExpectations };
+  return { truthRevision, patterns: resolvedPatterns, excludedTransactionKeys, merchantPatternRules, categoryExpectations };
 }
 
 function getProjectionSnapshot(options = {}) {
@@ -642,6 +687,9 @@ function getProjectionSnapshot(options = {}) {
   }
 }
 
+// Days a payment may arrive late before its cycle counts as missed.
+const lateToleranceDays = frequency => Math.min(10, (FREQUENCY_DAYS[frequency] || 30) * 0.35);
+
 function buildRecurringOccurrences(snapshot, startDate, endDate) {
   const start = parseDate(startDate);
   const end = parseDate(endDate);
@@ -652,44 +700,81 @@ function buildRecurringOccurrences(snapshot, startDate, endDate) {
     if (pattern.state === 'suppressed' || pattern.state === 'paused') return;
     if (pattern.settlesPairedCard) return;
     if (isLapsedDetectedPattern(pattern, startDate)) return;
+    const occurrenceFor = (date, extra = {}) => ({
+      patternId: pattern.id,
+      occurrenceId: `pattern:${pattern.id}:${extra.expectedPaymentDate || date}`,
+      date,
+      predictionKind: pattern.direction === 'income' ? 'recurring_income' : 'recurring_expense',
+      category: pattern.displayName,
+      categoryDefinitionId: pattern.categoryDefinitionId,
+      transactionName: pattern.displayName,
+      categoryType: pattern.direction,
+      incomeType: pattern.incomeType || null,
+      expenseType: pattern.expenseType || null,
+      probability: Math.max(0.45, pattern.confidence),
+      expectedAmount: pattern.amount,
+      probabilityWeightedAmount: pattern.amount,
+      amountRange: {
+        low: Math.max(0, pattern.amount - pattern.amountTolerance),
+        high: pattern.amount + pattern.amountTolerance,
+      },
+      confidence: pattern.confidence,
+      explanation: 'Based on a recurring pattern and your saved corrections',
+      correctionCapabilities: ['skip_occurrence', 'suppress_pattern', 'end_pattern', 'pause_pattern', 'override_pattern'],
+      ...extra,
+    });
+    const isProjected = date => {
+      const ended = pattern.state === 'ended' && pattern.endedAt && date >= pattern.endedAt;
+      return !ended && !pattern.skippedOccurrences.includes(`pattern:${pattern.id}:${date}`);
+    };
     let occurrence = pattern.nextExpectedDate
       ? parseDate(pattern.nextExpectedDate)
       : addFrequency(parseDate(pattern.lastSeenDate || startDate), pattern.frequency, pattern.billingDay);
-    while (occurrence < start) occurrence = addFrequency(occurrence, pattern.frequency, pattern.billingDay);
+    let previous = null;
+    while (occurrence < start) {
+      previous = occurrence;
+      occurrence = addFrequency(occurrence, pattern.frequency, pattern.billingDay);
+    }
+    // A bill due in the last few days that has not been paid yet is late, not
+    // skipped: keep it in the outlook as awaiting payment. The previous cycle
+    // must have been paid, so a long-stopped charge does not reappear.
+    if (previous) {
+      const due = formatDate(previous);
+      const tolerance = lateToleranceDays(pattern.frequency);
+      const daysLate = Math.round((start - previous) / 86400000);
+      const lastSeen = pattern.lastSeenDate ? parseDate(pattern.lastSeenDate) : null;
+      const sinceLastSeen = lastSeen ? Math.round((previous - lastSeen) / 86400000) : null;
+      if (daysLate <= tolerance && sinceLastSeen !== null && sinceLastSeen > tolerance
+        && sinceLastSeen <= FREQUENCY_DAYS[pattern.frequency] * 1.5 && isProjected(due)) {
+        occurrences.push(occurrenceFor(startDate, { awaitingReceipt: true, expectedPaymentDate: due }));
+      }
+    }
     let guard = 0;
     while (occurrence <= end && guard < 400) {
       const date = formatDate(occurrence);
-      const occurrenceId = `pattern:${pattern.id}:${date}`;
-      const ended = pattern.state === 'ended' && pattern.endedAt && date >= pattern.endedAt;
-      if (!ended && !pattern.skippedOccurrences.includes(occurrenceId)) {
-        occurrences.push({
-          patternId: pattern.id,
-          occurrenceId,
-          date,
-          predictionKind: pattern.direction === 'income' ? 'recurring_income' : 'recurring_expense',
-          category: pattern.displayName,
-          categoryDefinitionId: pattern.categoryDefinitionId,
-          transactionName: pattern.displayName,
-          categoryType: pattern.direction,
-          incomeType: pattern.incomeType || null,
-          expenseType: pattern.expenseType || null,
-          probability: Math.max(0.45, pattern.confidence),
-          expectedAmount: pattern.amount,
-          probabilityWeightedAmount: pattern.amount,
-          amountRange: {
-            low: Math.max(0, pattern.amount - pattern.amountTolerance),
-            high: pattern.amount + pattern.amountTolerance,
-          },
-          confidence: pattern.confidence,
-          explanation: 'Based on a recurring pattern and your saved corrections',
-          correctionCapabilities: ['skip_occurrence', 'suppress_pattern', 'end_pattern', 'pause_pattern', 'override_pattern'],
-        });
-      }
+      if (isProjected(date)) occurrences.push(occurrenceFor(date));
       occurrence = addFrequency(occurrence, pattern.frequency, pattern.billingDay);
       guard += 1;
     }
   });
-  return occurrences;
+
+  // A detected cadence for a bill the user already manages (an imported, manual,
+  // confirmed or overridden pattern of a similar amount) would project it twice.
+  // Only occurrences the managed pattern covers within the late tolerance are
+  // dropped, so a different charge from the same merchant is never hidden.
+  const patternsById = new Map(snapshot.patterns.map(pattern => [pattern.id, pattern]));
+  const managed = occurrences.filter(item => isUserBackedPattern(patternsById.get(item.patternId)));
+  return occurrences.filter((item) => {
+    const pattern = patternsById.get(item.patternId);
+    if (isUserBackedPattern(pattern) || !pattern.normalizedName) return true;
+    const tolerance = lateToleranceDays(pattern.frequency);
+    return !managed.some((other) => {
+      const owner = patternsById.get(other.patternId);
+      return owner.direction === pattern.direction && owner.normalizedName === pattern.normalizedName
+        && isSimilarAmount(Math.abs(pattern.amount), Math.abs(owner.amount))
+        && Math.abs(parseDate(other.date) - parseDate(item.date)) / 86400000 <= tolerance;
+    });
+  });
 }
 
 function validateDraft(payload = {}) {
@@ -1255,6 +1340,7 @@ module.exports = {
   getProjectionSnapshot,
   getProjectionSnapshotFromDb,
   inferFrequency,
+  createRecurringEvidenceFilter,
   listCorrections,
   listPresentationDismissals,
   materializePatterns,

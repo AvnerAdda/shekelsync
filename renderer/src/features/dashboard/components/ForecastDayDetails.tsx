@@ -1,5 +1,5 @@
 import React from 'react';
-import { Box, Button, Typography } from '@mui/material';
+import { Box, Button, Chip, Tooltip, Typography } from '@mui/material';
 import { useTranslation } from 'react-i18next';
 import InstitutionBadge from '@renderer/shared/components/InstitutionBadge';
 import CategoryIcon from '@renderer/features/breakdown/components/CategoryIcon';
@@ -26,6 +26,29 @@ const cents = (value: number) => {
   return Math.sign(value) * Math.round(Number(`${coefficient}e${Number(exponent) + 2}`));
 };
 
+const confidenceTiers = ['sure', 'likely', 'uncertain'] as const;
+const tierOf = (prediction: Record<string, any>) => confidenceTiers.includes(prediction.confidenceTier)
+  ? prediction.confidenceTier as typeof confidenceTiers[number] : 'uncertain';
+const tierChipSx = {
+  sure: { bgcolor: 'text.primary', color: 'background.paper' },
+  likely: { bgcolor: 'action.selected', color: 'text.primary' },
+  uncertain: { bgcolor: 'transparent', color: 'text.secondary', border: 1, borderColor: 'divider', borderStyle: 'dashed' },
+} as const;
+
+// A range is worth showing only when the amount varies by at least 5%.
+function variableRange(prediction: Record<string, any>) {
+  const low = finiteNumber(prediction.amountRange?.low);
+  const high = finiteNumber(prediction.amountRange?.high);
+  const amount = Math.abs(finiteNumber(prediction.amount) ?? 0);
+  if (low === null || high === null || !amount || prediction.timingBasis === 'daily_average') return null;
+  return Math.abs(high - low) / 2 / amount >= 0.05 ? { low, high } : null;
+}
+
+// Typical daily spending stays in the totals, but its many tiny daily shares
+// are summarized in one row rather than listed one by one.
+const isSmallDailyShare = (prediction: Record<string, any>) => prediction.timingBasis === 'daily_average'
+  && (Math.abs(contribution(prediction)) < 5 || (finiteNumber(prediction.probability) ?? 1) < 0.05);
+
 // Prefer the contribution calculated by the model: normalizations and overrides
 // can make it differ from the nominal amount times the displayed probability.
 function contribution(prediction: Record<string, any>) {
@@ -40,16 +63,23 @@ export default function ForecastDayDetails({ day, predictions, formatCurrency, o
     minimumFractionDigits: 2, maximumFractionDigits: 2,
   })}`;
   const groups = flows.map(flow => {
-    const rows = predictions.filter(prediction => (prediction.categoryType || 'expense') === flow.categoryType);
-    const sum = rows.reduce((total, prediction) => total + contribution(prediction), 0);
+    const flowRows = predictions.filter(prediction => (prediction.categoryType || 'expense') === flow.categoryType)
+      .map((prediction, index) => ({ prediction, index }))
+      .sort((a, b) => confidenceTiers.indexOf(tierOf(a.prediction)) - confidenceTiers.indexOf(tierOf(b.prediction))
+        || a.index - b.index)
+      .map(({ prediction }) => prediction);
+    const rows = flowRows.filter(prediction => !isSmallDailyShare(prediction));
+    const smallDaily = flowRows.filter(isSmallDailyShare);
+    const sum = flowRows.reduce((total, prediction) => total + contribution(prediction), 0);
     const total = finiteNumber(day[flow.metric]) ?? sum;
     // Older responses may only contain the top five predictions. Account for
     // their missing contributions explicitly instead of implying completeness.
     const remainder = cents(total - sum);
-    const displayedSum = rows.reduce((value, prediction) => value + cents(contribution(prediction)), 0);
+    const smallDailyCents = smallDaily.reduce((value, prediction) => value + cents(contribution(prediction)), 0);
+    const displayedSum = rows.reduce((value, prediction) => value + cents(contribution(prediction)), 0) + smallDailyCents;
     const rounding = cents(total) - displayedSum - remainder;
-    return { ...flow, rows, total, remainder, rounding };
-  }).filter(group => group.rows.length > 0 || group.total !== 0);
+    return { ...flow, rows, smallDaily: { count: smallDaily.length, cents: smallDailyCents }, total, remainder, rounding };
+  }).filter(group => group.rows.length > 0 || group.smallDaily.count > 0 || group.total !== 0);
 
   return (
     <Box>
@@ -77,6 +107,12 @@ export default function ForecastDayDetails({ day, predictions, formatCurrency, o
                       : prediction.transactionName || prediction.category_name || prediction.category}
                   </Typography>
                   <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
+                    {prediction.confidenceTier && (
+                      <Tooltip title={t(`forecast.confidenceTierHint.${tierOf(prediction)}`)}>
+                        <Chip size="small" label={t(`forecast.confidenceTier.${tierOf(prediction)}`)}
+                          sx={{ height: 20, fontSize: '0.7rem', fontWeight: 600, ...tierChipSx[tierOf(prediction)] }} />
+                      </Tooltip>
+                    )}
                     <Typography variant="caption" sx={{ color: 'warning.main', fontWeight: 500 }}>
                       {prediction.awaitingReceipt
                         ? tRoot('analysisPage.modals.future.incomeSources.awaiting')
@@ -112,6 +148,10 @@ export default function ForecastDayDetails({ day, predictions, formatCurrency, o
                         amount: money(finiteNumber(prediction.amount) ?? 0),
                         defaultValue: `Estimated transaction: ${money(finiteNumber(prediction.amount) ?? 0)}`,
                       })}
+                    {variableRange(prediction) && ` · ${t('forecast.amountRange', {
+                      low: money(variableRange(prediction)!.low),
+                      high: money(variableRange(prediction)!.high),
+                    })}`}
                   </Typography>
                 </Box>
                 <Box sx={{ textAlign: 'end' }}>
@@ -136,6 +176,26 @@ export default function ForecastDayDetails({ day, predictions, formatCurrency, o
                 </Box>
               </Box>
             ))}
+            {group.smallDaily.count > 0 && (
+              <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 2, py: 1.5, px: 2,
+                bgcolor: 'action.hover', borderRadius: 1, mb: 0.5 }}>
+                <Box>
+                  <Typography variant="body2" sx={{ fontWeight: 'medium' }}>
+                    {t('forecast.otherDailySpending', { count: group.smallDaily.count,
+                      defaultValue: `Other typical daily spending (${group.smallDaily.count})` })}
+                  </Typography>
+                  <Typography variant="caption" color="text.secondary">
+                    {t('forecast.otherDailySpendingHint', { defaultValue: 'Small daily shares of categories you spend on occasionally' })}
+                  </Typography>
+                </Box>
+                <Box sx={{ textAlign: 'end' }}>
+                  <Typography variant="body2" sx={{ fontWeight: 'bold' }}>{money(group.smallDaily.cents / 100)}</Typography>
+                  <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
+                    {t('forecast.contribution', { defaultValue: 'Included in forecast' })}
+                  </Typography>
+                </Box>
+              </Box>
+            )}
             {group.remainder !== 0 && (
               <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 2, px: 2, py: 1 }}>
                 <Typography variant="body2" color="text.secondary">

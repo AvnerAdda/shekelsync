@@ -1152,6 +1152,20 @@
       "scheduledPayment": "תשלום מתוכנן",
       "dailyAverage": "הוצאה יומית אופיינית",
       "dailyEstimate": "הערכה יומית: {{amount}}",
+      "otherDailySpending": "הוצאות יומיות אופייניות נוספות ({{count}})",
+      "otherDailySpendingHint": "חלקים יומיים קטנים של קטגוריות שבהן יש הוצאה מדי פעם",
+      "confidenceTier": {
+        "sure": "ודאי",
+        "likely": "סביר",
+        "uncertain": "לא ודאי"
+      },
+      "confidenceTierHint": {
+        "sure": "מועד וסכום ידועים",
+        "likely": "קבוע, אבל המועד או הסכום משתנים",
+        "uncertain": "הערכה לפי הוצאות אופייניות"
+      },
+      "amountRange": "בדרך כלל {{low}}–{{high}}",
+      "confidenceLegendHint": "מקטעים כהים יותר ודאיים יותר. ודאי: מועד וסכום ידועים. סביר: קבוע, אבל המועד או הסכום משתנים. לא ודאי: הערכה לפי הוצאות אופייניות.",
       "probability": "{{percent}}% הסתברות",
       "remainingForecast": "סכומים נוספים בתחזית",
       "roundingAdjustment": "עיגול",
