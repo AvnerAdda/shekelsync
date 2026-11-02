@@ -1,4 +1,5 @@
 const actualDatabase = require('../database.js');
+const { parseCsvLine } = require('./boi-sdmx.js');
 
 const DEFAULT_BASE_CURRENCY = 'ILS';
 const DEFAULT_MAX_AGE_DAYS = 14;
@@ -511,30 +512,6 @@ async function summarizeAmounts(entries = [], options = {}) {
     conversions,
     missing,
   };
-}
-
-function parseCsvLine(line) {
-  const values = [];
-  let current = '';
-  let quoted = false;
-  for (let index = 0; index < line.length; index += 1) {
-    const character = line[index];
-    if (character === '"') {
-      if (quoted && line[index + 1] === '"') {
-        current += '"';
-        index += 1;
-      } else {
-        quoted = !quoted;
-      }
-    } else if (character === ',' && !quoted) {
-      values.push(current);
-      current = '';
-    } else {
-      current += character;
-    }
-  }
-  values.push(current);
-  return values;
 }
 
 function parseBoiCsv(csvText) {

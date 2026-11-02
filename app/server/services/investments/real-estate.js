@@ -67,6 +67,8 @@ async function loadRealEstateAccount(dbAdapter, accountId) {
   return result.rows?.[0] || null;
 }
 
+const { isMortgagePayment } = require('../forecast-models/investment-schedule.js');
+
 async function fetchLinkedRealEstateTransactions(dbAdapter, accountId) {
   const result = await dbAdapter.query(
     `
@@ -113,11 +115,28 @@ async function upsertRealEstateSnapshot(dbAdapter, accountId, snapshot) {
       snapshot.current_value,
       snapshot.cost_basis,
       snapshot.as_of_date,
-      'Auto-synced from linked real estate transactions',
+      AUTO_SYNC_NOTE,
     ],
   );
 
   return result.rows?.[0] || null;
+}
+
+const AUTO_SYNC_NOTE = 'Auto-synced from linked real estate transactions';
+
+/**
+ * Remove auto-synced snapshots that the current rollup no longer produces
+ * (e.g. rows dated on mortgage debits written before those debits were
+ * excluded). Simulator and merged valuations are never touched.
+ */
+async function pruneStaleAutoSnapshots(dbAdapter, accountId, keepDates) {
+  const placeholders = keepDates.map((_, index) => `$${index + 3}`);
+  await dbAdapter.query(
+    `DELETE FROM investment_holdings
+      WHERE account_id = $1 AND COALESCE(holding_type, 'standard') = 'standard' AND notes = $2
+        ${placeholders.length ? `AND as_of_date NOT IN (${placeholders.join(', ')})` : ''}`,
+    [accountId, AUTO_SYNC_NOTE, ...keepDates],
+  );
 }
 
 async function syncRealEstateHolding({ dbAdapter, accountId } = {}) {
@@ -131,9 +150,16 @@ async function syncRealEstateHolding({ dbAdapter, accountId } = {}) {
     return null;
   }
 
-  const transactions = await fetchLinkedRealEstateTransactions(dbAdapter, numericAccountId);
+  // Mortgage payments are cash flow (mostly interest), not property value.
+  const linked = await fetchLinkedRealEstateTransactions(dbAdapter, numericAccountId);
+  const linkedCount = linked.length;
+  const transactions = linked.filter((row) => !isMortgagePayment(row.name));
   let snapshots = buildCumulativeRealEstateSnapshots(transactions);
   if (snapshots.length === 0) {
+    if (transactions.length === 0 && linkedCount > 0) {
+      // Only mortgage debits were linked: no auto-synced snapshot should remain.
+      await pruneStaleAutoSnapshots(dbAdapter, numericAccountId, []);
+    }
     return {
       accountId: numericAccountId,
       synced: false,
@@ -155,6 +181,7 @@ async function syncRealEstateHolding({ dbAdapter, accountId } = {}) {
     if (protectedDates.has(snapshot.as_of_date)) continue;
     rows.push(await upsertRealEstateSnapshot(dbAdapter, numericAccountId, snapshot));
   }
+  await pruneStaleAutoSnapshots(dbAdapter, numericAccountId, snapshots.map((snapshot) => snapshot.as_of_date));
 
   return {
     accountId: numericAccountId,

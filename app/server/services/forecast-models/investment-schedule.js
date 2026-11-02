@@ -149,6 +149,7 @@ function buildInvestmentSchedule(transactions, dates, now, truthSnapshot = {}) {
         category: row.category_name_en || row.category_name || 'Investments',
         transactionName: row.name,
         vendor: row.vendor || null,
+        accountNumber: row.account_number || null,
         evidenceCount: historyDates.length,
         inference: mortgage && historyDates.length < 3 ? 'mortgage_payment' : 'recurring_transfers',
       });
@@ -186,9 +187,11 @@ function applyInvestmentSchedule(dailyForecasts, simulationEntriesByDay, events,
       probability: 1, expectedAmount: event.amount, probabilityWeightedAmount: event.amount,
       amountRange: { low: range[0], high: range[1] }, predictionKind: 'recurring_investment',
       investmentDirection: direction, evidenceCount: event.evidenceCount, inference: event.inference,
-      explanation: event.inference === 'mortgage_payment'
-        ? 'Estimated monthly mortgage payment from the latest debit and its local payment day'
-        : 'Based on this transfer source’s recent payment amounts and recurring dates',
+      explanation: event.inference === 'mortgage_schedule'
+        ? 'Computed from your mortgage tracks (prime and CPI from Bank of Israel / CBS data)'
+        : event.inference === 'mortgage_payment'
+          ? 'Estimated monthly mortgage payment from the latest debit and its local payment day'
+          : 'Based on this transfer source’s recent payment amounts and recurring dates',
     });
     simulationMap.get(event.date)?.entries.push({
       patternKey, categoryType: 'investment', patternType: 'investment_schedule',
@@ -198,4 +201,4 @@ function applyInvestmentSchedule(dailyForecasts, simulationEntriesByDay, events,
   dailyForecasts.forEach(engine.refreshForecastDayPredictions);
 }
 
-module.exports = { buildInvestmentSchedule, applyInvestmentSchedule };
+module.exports = { buildInvestmentSchedule, applyInvestmentSchedule, isMortgagePayment, normalizeName, transactionDate };

@@ -131,6 +131,31 @@ const routeServices = {
     getRealEstateProfile: vi.fn(),
     upsertRealEstateProfile: vi.fn(),
     applyRealEstateValuation: vi.fn(),
+    summarizeOverview: vi.fn(),
+  },
+  mortgageService: {
+    enrichOverview: vi.fn(),
+    getMortgageView: vi.fn(),
+    saveMortgage: vi.fn(),
+    deleteMortgage: vi.fn(),
+    previewMortgage: vi.fn(),
+    calibrateTrack: vi.fn(),
+    syncLegacyColumns: vi.fn(),
+    getPropertyAnalysis: vi.fn(),
+    savePropertySettings: vi.fn(),
+    savePropertyCosts: vi.fn(),
+    getReconciliation: vi.fn(),
+    getStressTest: vi.fn(),
+    getRefinanceCheck: vi.fn(),
+    previewRefinance: vi.fn(),
+    savePaymentMatcher: vi.fn(),
+    priceIndexValuation: vi.fn(),
+  },
+  marketDataService: {
+    ensureFresh: vi.fn(),
+    getMarketSnapshot: vi.fn(),
+    syncMarketSeries: vi.fn(),
+    getSeries: vi.fn(),
   },
   ibkrSyncService: {
     getIBKRStatus: vi.fn(),
@@ -163,6 +188,8 @@ const database = routeServices.databaseService;
 const pikadonService = routeServices.pikadonService;
 const realEstateService = routeServices.realEstateService;
 const realEstateSimulatorService = routeServices.realEstateSimulatorService;
+const mortgageService = routeServices.mortgageService;
+const marketDataService = routeServices.marketDataService;
 const ibkrSyncService = routeServices.ibkrSyncService;
 const credentialsService = routeServices.credentialsService;
 
@@ -664,6 +691,8 @@ describe('Shared /api/investments routes', () => {
     vi.spyOn(realEstateSimulatorService, 'applyRealEstateValuation').mockResolvedValue({
       holding: { id: 44, account_id: 9, current_value: 700000 },
     });
+    mortgageService.enrichOverview.mockImplementation(async (overview: any) => overview);
+    mortgageService.syncLegacyColumns.mockResolvedValue({ updated: false });
 
     const estimate = await request(app)
       .post('/api/investments/real-estate/estimate')
@@ -701,6 +730,80 @@ describe('Shared /api/investments routes', () => {
       accountId: '9',
       asOfDate: '2026-06-01',
     });
+  });
+
+  it('serves mortgage tracks, previews and market data', async () => {
+    mortgageService.getMortgageView.mockResolvedValue({ accountId: 9, source: 'tracks' });
+    mortgageService.saveMortgage.mockResolvedValue({ accountId: 9, source: 'tracks', saved: true });
+    mortgageService.deleteMortgage.mockResolvedValue({ deleted: true });
+    mortgageService.previewMortgage.mockResolvedValue({ summary: { nextPayment: 6626 } });
+    mortgageService.calibrateTrack.mockResolvedValue({ best: { rateConvention: 'effective' } });
+    marketDataService.getMarketSnapshot.mockResolvedValue({ prime: { value: 4.75 } });
+    marketDataService.syncMarketSeries.mockResolvedValue({ imported: { 'cbs.cpi': 3 }, failed: [] });
+    marketDataService.getSeries.mockResolvedValue({ key: 'cbs.cpi', points: [] });
+
+    await request(app).get('/api/investments/real-estate/properties/9/mortgage?primeShiftPct=1').expect(200);
+    expect(mortgageService.getMortgageView).toHaveBeenCalledWith('9', { asOf: undefined, scenario: { primeShiftPct: '1' } });
+
+    const tracks = { tracks: [{ type: 'prime', margin: -0.75 }] };
+    const saved = await request(app).put('/api/investments/real-estate/properties/9/mortgage').send(tracks).expect(200);
+    expect(saved.body.saved).toBe(true);
+    expect(mortgageService.saveMortgage).toHaveBeenCalledWith('9', tracks);
+
+    await request(app).delete('/api/investments/real-estate/properties/9/mortgage').expect(200);
+    const preview = await request(app).post('/api/investments/real-estate/mortgage/preview').send({ mortgage: tracks }).expect(200);
+    expect(preview.body.summary.nextPayment).toBe(6626);
+    await request(app).post('/api/investments/real-estate/mortgage/calibrate').send({ track: {}, statement: {} }).expect(200);
+
+    mortgageService.getPropertyAnalysis.mockResolvedValue({ sale: {}, health: { overall: 'watch' } });
+    mortgageService.savePropertySettings.mockResolvedValue({ usageType: 'rented' });
+    mortgageService.savePropertyCosts.mockResolvedValue([{ type: 'purchase_tax', amount: 1 }]);
+    const analysis = await request(app).get('/api/investments/real-estate/properties/9/analysis').expect(200);
+    expect(analysis.body.health.overall).toBe('watch');
+    await request(app).put('/api/investments/real-estate/properties/9/settings').send({ usageType: 'rented' }).expect(200);
+    expect(mortgageService.savePropertySettings).toHaveBeenCalledWith('9', { usageType: 'rented' });
+    await request(app).put('/api/investments/real-estate/properties/9/costs').send([{ type: 'purchase_tax', amount: 1 }]).expect(200);
+    expect(mortgageService.savePropertyCosts).toHaveBeenCalledWith('9', [{ type: 'purchase_tax', amount: 1 }]);
+
+    mortgageService.getReconciliation.mockResolvedValue({ status: 'drift', months: [] });
+    mortgageService.savePaymentMatcher.mockResolvedValue({ status: 'ok', matcher: { pattern: 'משכנתא' } });
+    const reconciliation = await request(app).get('/api/investments/real-estate/properties/9/reconciliation').expect(200);
+    expect(reconciliation.body.status).toBe('drift');
+    await request(app).put('/api/investments/real-estate/properties/9/mortgage/payment-matcher').send({ pattern: 'משכנתא' }).expect(200);
+    expect(mortgageService.savePaymentMatcher).toHaveBeenCalledWith('9', { pattern: 'משכנתא' });
+
+    // Profile saves pass the price-index ratio to the simulator when available.
+    mortgageService.priceIndexValuation.mockResolvedValue({ ratio: 1.02 });
+    realEstateSimulatorService.upsertRealEstateProfile.mockResolvedValue({ profile: {} });
+    mortgageService.syncLegacyColumns.mockResolvedValue({ updated: false });
+    await request(app).put('/api/investments/real-estate/profiles/9').send({ valuation_method: 'price_index' }).expect(200);
+    expect(realEstateSimulatorService.upsertRealEstateProfile).toHaveBeenCalledWith('9', { valuation_method: 'price_index', price_index_ratio: 1.02 });
+
+    mortgageService.getStressTest.mockResolvedValue({ scenarios: [] });
+    mortgageService.getRefinanceCheck.mockResolvedValue({ tracks: [] });
+    mortgageService.previewRefinance.mockResolvedValue({ verdict: 'worth_it' });
+    await request(app).post('/api/investments/real-estate/properties/9/mortgage/stress').send({ scenarios: [] }).expect(200);
+    expect(mortgageService.getStressTest).toHaveBeenCalledWith('9', { scenarios: [] });
+    await request(app).get('/api/investments/real-estate/properties/9/mortgage/refinance-check?switchingCosts=2000').expect(200);
+    expect(mortgageService.getRefinanceCheck).toHaveBeenCalledWith('9', { asOf: undefined, switchingCosts: '2000' });
+    const refi = await request(app).post('/api/investments/real-estate/properties/9/mortgage/refinance-preview').send({ closeTrackIds: ['1'] }).expect(200);
+    expect(refi.body.verdict).toBe('worth_it');
+
+    const snapshot = await request(app).get('/api/investments/market-data/snapshot').expect(200);
+    expect(snapshot.body.prime.value).toBe(4.75);
+    await request(app).post('/api/investments/market-data/sync').send({ force: true, keys: ['cbs.cpi'] }).expect(200);
+    expect(marketDataService.syncMarketSeries).toHaveBeenCalledWith({ keys: ['cbs.cpi'], force: true });
+    await request(app).get('/api/investments/market-data/series/cbs.cpi?from=2025-01').expect(200);
+    expect(marketDataService.getSeries).toHaveBeenCalledWith('cbs.cpi', { from: '2025-01', to: undefined });
+  });
+
+  it('returns validation errors from the mortgage service as 400', async () => {
+    const error: any = new Error('tracks[0].margin is required for a prime track');
+    error.status = 400;
+    mortgageService.saveMortgage.mockRejectedValue(error);
+    const response = await request(app).put('/api/investments/real-estate/properties/9/mortgage').send({}).expect(400);
+    expect(response.body.error).toMatch(/margin is required/);
+    expect(response.body.details).toBeUndefined();
   });
 
   it('checks existing investments and lists patterns', async () => {

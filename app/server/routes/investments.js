@@ -1,4 +1,5 @@
 const express = require('express');
+const { registerRealEstateRoutes } = require('./investments-real-estate.js');
 
 let autoLinker;
 const {
@@ -195,6 +196,10 @@ function createInvestmentsRouter({ services = {} } = {}) {
   const realEstateService = services.realEstateService || require('../services/investments/real-estate.js');
   const realEstateSimulatorService = services.realEstateSimulatorService
     || require('../services/investments/real-estate-simulator.js');
+  const mortgageService = services.mortgageService
+    || require('../services/investments/mortgage/service.js');
+  const marketDataService = services.marketDataService
+    || require('../services/investments/market-data.js');
   const ibkrSyncService = services.ibkrSyncService || require('../services/investments/ibkr-sync.js');
   const credentialsService = services.credentialsService || require('../services/credentials.js');
   const databaseService = services.databaseService || require('../services/database.js');
@@ -814,79 +819,9 @@ function createInvestmentsRouter({ services = {} } = {}) {
   });
 
   // ==========================================
-  // REAL ESTATE SIMULATOR ROUTES
+  // REAL ESTATE, MORTGAGE AND MARKET DATA ROUTES
   // ==========================================
-
-  router.post('/real-estate/estimate', async (req, res) => {
-    try {
-      const estimate = realEstateSimulatorService.estimateRealEstateValue(req.body || {});
-      res.json({ estimate });
-    } catch (error) {
-      console.error('Real estate estimate error:', error);
-      res.status(error?.status || 500).json({
-        error: error?.message || 'Failed to estimate real estate value',
-        details: error?.stack,
-      });
-    }
-  });
-
-  router.get('/real-estate/overview', async (_req, res) => {
-    try {
-      const result = await realEstateSimulatorService.getRealEstateOverview();
-      res.json(result);
-    } catch (error) {
-      console.error('Real estate overview fetch error:', error);
-      res.status(error?.status || 500).json({
-        error: error?.message || 'Failed to fetch real estate overview',
-        details: error?.stack,
-      });
-    }
-  });
-
-  router.get('/real-estate/profiles/:accountId', async (req, res) => {
-    try {
-      const result = await realEstateSimulatorService.getRealEstateProfile(req.params.accountId);
-      res.json(result);
-    } catch (error) {
-      console.error('Real estate profile fetch error:', error);
-      res.status(error?.status || 500).json({
-        error: error?.message || 'Failed to fetch real estate profile',
-        details: error?.stack,
-      });
-    }
-  });
-
-  router.put('/real-estate/profiles/:accountId', async (req, res) => {
-    try {
-      const result = await realEstateSimulatorService.upsertRealEstateProfile(
-        req.params.accountId,
-        req.body || {},
-      );
-      res.json(result);
-    } catch (error) {
-      console.error('Real estate profile upsert error:', error);
-      res.status(error?.status || 500).json({
-        error: error?.message || 'Failed to save real estate profile',
-        details: error?.stack,
-      });
-    }
-  });
-
-  router.post('/real-estate/profiles/:accountId/apply-valuation', async (req, res) => {
-    try {
-      const result = await realEstateSimulatorService.applyRealEstateValuation({
-        accountId: req.params.accountId,
-        ...(req.body || {}),
-      });
-      res.status(201).json(result);
-    } catch (error) {
-      console.error('Real estate valuation apply error:', error);
-      res.status(error?.status || 500).json({
-        error: error?.message || 'Failed to apply real estate valuation',
-        details: error?.stack,
-      });
-    }
-  });
+  registerRealEstateRoutes(router, { realEstateSimulatorService, mortgageService, marketDataService });
 
   /**
    * GET /api/investments/bank-summary

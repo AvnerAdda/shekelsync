@@ -504,4 +504,15 @@ describe('real estate simulator service', () => {
       lastValuationDate: '2026-06-01',
     });
   });
+
+  it('adds a price-index source when a ratio is supplied', () => {
+    const estimate = simulatorService.estimateRealEstateValue({
+      purchase_price: 2000000,
+      purchase_date: '2025-01-01',
+      valuation_method: 'price_index',
+      last_valuation_date: '2026-11-01',
+    }, { priceIndexRatio: 1.02 });
+    expect(estimate.valuation_method).toBe('price_index');
+    expect(estimate.estimated_value).toBe(2040000);
+  });
 });
