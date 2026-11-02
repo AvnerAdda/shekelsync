@@ -2364,6 +2364,7 @@
       "title": "Simulateur immobilier",
       "unsavedSuffix": " - modifications non enregistrées",
       "fields": {
+        "managedByTracks": "Calculé depuis vos tranches de prêt",
         "city": "Ville",
         "neighborhood": "Quartier",
         "propertyType": "Type de bien",
@@ -2405,6 +2406,7 @@
         "other": "Autre"
       },
       "valuationMethods": {
+        "priceIndex": "Indice des prix CBS",
         "blended": "Mixte",
         "manual": "Valeur manuelle",
         "purchaseGrowth": "Croissance depuis l'achat",
@@ -2443,6 +2445,549 @@
       }
     },
     "realEstateTab": {
+      "refinance": {
+        "title": "Renégociation (מחזור)",
+        "subtitle": "Remplacer une tranche serait-il rentable, après frais de remboursement anticipé et frais de changement ?",
+        "check": {
+          "title": "Si vous obteniez le taux moyen du marché aujourd'hui",
+          "subtitle": "Même type de tranche et même échéance, au taux moyen de la Banque d'Israël pour les nouveaux prêts ; frais de changement {{costs}}.",
+          "track": "Tranche",
+          "balance": "Solde",
+          "rates": "Vous → marché",
+          "monthly": "Mensualité",
+          "saving": "Économie nette (valeur actuelle)",
+          "verdict": "Verdict",
+          "noBenchmark": "Pas de moyenne de marché publique : demandez une offre à votre banque et comparez-la ci-dessous."
+        },
+        "offer": {
+          "title": "Comparer une offre de banque",
+          "subtitle": "Choisissez les tranches que le nouveau prêt rembourserait, puis saisissez les tranches proposées telles que la banque les présente.",
+          "type": "Tranche proposée",
+          "primeMargin": "Prime ±",
+          "margin": "Marge",
+          "rate": "Taux %",
+          "convention": "Exprimé en",
+          "term": "Mois",
+          "addTrack": "Ajouter une tranche proposée",
+          "switchingCosts": "Frais de changement ₪",
+          "switchingHint": "Expert, frais de dossier, avocat",
+          "financeFees": "Ajouter les frais au nouveau prêt",
+          "compare": "Comparer"
+        },
+        "verdicts": {
+          "worth_it": "Rentable",
+          "marginal": "Limite",
+          "not_worth_it": "Aucun gain"
+        },
+        "result": {
+          "monthly": "Mensualité",
+          "saving": "Économie nette",
+          "pv": "{{amount}} en valeur actuelle ({{rate}} %/an)",
+          "costs": "Coût du changement",
+          "costsHint": "Frais de remboursement anticipé {{fee}} + changement {{switching}}",
+          "breakEven": "Rentabilisé après",
+          "never": "Jamais",
+          "months": "{{count}} mois",
+          "ends": "Fin {{date}}",
+          "chart": "Mensualité : prêt actuel vs offre",
+          "current": "Prêt actuel",
+          "offer": "Avec l'offre"
+        },
+        "warnings": {
+          "planned": "Les déblocages après la date de renégociation restent aux conditions d'origine."
+        },
+        "confirmApply": "Enregistrer cette renégociation ? Les tranches remplacées seront clôturées le {{date}} et les nouvelles ajoutées.",
+        "apply": "J'ai fait cette renégociation : mettre à jour mes tranches",
+        "applied": "Tranches mises à jour",
+        "disclaimer": "Estimations. Les frais de remboursement anticipé sont un maximum ; comparaison dans le scénario de base (prime stable, inflation anticipée par le marché)."
+      },
+      "stress": {
+        "title": "Test de résistance",
+        "subtitle": "Comment votre mensualité évolue si le prime ou l'inflation changent à partir d'aujourd'hui. Le scénario de base garde le prime actuel et l'inflation anticipée par le marché.",
+        "customTitle": "Construisez votre scénario",
+        "custom": "Votre scénario : prime {{prime}}, inflation {{cpi}} %/an",
+        "primeShift": "Variation du prime : {{value}}",
+        "primeShiftLabel": "Variation du prime",
+        "inflation": "Inflation : {{value}} % par an",
+        "inflationLabel": "Inflation",
+        "presets": {
+          "base": "Scénario de base",
+          "prime1": "Prime +1 %",
+          "prime2": "Prime +2 %",
+          "prime3": "Prime +3 %",
+          "cpi4": "Inflation 4 %/an",
+          "combined": "Prime +2 % et inflation 4 %"
+        },
+        "chartTitle": "Mensualité par scénario",
+        "nominalNote": "Montants en shekels futurs : les mensualités indexées augmentent avec l'inflation même si rien d'autre ne change.",
+        "table": {
+          "scenario": "Scénario",
+          "in1y": "Dans 1 an",
+          "in5y": "Dans 5 ans",
+          "peak": "Mensualité maximale",
+          "costDelta": "Surcoût sur la durée",
+          "pti": "Mensualité max / revenu"
+        },
+        "incomeNote": "Pour un revenu net de {{income}} par mois. Les banques plafonnent les nouveaux prêts à 50 %."
+      },
+      "reconciliation": {
+        "composition": {
+          "paying": "{{track}} : {{amount}} le {{date}}",
+          "notYet": "{{track}} : pas encore de paiement, la première échéance le {{date}}"
+        },
+        "editTracks": "Modifier les tranches",
+        "noHistory": "{{count}} mois antérieurs ne sont pas vérifiés : votre historique bancaire commence le {{date}}.",
+        "title": "Calculé vs prélevé par la banque",
+        "matcher": {
+          "inUse": "Ce prélèvement est déjà utilisé.",
+          "saved": "Enregistré : ce prélèvement sert à vérifier vos paiements.",
+          "current": "Prélèvements correspondant à « {{pattern}} »{{vendor}} ({{source}}). {{count}} trouvés.",
+          "none": "Aucun prélèvement de prêt trouvé dans vos transactions. Choisissez le bon ci-dessous une fois le compte bancaire synchronisé.",
+          "sources": {
+            "saved": "choisi par vous",
+            "linked_transactions": "depuis les paiements liés à ce bien",
+            "detected": "détecté automatiquement"
+          },
+          "pick": "Prélèvement du prêt",
+          "occurrences": "{{count}}×, dernier {{amount}}",
+          "save": "Utiliser ce prélèvement"
+        },
+        "suggestions": {
+          "largeGap": "En {{month}}, la banque a prélevé {{actual}} mais vos tranches ne totalisent que {{expected}}. Une tranche manque probablement, ou sa date de déblocage ou de première échéance est fausse.",
+          "consistentDrift": "La banque prélève {{amount}} de plus ou de moins que le calcul chaque mois. Saisissez le solde de la banque par tranche dans « Vérification avec le relevé bancaire », et vérifiez si ses taux sont nominaux ou effectifs.",
+          "latestDrift": "Le dernier prélèvement diffère de la mensualité calculée. Une première échéance inclut souvent des jours d'intérêts en plus ; si cela se répète, vérifiez vos tranches.",
+          "missing": "Aucun prélèvement de prêt le mois dernier. Si le compte n'est pas synchronisé, synchronisez-le ; sinon vérifiez le prélèvement choisi ci-dessous.",
+          "firstPayment": "Un prélèvement avant la première échéance calculée correspond en général aux intérêts entre le déblocage et la première échéance, ou à un déblocage plus tôt."
+        },
+        "table": {
+          "month": "Mois",
+          "expected": "Calculé",
+          "actual": "Prélevé",
+          "difference": "Écart",
+          "status": "Statut"
+        },
+        "statuses": {
+          "ok": "Conforme",
+          "drift": "Écart",
+          "missing": "Manquant",
+          "unexpected": "Imprévu",
+          "pending": "À venir"
+        }
+      },
+      "detailTabs": {
+        "stress": "Scénarios & renégociation",
+        "mortgage": "Prêt",
+        "sale": "Vente & rentabilité",
+        "health": "Santé du crédit",
+        "healthNeedsMortgage": "Ajoutez vos tranches de prêt pour voir la santé du crédit."
+      },
+      "sale": {
+        "index": {
+          "title": "Valeur selon l'indice des prix des logements (CBS)",
+          "noData": "Aucune donnée d'indice publiée depuis votre achat (dernière : {{to}}). Valeur indexée = prix d'achat {{value}}.",
+          "body": "{{series}} : {{pct}} de {{from}} à {{to}}, votre prix d'achat vaut donc environ {{value}} aujourd'hui (votre estimation actuelle : {{estimate}}).",
+          "lag": "L'indice est publié avec environ 3 mois de retard et fait la moyenne de deux mois de transactions.",
+          "active": "Utilisé pour votre valorisation, mis à jour automatiquement",
+          "use": "Utiliser pour ma valorisation",
+          "series": {
+            "cbs.hpi.national": "Prix des logements (national)",
+            "cbs.hpi.new_dwellings": "Prix des logements neufs",
+            "cbs.hpi.district.jerusalem": "District de Jérusalem",
+            "cbs.hpi.district.north": "District Nord",
+            "cbs.hpi.district.haifa": "District de Haïfa",
+            "cbs.hpi.district.center": "District Centre",
+            "cbs.hpi.district.tel_aviv": "District de Tel Aviv",
+            "cbs.hpi.district.south": "District Sud"
+          }
+        },
+        "title": "Vente & seuil de rentabilité",
+        "editAssumptions": "Hypothèses & frais d'achat",
+        "cards": {
+          "today": "Si vous vendiez aujourd'hui",
+          "todayProfit": "{{amount}} vs l'argent investi",
+          "clearDebt": "Prix pour solder toute la dette",
+          "vsValue": "{{pct}} vs la valeur actuelle",
+          "recoverCash": "Prix pour récupérer tout votre argent",
+          "cashInvested": "Argent investi : {{amount}}",
+          "alternative": "Propriétaire vs locataire qui investit",
+          "aheadFrom": "Gagnant à partir de {{year}}",
+          "alwaysBehind": "Perdant sur toute la durée",
+          "breakEvenAppreciation": "Il faut ≥ {{pct}}/an de hausse des prix pour gagner sur 10 ans"
+        },
+        "breakdown": {
+          "title": "Vendre aujourd'hui, étape par étape",
+          "price": "Prix de vente (votre part)",
+          "saleCosts": "Agence, avocat et TVA",
+          "tax": "Impôt sur la plus-value (מס שבח)",
+          "mortgage": "Remboursement du prêt (intérêts courus inclus)",
+          "undrawn": "Reste dû pour les déblocages à venir",
+          "fees": "Frais de remboursement anticipé (estimation)",
+          "net": "Dans votre poche",
+          "invested": "Argent investi (apport, frais, mensualités)",
+          "result": "Gain / perte",
+          "valueNote": "Basé sur une valeur estimée de {{value}}."
+        },
+        "assumptions": {
+          "costsFromLinked": "L'argent investi est lu depuis les paiements liés à ce bien (apport, avocat…). Vérifiez-les dans les hypothèses.",
+          "downPaymentDerived": "Apport supposé = prix d'achat − prêt. Ajoutez vos vrais frais d'achat pour des chiffres précis.",
+          "purchaseTaxMissing": "Aucun impôt d'acquisition (מס רכישה) saisi."
+        },
+        "sensitivity": {
+          "title": "Gain ou perte selon le prix de vente",
+          "subtitle": "En vendant aujourd'hui au-dessus ou en dessous de la valeur estimée.",
+          "price": "Prix",
+          "netProceeds": "Dans votre poche",
+          "profit": "Gain / perte"
+        },
+        "alternative": {
+          "title": "Propriétaire vs louer et investir la différence",
+          "subtitle": "Propriétaire : ce qui vous resterait après une vente cette année-là. Alternative : le même argent (apport, frais, mensualités moins le loyer) placé à {{rate}}/an, après impôt. Le bien évolue selon votre hypothèse de croissance.",
+          "noRent": "Ajoutez le loyer d'un logement équivalent dans les hypothèses : sinon le loyer économisé n'est pas pris en compte.",
+          "crossover": "Le propriétaire passe devant",
+          "own": "Propriétaire (net à la vente)",
+          "alt": "Location + placement"
+        },
+        "disclaimer": "Estimations. Les frais de remboursement anticipé sont un maximum (sans remises d'ancienneté ou de préavis) ; l'impôt sur la plus-value est simplifié. Vérifiez auprès de votre banque et d'un conseiller fiscal avant de décider."
+      },
+      "health": {
+        "title": "Santé du crédit",
+        "overallHint": "Le verdict global est le plus faible des quatre domaines ci-dessous.",
+        "verdicts": {
+          "good": "Bon",
+          "watch": "À surveiller",
+          "risk": "À risque",
+          "unknown": "Données insuffisantes"
+        },
+        "rates": {
+          "title": "Vos taux vs le marché",
+          "summary": "Comparé à la moyenne de la Banque d'Israël pour les nouveaux prêts du même type.",
+          "noBenchmark": "Pas de moyenne de marché publique pour ce type de tranche",
+          "marginLine": "Marge {{yours}} vs marché {{benchmark}} ({{period}})",
+          "rateLine": "Taux {{yours}} vs marché {{benchmark}} ({{period}})"
+        },
+        "exposure": {
+          "title": "Exposition aux taux et à l'inflation",
+          "summary": "Quelle part du prêt suit le prime ou des taux variables, et ce que coûterait un mauvais scénario.",
+          "mix": "Répartition",
+          "fixed": "fixe",
+          "mixHint": "Prime {{prime}} · variable {{variable}} · indexé IPC {{cpi}}",
+          "perPrimePoint": "Chaque +1 % sur le prime",
+          "perMonth": "par mois",
+          "steady": "Mensualité",
+          "steadyHint": "à partir de {{month}}",
+          "worst": "Pire scénario",
+          "worstHint": "+{{pct}} · prime +2 % et inflation 4 %",
+          "fixedThird": "Moins d'un tiers du prêt est à taux fixe (recommandation de la Banque d'Israël)."
+        },
+        "affordability": {
+          "title": "Capacité de remboursement",
+          "summary": "La mensualité en part du revenu net du foyer. Les banques prêtent jusqu'à 50 % ; 30 % ou moins est confortable.",
+          "noIncome": "Aucun revenu détecté. Catégorisez votre salaire comme revenu, ou saisissez-le dans les hypothèses.",
+          "pti": "Mensualité / revenu",
+          "stressed": "Dans le pire scénario",
+          "cap": "Plafond 50 %",
+          "meterLabel": "Taux d'effort {{value}}",
+          "stressedMarker": "Pire scénario",
+          "incomeManual": "Revenu : {{amount}} par mois (saisi manuellement)",
+          "incomeDetected": "Revenu : {{amount}} par mois, médiane des {{count}} derniers mois avec revenu dans vos transactions"
+        },
+        "equity": {
+          "title": "Capital propre",
+          "summary": "La part du bien qui vous appartient, en comptant les déblocages à venir comme dette.",
+          "ltv": "Prêt / valeur",
+          "cushion": "Baisse de prix qui efface votre capital",
+          "cushionHint": "avant frais de vente",
+          "principalShare": "Capital dans chaque mensualité",
+          "principalFrom": "Plus de capital que d'intérêts à partir de {{month}}",
+          "ltv60": "Sous 60 % prêt/valeur",
+          "flatPrices": "au prix actuel"
+        },
+        "prepayment": {
+          "title": "Et un remboursement anticipé ?",
+          "body": "Rembourser {{amount}} sur votre tranche {{track}} ({{rate}}) après le dernier déblocage économiserait environ {{saved}} d'intérêts et la terminerait {{months}} mois plus tôt. Frais de remboursement anticipé estimés aujourd'hui : {{fee}}.",
+          "caveat": "L'argent utilisé pour rembourser n'est pas placé ailleurs : comparez l'économie avec ce qu'il pourrait rapporter."
+        }
+      },
+      "assumptions": {
+        "valueIndex": {
+          "cbs_hpi_national": "National",
+          "cbs_hpi_new_dwellings": "Logements neufs",
+          "cbs_hpi_district_jerusalem": "District de Jérusalem",
+          "cbs_hpi_district_north": "District Nord",
+          "cbs_hpi_district_haifa": "District de Haïfa",
+          "cbs_hpi_district_center": "District Centre",
+          "cbs_hpi_district_tel_aviv": "District de Tel Aviv",
+          "cbs_hpi_district_south": "District Sud"
+        },
+        "title": "Hypothèses & frais d'achat",
+        "saveFailed": "Échec de l'enregistrement",
+        "cancel": "Annuler",
+        "save": "Enregistrer",
+        "usage": {
+          "valueIndexAuto": "Automatique (neuf si sur plan, sinon national)",
+          "valueIndex": "Indice de prix pour la valeur automatique",
+          "offPlan": "Acheté sur plan (promoteur)",
+          "title": "Utilisation du bien",
+          "type": "Usage",
+          "owner_occupied": "J'y habite",
+          "rented": "Loué",
+          "vacant": "Vide",
+          "rentReceived": "Loyer mensuel perçu",
+          "rentSaved": "Loyer d'un logement équivalent",
+          "delivery": "Date de livraison / d'emménagement",
+          "deliveryHint": "Achat sur plan : le loyer n'est économisé qu'à partir de la livraison",
+          "rentGrowth": "Hausse des loyers",
+          "vacancy": "Vacance",
+          "rentalTax": "Impôt sur les loyers",
+          "rentalTaxHint": "0 sous le plafond d'exonération, 10 au régime forfaitaire"
+        },
+        "sale": {
+          "title": "Vente",
+          "broker": "Agence",
+          "lawyer": "Avocat",
+          "vat": "TVA",
+          "other": "Autres frais",
+          "exemption": "Exonération de plus-value (logement unique)",
+          "cgt": "Impôt sur la plus-value"
+        },
+        "alternative": {
+          "title": "Comparaison et revenu",
+          "return": "Rendement si placé ailleurs",
+          "tax": "Impôt sur les gains de placement",
+          "income": "Revenu net mensuel",
+          "incomeDetected": "Laisser vide pour utiliser le revenu détecté : {{amount}}",
+          "incomeNone": "Non détecté dans les transactions"
+        },
+        "costs": {
+          "title": "Frais d'achat et apport",
+          "hint": "Ce que vous avez payé de votre poche. Sans ligne d'apport, il est supposé égal au prix d'achat moins le prêt.",
+          "type": "Type",
+          "amount": "Montant",
+          "date": "Date",
+          "status": "Statut",
+          "paid": "Payé",
+          "planned": "Prévu",
+          "add": "Ajouter un frais",
+          "types": {
+            "down_payment": "Apport (fonds propres)",
+            "purchase_tax": "Impôt d'acquisition (מס רכישה)",
+            "lawyer": "Avocat",
+            "broker": "Agence",
+            "appraisal": "Expert",
+            "renovation": "Travaux",
+            "mortgage_fees": "Frais de prêt",
+            "other": "Autre"
+          }
+        }
+      },
+      "market": {
+        "title": "Données de marché",
+        "empty": "Pas encore synchronisé. Synchronisez pour calculer les tranches prime et indexées avec des données réelles.",
+        "policyRate": "Taux BoI",
+        "policyRateHint": "Taux directeur de la Banque d'Israël, depuis le {{date}}",
+        "prime": "Prime",
+        "primeHint": "Taux BoI + 1,5 %. Prochaine décision : {{date}}",
+        "cpi": "IPC 12 m",
+        "cpiHint": "Dernier IPC : {{period}}. Indice connu aujourd'hui : {{known}}",
+        "inflationExpectation": "Inflation attendue 1 an",
+        "inflationExpectationHint": "Anticipation composite de la Banque d'Israël, utilisée pour projeter les tranches indexées",
+        "housePrices": "Prix immobiliers 12 m",
+        "housePricesHint": "Indice des prix des logements du CBS, {{period}} (publié avec ~3 mois de retard)",
+        "stale": "Certaines données ne sont pas à jour",
+        "lastSynced": "Dernière synchro {{date}}",
+        "sync": "Synchroniser",
+        "syncError": "Certaines séries n'ont pas pu être actualisées : {{error}}",
+        "sources": "Sources : API publiques de la Banque d'Israël et du Bureau central des statistiques. Valeurs mises en cache localement."
+      },
+      "mortgage": {
+        "primeLag": {
+          "next": "Dès l'échéance suivante",
+          "later": "Une échéance plus tard"
+        },
+        "dates": {
+          "fix": "Mettre au {{date}}",
+          "onDraw": "La première échéance ({{payment}}) doit venir après le déblocage ({{draw}}), en général un mois plus tard.",
+          "longGap": "La première échéance ({{payment}}) tombe {{days}} jours après le déblocage ({{draw}}). Les banques prélèvent en général la première échéance un mois après le déblocage.",
+          "applyAll": "Mêmes dates pour toutes les tranches",
+          "applyAllHint": "Copie la date de déblocage et la date de première échéance de cette tranche sur les autres : les tranches d'un prêt sont en général débloquées et payées ensemble."
+        },
+        "editorTitle": "Tranches du prêt",
+        "editorTitleFor": "Tranches du prêt — {{name}}",
+        "editorIntro": "Saisissez chaque tranche (מסלול) comme dans votre contrat de prêt. La tranche prime suit le taux de la Banque d'Israël et les tranches indexées suivent l'IPC publié automatiquement.",
+        "confirmRemove": "Supprimer les tranches détaillées ? Le bien conserve son dernier solde calculé.",
+        "legacyNotice": "Cette projection est estimée à partir du solde, du taux et de la mensualité uniques. Définissez vos tranches (prime, fixe, indexée…) pour un échéancier précis qui suit le taux de la Banque d'Israël et l'IPC.",
+        "trackTypes": {
+          "prime": "Prime",
+          "fixed_unlinked": "Fixe non indexé (קל\"צ)",
+          "fixed_cpi": "Fixe indexé IPC (ק\"צ)",
+          "variable_unlinked": "Variable non indexé",
+          "variable_cpi": "Variable indexé IPC",
+          "fx_linked": "Devise étrangère",
+          "legacy": "Prêt (unique)"
+        },
+        "fields": {
+          "primeLagHint": "Certaines banques n'appliquent un changement du prime qu'à partir de l'échéance suivant la décision de la Banque d'Israël. Comparez avec vos prélèvements.",
+          "primeLag": "Les changements du prime s'appliquent",
+          "type": "Type de tranche",
+          "label": "Libellé (facultatif)",
+          "primeMargin": "Marge sur prime",
+          "margin": "Marge sur l'ancre",
+          "primeNow": "Aujourd'hui : {{rate}} % ({{effective}} % effectif)",
+          "currentRate": "Taux actuel",
+          "rate": "Taux d'intérêt",
+          "equalsNominal": "= {{rate}} % nominal",
+          "equalsEffective": "= {{rate}} % effectif",
+          "conventionHint": "Les banques affichent souvent le taux annuel effectif (ריבית אפקטיבית). Vérifiez votre relevé de prêt.",
+          "variableUnlinkedHint": "Révisé tous les quelques ans selon un taux d'ancrage obligataire. Pour « prime ± x », choisissez Prime.",
+          "nominal": "Nominal",
+          "effective": "Effectif",
+          "resetPeriod": "Le taux change tous les",
+          "term": "Durée",
+          "years": "{{years}} ans",
+          "firstPayment": "Date de 1re échéance",
+          "amortization": "Mode de remboursement",
+          "grace": "Différé",
+          "graceEnd": "Fin du différé",
+          "cpiFloor": "Plancher de déflation (solde jamais sous l'indice de base)",
+          "lender": "Prêteur",
+          "approvedAmount": "Montant du prêt accordé",
+          "drawnSummary": "Débloqué {{drawn}} · prévu {{planned}}",
+          "brokenPeriod": "Intérêts de la 1re période"
+        },
+        "units": {
+          "months": "mois"
+        },
+        "amortization": {
+          "spitzer": "Spitzer (mensualités constantes)",
+          "equal_principal": "Capital constant",
+          "balloon": "In fine (intérêts seuls)",
+          "bullet": "Bullet (tout à l'échéance)"
+        },
+        "grace": {
+          "none": "Aucun",
+          "partial": "Partiel (intérêts seuls)",
+          "full": "Total (intérêts capitalisés)"
+        },
+        "brokenPeriod": {
+          "separate": "Prélevés à part à l'échéance suivante (intérêts seuls)",
+          "monthly": "Mois normal",
+          "actual_days": "Jours réels depuis le déblocage"
+        },
+        "tranches": {
+          "title": "Déblocages",
+          "date": "Date de déblocage",
+          "amount": "Montant",
+          "status": "Statut",
+          "drawn": "Débloqué",
+          "planned": "Prévu",
+          "rate": "Taux (si différent)",
+          "marketRate": "Vide = moyenne du marché",
+          "add": "Ajouter un déblocage"
+        },
+        "statement": {
+          "toggle": "Vérification avec le relevé bancaire",
+          "hint": "Saisissez le solde indiqué par votre banque pour cette tranche. La projection repart de ce solde, pour que les petites différences de convention ne s'accumulent pas.",
+          "date": "Date du relevé",
+          "balance": "Solde du relevé",
+          "remaining": "Échéances restantes"
+        },
+        "offPlan": {
+          "resplit": "Répartir avec la même répartition",
+          "alreadyPlanned": "{{amount}} est déjà prévu : {{split}}. Répartissez-le selon la répartition déjà débloquée, à la date de livraison ci-dessous.",
+          "title": "Achat sur plan ? Ajoutez le déblocage restant",
+          "hint": "Répartit le montant entre les tranches dans les mêmes proportions que ce qui est déjà débloqué. Les tranches fixes sans taux sont valorisées à la moyenne de marché de la Banque d'Israël.",
+          "date": "Livraison prévue",
+          "amount": "Montant restant à débloquer",
+          "apply": "Ajouter avec la même répartition"
+        },
+        "events": {
+          "title": "Remboursements anticipés et changements",
+          "type": "Événement",
+          "track": "Tranche",
+          "date": "Date",
+          "amount": "Montant",
+          "mode": "Puis",
+          "prepay_partial": "Remboursement partiel",
+          "prepay_full": "Remboursement total",
+          "rate_override": "Changement de taux",
+          "reduce_payment": "Baisser la mensualité",
+          "reduce_term": "Réduire la durée",
+          "rate": "Nouveau taux",
+          "fee": "Frais payés",
+          "add": "Ajouter un événement"
+        },
+        "preview": {
+          "balance": "Solde",
+          "next": "Prochaine",
+          "nextPayment": "Prochaine échéance",
+          "totalCost": "Total intérêts + indexation",
+          "incomplete": "Remplissez les champs obligatoires pour voir la mensualité."
+        },
+        "actions": {
+          "removeTrack": "Supprimer la tranche",
+          "addTrack": "Ajouter une tranche",
+          "cancel": "Annuler",
+          "save": "Enregistrer le prêt",
+          "editTracks": "Modifier les tranches",
+          "setupTracks": "Définir les tranches",
+          "removeTracks": "Supprimer les tranches",
+          "close": "Fermer"
+        },
+        "errors": {
+          "saveFailed": "Échec de l'enregistrement du prêt"
+        },
+        "source": {
+          "tracks": "Tranches détaillées",
+          "legacy": "Estimation"
+        },
+        "empty": {
+          "title": "Pas encore d'échéancier",
+          "description": "Ajoutez vos tranches pour voir le solde dans le temps, intérêts vs capital, et l'effet du prime ou de l'IPC sur votre mensualité."
+        },
+        "scenarios": {
+          "title": "Et si les taux changent ?",
+          "subtitle": "Les variations s'appliquent à partir d'aujourd'hui. Le scénario de base garde le prime au niveau actuel et projette l'IPC selon les anticipations d'inflation du marché.",
+          "base": "Scénario de base",
+          "prime1": "Prime +1 %",
+          "prime2": "Prime +2 %",
+          "cpi4": "Inflation 4 %/an",
+          "combined": "Prime +2 % et inflation 4 %",
+          "paymentIn": "Mensualité dans {{years}} an(s)",
+          "vsBase": "vs base"
+        },
+        "summary": {
+          "balance": "Solde aujourd'hui",
+          "undrawn": "+ {{amount}} restant à débloquer",
+          "nextPayment": "Prochaine échéance",
+          "rate": "Taux moyen pondéré",
+          "rateEffective": "{{rate}} % effectif",
+          "interestPaid": "Intérêts payés à ce jour",
+          "interestRemaining": "{{amount}} restant à payer",
+          "indexation": "Indexation IPC à ce jour",
+          "indexationHint": "Ajoutée aux soldes indexés",
+          "totalCost": "Coût du prêt",
+          "totalCostHint": "Intérêts + indexation sur toute la durée",
+          "payoff": "Remboursé le"
+        },
+        "charts": {
+          "balanceTitle": "Solde et capital propre dans le temps",
+          "balanceSubtitle": "Solde restant par tranche (empilé) et votre capital propre : valeur du bien selon votre hypothèse de croissance, moins la dette.",
+          "equity": "Votre capital propre",
+          "today": "Aujourd'hui",
+          "compositionTitle": "Où vont vos paiements, par année",
+          "compositionSubtitle": "Capital remboursé vs intérêts payés, plus l'indexation IPC ajoutée aux soldes indexés.",
+          "principal": "Capital",
+          "interest": "Intérêts",
+          "indexation": "Indexation IPC",
+          "showTable": "Afficher le tableau annuel",
+          "hideTable": "Masquer le tableau annuel"
+        },
+        "table": {
+          "year": "Année",
+          "payments": "Paiements",
+          "endBalance": "Solde en fin d'année"
+        }
+      },
       "marketDataNotice": "La valorisation est actuellement basée sur vos hypothèses enregistrées dans le simulateur. Les ventes comparables par adresse/type ne sont pas encore connectées.",
       "propertiesTitle": "Biens",
       "propertiesSubtitle": "Vérifiez la valeur, la dette, l'équité et les hypothèses de paiement mensuel.",
@@ -2454,6 +2999,7 @@
         "loanToValue": "Prêt / valeur"
       },
       "hints": {
+        "mortgageLive": "Calculé pour aujourd'hui depuis vos tranches, ou tel que saisi",
         "marketValue": "Valeur actuelle du simulateur avant dette",
         "netEquity": "Valeur détenue moins part du prêt",
         "mortgage": "Solde total du prêt saisi",
@@ -2461,6 +3007,9 @@
         "loanToValue": "Prêt divisé par valeur du bien"
       },
       "property": {
+        "mortgageProjected": "estimé aujourd'hui : {{amount}}",
+        "mortgageUndrawn": "dont {{amount}} restant à débloquer",
+        "mortgageLive": "à jour · {{rate}} %",
         "unknownLocation": "Emplacement non défini",
         "noConfidence": "brouillon",
         "marketValue": "Valeur",
@@ -2473,6 +3022,7 @@
         "updated": "Date d'évaluation"
       },
       "actions": {
+        "mortgage": "Prêt",
         "edit": "Modifier"
       },
       "empty": {

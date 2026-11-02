@@ -3,6 +3,12 @@ const { createRecurringEvidenceFilter } = require('../financial-truth.js');
 const { loadProjectionCategories, prepareProjectionPolicy } = require('./projection-policy.js');
 const { buildIncomeSchedule, applyIncomeSchedule } = require('./income-schedule.js');
 const { buildInvestmentSchedule, applyInvestmentSchedule } = require('./investment-schedule.js');
+const {
+  applyMortgageExpenseSchedule,
+  buildMortgageScheduleEvents,
+  dropDuplicateMortgagePredictions,
+  loadMortgageForecastContext,
+} = require('./mortgage-schedule.js');
 const { buildInfrequentExpenseEstimates, applyInfrequentExpenseEstimates } = require('./infrequent-expenses.js');
 const {
   expectationCategoryIds,
@@ -105,7 +111,11 @@ function generateForecast({
   const isRecurringEvidence = createRecurringEvidenceFilter(originalTruthSnapshot, historicalTransactions);
   const evidenceTransactions = policy.transactions.filter(transaction => !isRecurringEvidence(transaction));
   const expectationCategories = expectationCategoryIds(truthSnapshot);
-  allTransactions = evidenceTransactions.filter(transaction => !isScheduledInstallmentPayment(transaction, expectationCategories));
+  // Mortgages with detailed tracks are projected from their schedule, so their
+  // past debits must not also feed category averages (expense-categorized loans).
+  const mortgageContext = (engine.loadMortgageForecastContext || loadMortgageForecastContext)(db, now);
+  allTransactions = evidenceTransactions.filter(transaction => !isScheduledInstallmentPayment(transaction, expectationCategories))
+    .filter(transaction => !mortgageContext.matchesTransaction(transaction));
 
   // Investments require source-level timing; category averages mix standing orders and one-off transfers.
   const patterns = analyzeCategoryPatterns(allTransactions.filter(transaction => transaction.category_type !== 'investment'));
@@ -144,8 +154,15 @@ function generateForecast({
   injectResolvedRecurringPredictions(dailyForecasts, simulationEntriesByDay, truthSnapshot);
   const incomeSchedule = buildIncomeSchedule(historicalTransactions, dailyForecasts.map(day => day.date), now, engine, originalTruthSnapshot);
   applyIncomeSchedule(dailyForecasts, simulationEntriesByDay, incomeSchedule, engine);
-  const investmentSchedule = buildInvestmentSchedule(historicalTransactions, dailyForecasts.map(day => day.date), now, originalTruthSnapshot);
-  applyInvestmentSchedule(dailyForecasts, simulationEntriesByDay, investmentSchedule, engine);
+  const forecastDates = dailyForecasts.map(day => day.date);
+  const mortgageEvents = buildMortgageScheduleEvents(mortgageContext, forecastDates, historicalTransactions);
+  const investmentSchedule = buildInvestmentSchedule(historicalTransactions, forecastDates, now, originalTruthSnapshot)
+    .filter(event => !mortgageContext.matchesSource(event));
+  applyInvestmentSchedule(dailyForecasts, simulationEntriesByDay,
+    [...investmentSchedule, ...mortgageEvents.filter(event => event.categoryType !== 'expense')], engine);
+  applyMortgageExpenseSchedule(dailyForecasts, simulationEntriesByDay,
+    mortgageEvents.filter(event => event.categoryType === 'expense'), engine);
+  dropDuplicateMortgagePredictions(dailyForecasts, simulationEntriesByDay, mortgageContext, engine);
   dropNegligiblePredictions(dailyForecasts, simulationEntriesByDay, engine);
   const monteCarloResults = runMonteCarloSimulation(
     dailyForecasts,
