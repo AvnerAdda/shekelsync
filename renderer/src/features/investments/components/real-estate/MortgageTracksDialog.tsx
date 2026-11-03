@@ -451,7 +451,15 @@ const MortgageTracksDialog: React.FC<MortgageTracksDialogProps> = ({ open, title
                   size="small"
                   label={t('tranches.status', 'Status')}
                   value={tranche.status}
-                  onChange={(event) => updateTranche(index, trancheIndex, { status: event.target.value as MortgageTranche['status'] })}
+                  onChange={(event) => {
+                    const status = event.target.value as MortgageTranche['status'];
+                    // Marking a planned draw as drawn keeps the market rate it was priced at
+                    // (editable: replace it with the bank's actual rate).
+                    const assumed = preview.data?.schedule?.tracks?.[index]?.tranches?.[trancheIndex]?.assumedRate;
+                    const keepAssumed = meta.needsRate && status === 'drawn' && tranche.status === 'planned'
+                      && (tranche.rate === null || tranche.rate === undefined) && typeof assumed === 'number' && Number.isFinite(assumed);
+                    updateTranche(index, trancheIndex, keepAssumed ? { status, rate: Math.round(assumed * 10000) / 10000 } : { status });
+                  }}
                 >
                   <MenuItem value="drawn">{t('tranches.drawn', 'Drawn')}</MenuItem>
                   <MenuItem value="planned">{t('tranches.planned', 'Planned')}</MenuItem>

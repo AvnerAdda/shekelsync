@@ -2608,7 +2608,31 @@ async function runRevisionCheckedWorker(options) {
   return result;
 }
 
+const MARKET_REFRESH_INTERVAL_MS = 6 * 60 * 60 * 1000;
+let lastMarketRefreshAt = 0;
+
+/**
+ * Mortgage payments follow prime and CPI. Refresh stale market series in the
+ * background (only with an active mortgage); the sync clears forecast caches
+ * when it imports new data, so the next request uses it.
+ */
+function refreshMortgageMarketDataInBackground() {
+  if (process.env.NODE_ENV === 'test') return;
+  const now = Date.now();
+  if (now - lastMarketRefreshAt < MARKET_REFRESH_INTERVAL_MS) return;
+  lastMarketRefreshAt = now;
+  Promise.resolve().then(async () => {
+    const database = require('./database.js');
+    const result = await database.query(
+      "SELECT 1 AS found FROM mortgage_loans WHERE COALESCE(status, 'active') = 'active' LIMIT 1",
+    );
+    if (!result.rows?.length) return;
+    await require('./investments/market-data.js').ensureFresh();
+  }).catch(() => { /* no mortgage tables yet, or offline */ });
+}
+
 async function generateDailyForecast(options = {}) {
+  if (options.__workerThread !== true) refreshMortgageMarketDataInBackground();
   const activeModelId = forecastModelRegistry.resolveActiveModelId(options);
   const normalizedKey = JSON.stringify({
     includeToday: options.includeToday ?? false,

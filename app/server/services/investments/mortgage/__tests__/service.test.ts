@@ -115,6 +115,33 @@ describe('mortgage service', () => {
     expect(property.loanToValue).toBeCloseTo((property.totalMortgageBalance / 2000000) * 100, 1);
   });
 
+  it('keeps the assumed market rate when a planned drawdown is marked drawn', async () => {
+    db.exec(`
+      INSERT INTO market_series (series_key, source, frequency, last_synced_at) VALUES ('boi.mrtg.fixed_unlinked', 'boi', 'M', '2026-11-01T00:00:00Z');
+      INSERT INTO market_series_points (series_key, period, value) VALUES ('boi.mrtg.fixed_unlinked', '2026-09', 5.1);
+    `);
+    const planned = { drawDate: '2026-12-10', amount: 200000, status: 'planned' };
+    const track = { ...mortgagePayload.tracks[1], tranches: [{ drawDate: '2026-09-10', amount: 400000 }, planned] };
+    const before = await service.saveMortgage(1, { tracks: [track] });
+    const drawn = await service.saveMortgage(1, { tracks: [{ ...track, tranches: [track.tranches[0], { ...planned, status: 'drawn' }] }] });
+    const tranches = (await store.getMortgageForAccount(1)).tracks[0].tranches;
+    expect(tranches.map((tranche: any) => [tranche.status, tranche.rate])).toEqual([['drawn', null], ['drawn', 5.1]]);
+    const paymentOn = (view: any, date: string) => view.schedule.tracks[0].rows.find((row: any) => row.date === date)?.payment;
+    expect(paymentOn(drawn, '2027-01-10')).toBeCloseTo(paymentOn(before, '2027-01-10'), 2);
+    // An explicit rate entered by the user wins.
+    await service.saveMortgage(1, { tracks: [{ ...track, tranches: [track.tranches[0], { ...planned, status: 'drawn', rate: 4.2 }] }] });
+    expect((await store.getMortgageForAccount(1)).tracks[0].tranches[1].rate).toBe(4.2);
+  });
+
+  it('clears cached forecasts when the mortgage or its matcher changes', async () => {
+    let cleared = 0;
+    service.__setDependencies({ invalidateForecastCaches: () => { cleared += 1; } });
+    await service.saveMortgage(1, mortgagePayload);
+    expect(cleared).toBe(1);
+    await service.deleteMortgage(1);
+    expect(cleared).toBe(2);
+  });
+
   it('stores settings and costs and builds the sale analysis and health', async () => {
     db.exec("UPDATE real_estate_properties SET purchase_price = 2000000, purchase_date = '2026-08-01', annual_growth_rate = 3 WHERE account_id = 1");
     await service.saveMortgage(1, mortgagePayload);

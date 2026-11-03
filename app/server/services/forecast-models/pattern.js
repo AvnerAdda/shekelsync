@@ -114,6 +114,7 @@ function generateForecast({
   // Mortgages with detailed tracks are projected from their schedule, so their
   // past debits must not also feed category averages (expense-categorized loans).
   const mortgageContext = (engine.loadMortgageForecastContext || loadMortgageForecastContext)(db, now);
+  if (mortgageContext.error) console.warn('[Forecast] Mortgage schedule unavailable:', mortgageContext.error);
   allTransactions = evidenceTransactions.filter(transaction => !isScheduledInstallmentPayment(transaction, expectationCategories))
     .filter(transaction => !mortgageContext.matchesTransaction(transaction));
 

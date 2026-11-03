@@ -232,9 +232,58 @@ async function syncLegacyColumns(accountIdInput, { asOf: asOfInput, summary: pre
   return { updated: true, balance, payment, rate, remainingYears };
 }
 
+/** Forecasts read the mortgage schedule: drop every cached projection. */
+function invalidateForecastCaches() {
+  try {
+    (dependencies.invalidateForecastCaches || require('../../financial-truth.js').invalidateDependentCaches)();
+  } catch (_error) {
+    // Best-effort: a stale cache expires on its own.
+  }
+}
+
+/**
+ * A planned drawdown without its own rate is priced at the market average on
+ * its draw date. Marking it drawn would otherwise fall back to the track rate
+ * and silently change the payment, so the assumed rate is kept.
+ */
+async function freezeDrawnTrancheRates(accountId, payload) {
+  if (!Array.isArray(payload?.tracks)) return payload;
+  const existing = await dependencies.store.getMortgageForAccount(accountId).catch(() => null);
+  if (!existing?.tracks?.length) return payload;
+  let paths = null;
+  const tracks = [];
+  for (const [index, track] of payload.tracks.entries()) {
+    const previous = existing.tracks[index];
+    if (!previous || previous.type !== track?.type || track.type === 'prime' || !Array.isArray(track.tranches)) {
+      tracks.push(track);
+      continue;
+    }
+    const plannedAmounts = previous.tranches
+      .filter((tranche) => tranche.status === 'planned' && tranche.rate === null)
+      .map((tranche) => Number(tranche.amount));
+    const tranches = [];
+    for (const tranche of track.tranches) {
+      const unpriced = tranche?.rate === null || tranche?.rate === undefined || tranche?.rate === '';
+      const matchIndex = tranche?.status !== 'planned' && unpriced ? plannedAmounts.indexOf(Number(tranche.amount)) : -1;
+      if (matchIndex < 0) {
+        tranches.push(tranche);
+        continue;
+      }
+      plannedAmounts.splice(matchIndex, 1);
+      paths = paths || await buildRatePaths(resolveAsOf());
+      const market = paths.marketRateAt?.(track.type, tranche.drawDate);
+      tranches.push(Number.isFinite(market) ? { ...tranche, rate: Math.round(market * 10000) / 10000 } : tranche);
+    }
+    tracks.push({ ...track, tranches });
+  }
+  return { ...payload, tracks };
+}
+
 async function saveMortgage(accountIdInput, payload = {}) {
   const accountId = parseAccountId(accountIdInput);
-  await dependencies.store.replaceMortgageForAccount(accountId, payload);
+  const prepared = await freezeDrawnTrancheRates(accountId, payload);
+  await dependencies.store.replaceMortgageForAccount(accountId, prepared);
+  invalidateForecastCaches();
   await syncLegacyColumns(accountId);
   await refreshValuationSnapshot(accountId, { force: true }).catch(() => null);
   return getMortgageView(accountId);
@@ -384,6 +433,7 @@ async function deleteMortgage(accountIdInput) {
     // Deleting must still work if the profile cannot be refreshed.
   }
   await dependencies.store.deleteMortgageForAccount(accountId);
+  invalidateForecastCaches();
   return { deleted: true };
 }
 
@@ -715,6 +765,7 @@ async function getReconciliation(accountIdInput, options = {}) {
 async function savePaymentMatcher(accountIdInput, payload = {}) {
   const accountId = parseAccountId(accountIdInput);
   await dependencies.store.updatePaymentMatcher(accountId, payload);
+  invalidateForecastCaches();
   return getReconciliation(accountId);
 }
 

@@ -24,6 +24,10 @@ const {
 } = require('../investments/mortgage/debit-matcher.js');
 
 const PAID_TOLERANCE_DAYS = 10;
+// Without a debit matcher, a debit or forecast source is this mortgage's
+// payment when it lands near a scheduled payment with a similar amount.
+const UNMATCHED_DAY_TOLERANCE = 3;
+const UNMATCHED_AMOUNT_TOLERANCE = 0.1;
 
 function tableExists(db, name) {
   try {
@@ -147,18 +151,55 @@ function loadMortgageForecastContext(db, now = new Date()) {
     if (loans.length === 0) return EMPTY_CONTEXT;
     const matchers = loans.map((loan) => loan.matcher).filter(Boolean);
     const unmatched = loans.some((loan) => !loan.matcher);
+    const unmatchedPayments = loans.filter((loan) => !loan.matcher).flatMap(schedulePayments);
     return {
       loans,
       hasLoans: true,
-      matchesTransaction: (row) => matchers.some((matcher) => matchesDebit(matcher, row)),
-      // Without a matcher for some loan, any mortgage-named source is assumed
-      // to be covered by the modelled schedule.
-      matchesSource: (item) => matchers.some((matcher) => matchesForecastSource(matcher, item))
-        || (unmatched && isMortgagePayment(item?.transactionName || item?.displayName || '')),
+      matchesTransaction: (row) => matchers.some((matcher) => matchesDebit(matcher, row))
+        || (unmatched && Number(row?.price) < 0
+          && nearScheduledPayment(unmatchedPayments, transactionDate(row.date), Math.abs(Number(row.price)))),
+      // Without a matcher for some loan, any mortgage-named source, or one that
+      // lands on a scheduled payment with a similar amount, is assumed to be
+      // covered by the modelled schedule.
+      matchesSource: (item, date = item?.date) => matchers.some((matcher) => matchesForecastSource(matcher, item))
+        || (unmatched && (isMortgagePayment(item?.transactionName || item?.displayName || '')
+          || nearScheduledPayment(unmatchedPayments, date, sourceAmount(item)))),
     };
   } catch (error) {
     return { ...EMPTY_CONTEXT, error: error.message };
   }
+}
+
+/** Payment totals per date across a loan's tracks. */
+function schedulePayments(loan) {
+  const byDate = new Map();
+  for (const track of loan.schedule?.tracks || []) {
+    for (const row of track.rows || []) {
+      if (row.payment > 0) byDate.set(row.date, (byDate.get(row.date) || 0) + row.payment);
+    }
+  }
+  return [...byDate.entries()].map(([date, amount]) => ({ date, amount }));
+}
+
+function sourceAmount(item) {
+  const amount = Number(item?.amount ?? item?.expectedAmount ?? item?.probabilityWeightedAmount);
+  return Number.isFinite(amount) ? Math.abs(amount) : null;
+}
+
+function nearScheduledPayment(payments, date, amount) {
+  if (!date || !(amount > 0)) return false;
+  return payments.some((payment) => dayDistance(payment.date, date) <= UNMATCHED_DAY_TOLERANCE
+    && Math.abs(amount - payment.amount) <= payment.amount * UNMATCHED_AMOUNT_TOLERANCE);
+}
+
+/** Israeli banks debit on the next business day: Friday/Saturday → Sunday. */
+function nextBusinessDay(date) {
+  const parsed = new Date(`${date}T00:00:00Z`);
+  const weekday = parsed.getUTCDay();
+  const shift = weekday === 5 ? 2 : weekday === 6 ? 1 : 0;
+  if (!shift) return date;
+  parsed.setUTCDate(parsed.getUTCDate() + shift);
+  return parsed.toISOString().slice(0, 10);
 }
 
 /**
@@ -170,19 +211,21 @@ function buildMortgageScheduleEvents(context, dates, historicalTransactions = []
   const dateSet = new Set(dates);
   const events = [];
   for (const loan of context.loans) {
-    const paidDates = (historicalTransactions || [])
-      .filter((row) => loan.matcher && matchesDebit(loan.matcher, row))
-      .map((row) => transactionDate(row.date))
-      .filter(Boolean);
+    const payments = schedulePayments(loan);
+    const debits = (historicalTransactions || []).filter((row) => Number(row.price) < 0);
+    const paidDates = loan.matcher
+      ? debits.filter((row) => matchesDebit(loan.matcher, row)).map((row) => transactionDate(row.date)).filter(Boolean)
+      : [];
+    const isPaid = (date, amount) => (loan.matcher
+      ? paidDates.some((paid) => dayDistance(paid, date) <= PAID_TOLERANCE_DAYS)
+      : debits.some((row) => nearScheduledPayment([{ date, amount }], transactionDate(row.date), Math.abs(Number(row.price)))));
     const byDate = new Map();
-    for (const track of loan.schedule.tracks) {
-      for (const row of track.rows) {
-        if (!dateSet.has(row.date) || !(row.payment > 0)) continue;
-        byDate.set(row.date, (byDate.get(row.date) || 0) + row.payment);
-      }
+    for (const payment of payments) {
+      const date = nextBusinessDay(payment.date);
+      if (!dateSet.has(date) || isPaid(date, payment.amount)) continue;
+      byDate.set(date, (byDate.get(date) || 0) + payment.amount);
     }
     for (const [date, amount] of [...byDate.entries()].sort()) {
-      if (paidDates.some((paid) => dayDistance(paid, date) <= PAID_TOLERANCE_DAYS)) continue;
       const rounded = Math.round(amount * 100) / 100;
       events.push({
         sourceKey: `mortgage:${loan.loanId}`,
@@ -223,6 +266,8 @@ function applyMortgageExpenseSchedule(dailyForecasts, simulationEntriesByDay, ev
       inference: 'mortgage_schedule',
       explanation: 'Computed from your mortgage tracks (prime and CPI from Bank of Israel / CBS data)',
     });
+    // Gross expenses are not recomputed from predictions; cash flow reads them.
+    day.expectedExpenses = (Number(day.expectedExpenses) || 0) + event.amount;
     simulationMap.get(event.date)?.entries.push({
       patternKey, monthlyKey: patternKey, categoryType: 'expense', expenseType: 'operating',
       patternType: 'mortgage_schedule', probability: 1, avgAmount: event.amount, stdDev: event.stdDev,
@@ -243,8 +288,11 @@ function dropDuplicateMortgagePredictions(dailyForecasts, simulationEntriesByDay
       const key = String(prediction.patternKey || '');
       if (key.includes('mortgage:') || prediction.inference === 'mortgage_schedule') return true;
       if (!(prediction.categoryType === 'investment' || prediction.categoryType === 'expense')) return true;
-      if (!context.matchesSource(prediction)) return true;
+      if (!context.matchesSource(prediction, day.date)) return true;
       dropped.add(key);
+      if (prediction.categoryType === 'expense') {
+        day.expectedExpenses = (Number(day.expectedExpenses) || 0) - (Number(prediction.probabilityWeightedAmount) || 0);
+      }
       return false;
     });
   }
@@ -258,6 +306,7 @@ function dropDuplicateMortgagePredictions(dailyForecasts, simulationEntriesByDay
 
 module.exports = {
   EMPTY_CONTEXT,
+  nextBusinessDay,
   applyMortgageExpenseSchedule,
   buildMortgageScheduleEvents,
   dropDuplicateMortgagePredictions,

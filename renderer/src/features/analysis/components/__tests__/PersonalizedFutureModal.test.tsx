@@ -6,14 +6,16 @@ import { format, subMonths } from 'date-fns';
 import translations from '../../../../i18n/locales/en.json';
 import PersonalizedFutureModal from '../PersonalizedFutureModal';
 
-const { get } = vi.hoisted(() => ({ get: vi.fn() }));
+const { get, overlayGet } = vi.hoisted(() => ({ get: vi.fn(), overlayGet: vi.fn() }));
 const t = (key: string, options?: Record<string, string>) => {
   let value: any = translations.analysisPage.modals.future;
   for (const part of key.split('.')) value = value?.[part];
   return String(value ?? key).replace(/\{\{(\w+)\}\}/g, (_match, name) => options?.[name] ?? name);
 };
 vi.mock('react-i18next', () => ({ useTranslation: () => ({ t, i18n: { language: 'en' } }) }));
-vi.mock('@renderer/lib/api-client', () => ({ apiClient: { get } }));
+vi.mock('@renderer/lib/api-client', () => ({ apiClient: {
+  get: (url: string, options?: unknown) => (url === '/api/planning/forecast-overlay' ? overlayGet(url, options) : get(url, options)),
+} }));
 vi.mock('@app/contexts/FinancePrivacyContext', () => ({ useFinancePrivacy: () => ({ formatCurrency: (value: number) => `ILS ${value}` }) }));
 vi.mock('recharts', () => ({
   ResponsiveContainer: ({ children }: any) => <div>{children}</div>,
@@ -33,8 +35,30 @@ const payload = () => ({
   expenseDrivers: [{ categoryDefinitionId: 2, category: 'Repairs', categoryNameEn: 'Repairs', amount: 80, scheduled: 0, typical: 0, occasional: 80 }],
   incomeDrivers: [{ source: 'Example Employer payroll', amount: 100, nextDate: '2026-10-07', expectedPaymentDate: '2026-10-06', awaitingReceipt: true }],
 });
+const overlayPayload = (overrides: Record<string, unknown> = {}) => ({
+  as_of_date: '2026-10-01', status: 'ready', spending_period_end: '2026-10-10',
+  available_spend: 400, available_spend_baseline: 400, shortfall: 0, cash_buffer: 200, reserved_cash: 300,
+  include_goals: true, starting_floor: 500, goals: [], scenarios: [], daily: [], ...overrides,
+});
+const plannedOverlay = (options: any) => {
+  const withCar = String(options?.params?.scenario_ids || '').split(',').includes('7');
+  const goals = options?.params?.goals !== '0';
+  return { ok: true, data: overlayPayload({
+    available_spend: withCar ? 100 : 400,
+    goals: [{ id: 3, name: 'Holiday', reserve_location: 'external', monthly_contribution: 100, remaining_amount: 1000 }],
+    scenarios: [{ id: 7, name: 'New car', selected: withCar }],
+    daily: [
+      { date: '2026-12-01', scenario_change: withCar ? -300 : 0, external_contributions: 0, reserved_floor: 500 },
+      { date: '2027-01-01', scenario_change: 0, external_contributions: goals ? 100 : 0, reserved_floor: 600 },
+    ],
+  }) };
+};
 const show = (open = true) => render(<MemoryRouter><PersonalizedFutureModal open={open} onClose={vi.fn()} /></MemoryRouter>);
-beforeEach(() => { get.mockReset().mockResolvedValue({ ok: true, data: payload() }); });
+beforeEach(() => {
+  get.mockReset().mockResolvedValue({ ok: true, data: payload() });
+  overlayGet.mockReset().mockResolvedValue({ ok: true, data: overlayPayload() });
+  try { localStorage.removeItem('shekelsync.cashFlowOutlook.plans'); } catch { /* unavailable */ }
+});
 
 describe('cash-flow outlook', () => {
   it('shows closing balances, cash-flow changes, assumptions and the server horizon consistently', async () => {
@@ -153,6 +177,53 @@ describe('cash-flow outlook', () => {
     show();
     await screen.findByTestId('forecast-closing-base');
     expect(screen.queryByRole('group', { name: 'Investments' })).not.toBeInTheDocument();
+  });
+
+  it('adds a "with my plans" line, the reserved floor and Available to spend', async () => {
+    overlayGet.mockImplementation((_url: string, options: any) => Promise.resolve(plannedOverlay(options)));
+    show();
+    expect(await screen.findByTestId('plans-closing')).toHaveTextContent('ILS 920');
+    const rows = () => JSON.parse(screen.getByTestId('chart').getAttribute('data-chart-data')!);
+    expect(rows().at(-1)).toMatchObject({ expectedCumulative: 1020, plannedCumulative: 920, reservedFloor: 600 });
+    expect(rows()[0]).toMatchObject({ plannedCumulative: 1000, reservedFloor: 500 });
+    expect(screen.getAllByTestId('line').map(line => line.getAttribute('data-key'))).toEqual(
+      expect.arrayContaining(['plannedCumulative', 'reservedFloor']));
+    expect(screen.getByText('ILS -100 vs expected')).toBeVisible();
+    expect(screen.getByTestId('plans-available')).toHaveTextContent('ILS 400 until Oct 10');
+    expect(overlayGet).toHaveBeenLastCalledWith('/api/planning/forecast-overlay', expect.objectContaining({
+      params: expect.objectContaining({ goals: '1' }),
+    }));
+
+    fireEvent.click(screen.getByRole('button', { name: 'Plans (1)' }));
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'New car' }));
+    await waitFor(() => expect(screen.getByTestId('plans-closing')).toHaveTextContent('ILS 620'));
+    expect(overlayGet).toHaveBeenLastCalledWith('/api/planning/forecast-overlay', expect.objectContaining({
+      params: expect.objectContaining({ scenario_ids: '7' }),
+    }));
+    expect(screen.getByText('ILS -300 with selected scenarios')).toBeVisible();
+    // Plans never change the plain forecast.
+    expect(screen.getByTestId('forecast-closing-base')).toHaveTextContent('ILS 1020');
+  });
+
+  it('warns when the plans dip into reserved money and refetches after plan edits', async () => {
+    overlayGet.mockImplementation((_url: string, options: any) => Promise.resolve({
+      ...plannedOverlay(options), data: { ...plannedOverlay(options).data, starting_floor: 900,
+        daily: plannedOverlay(options).data.daily.map((day: any) => ({ ...day, reserved_floor: 950 })) },
+    }));
+    show();
+    expect(await screen.findByText('Your plans dip into reserved money on Apr 1, 2027.')).toBeVisible();
+    const calls = overlayGet.mock.calls.length;
+    act(() => window.dispatchEvent(new Event('planningChanged')));
+    await waitFor(() => expect(overlayGet.mock.calls.length).toBe(calls + 1));
+  });
+
+  it('keeps the chart unchanged without goals or scenarios', async () => {
+    show();
+    await screen.findByTestId('outlook-plans');
+    expect(screen.getByText(/Add savings goals or What if\? scenarios/)).toBeVisible();
+    expect(screen.queryByRole('button', { name: /^Plans/ })).not.toBeInTheDocument();
+    expect(screen.getAllByTestId('line').map(line => line.getAttribute('data-key'))).not.toContain('plannedCumulative');
+    expect(screen.getByTestId('plans-available')).toHaveTextContent('ILS 400');
   });
 
   it('provides a retry after a failed request', async () => {

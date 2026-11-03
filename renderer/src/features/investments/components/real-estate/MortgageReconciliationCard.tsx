@@ -104,6 +104,8 @@ const MortgageReconciliationCard: React.FC<MortgageReconciliationCardProps> = ({
       if (!response.ok) throw new Error((response.data as { error?: string })?.error || response.statusText);
       setData(response.data as MortgageReconciliation);
       setSavedNotice(true);
+      // The matcher decides which debits count as already-paid mortgage payments.
+      globalThis.dispatchEvent?.(new CustomEvent('dataRefresh'));
     } catch (saveError) {
       setError(saveError instanceof Error ? saveError.message : 'Failed to save');
     } finally {

@@ -437,6 +437,15 @@ async function syncMarketSeries(payload = {}, dependencies = {}) {
   }
   await Promise.all(tasks);
 
+  if (Object.keys(imported).length > 0) {
+    // Mortgage payments in the forecast follow prime and CPI.
+    try {
+      (dependencies.invalidateCaches || require('../financial-truth.js').invalidateDependentCaches)();
+    } catch (_error) {
+      // Best-effort: cached forecasts expire on their own.
+    }
+  }
+
   return {
     syncedAt,
     requested,

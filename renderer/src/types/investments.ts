@@ -581,6 +581,7 @@ export interface MortgageSchedule {
     label: string | null;
     type: MortgageTrackType;
     rows: MortgageScheduleRow[];
+    tranches?: Array<{ id: string | number | null; drawDate: string; amount: number; status: MortgageTranche['status']; assumedRate: number | null }>;
     maturityDate: string | null;
     closedDate: string | null;
     totals: MortgageTotals;

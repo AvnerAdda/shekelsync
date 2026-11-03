@@ -1344,6 +1344,7 @@ function listPresentationDismissals(options = {}) {
 
 module.exports = {
   AFFECTED_DOMAINS,
+  invalidateDependentCaches,
   affectedDomainsForCorrection,
   scheduleDependentRecalculation,
   applySubscriptionUpdate,

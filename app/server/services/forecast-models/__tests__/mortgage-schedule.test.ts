@@ -111,6 +111,58 @@ describe('mortgage schedule in the forecast', () => {
     expect(simulations[0].entries.map((entry: any) => entry.patternKey)).toEqual(['financial_pattern:4', 'mortgage_schedule:mortgage:1']);
   });
 
+  it('keeps gross expenses and cash flow in step on the expense path', () => {
+    seed(db, { categoryType: 'expense' });
+    const context = model.loadMortgageForecastContext(db, now);
+    const events = model.buildMortgageScheduleEvents(context, dates('2026-11-01', '2026-11-30'), []);
+    const guessed = { patternKey: 'financial_pattern:3', categoryType: 'expense', transactionName: 'דסק-משכנתא חיוב',
+      isUserResolvedPattern: true, probabilityWeightedAmount: 2680 };
+    const days: any[] = [{ date: '2026-11-10', expectedIncome: 0, expectedExpenses: 2680, predictions: [guessed] }];
+    const simulations = [{ date: '2026-11-10', entries: [{ patternKey: 'financial_pattern:3' }] }];
+    const forecastEngine = { refreshForecastDayPredictions: (day: any) => {
+      day.expectedCashFlow = (Number(day.expectedIncome) || 0) - (Number(day.expectedExpenses) || 0);
+    } };
+    model.applyMortgageExpenseSchedule(days, simulations, events, forecastEngine);
+    model.dropDuplicateMortgagePredictions(days, simulations, context, forecastEngine);
+    expect(days[0].expectedExpenses).toBeCloseTo(events[0].amount, 2);
+    expect(days[0].expectedCashFlow).toBeCloseTo(-events[0].amount, 2);
+  });
+
+  it('matches by date and amount when no debit matcher can be found', () => {
+    seed(db, { link: false });
+    db.exec("UPDATE transactions SET name = 'הוראת קבע 12345'");
+    const context = model.loadMortgageForecastContext(db, now);
+    expect(context.loans[0].matcher).toBeNull();
+    const history = db.prepare(`SELECT t.*, cd.name AS category_name, cd.name_en AS category_name_en
+      FROM transactions t LEFT JOIN category_definitions cd ON cd.id = t.category_definition_id`).all();
+    // The past debits are this mortgage, not category evidence.
+    expect(history.every((row: any) => context.matchesTransaction(row))).toBe(true);
+    expect(context.matchesTransaction({ ...history[0], price: -250 })).toBe(false);
+    // The guessed standing order is covered by the schedule.
+    expect(context.matchesSource({ transactionName: 'הוראת קבע 12345', amount: 2700 }, '2026-11-10')).toBe(true);
+    expect(context.matchesSource({ transactionName: 'הוראת קבע 12345', amount: 2700 }, '2026-11-20')).toBe(false);
+    // An early debit marks that month as paid.
+    const early = [{ name: 'הוראת קבע 12345', price: -2685, date: '2026-11-08T21:00:00.000Z' }];
+    expect(model.buildMortgageScheduleEvents(context, dates('2026-11-01', '2026-12-31'), early)
+      .map((event: any) => event.date)).toEqual(['2026-12-10']);
+  });
+
+  it('recognises housing-loan debit labels', () => {
+    seed(db, { link: false });
+    db.exec("UPDATE transactions SET name = 'הלוואה לדיור'");
+    expect(model.loadMortgageForecastContext(db, now).loans[0].matcher).toMatchObject({ pattern: 'הלוואה לדיור' });
+  });
+
+  it('moves weekend payment dates to the next business day', () => {
+    expect(model.nextBusinessDay('2027-04-09')).toBe('2027-04-11'); // Friday
+    expect(model.nextBusinessDay('2027-04-10')).toBe('2027-04-11'); // Saturday
+    expect(model.nextBusinessDay('2027-04-11')).toBe('2027-04-11');
+    seed(db);
+    const context = model.loadMortgageForecastContext(db, now);
+    const events = model.buildMortgageScheduleEvents(context, dates('2027-04-01', '2027-04-30'), []);
+    expect(events.map((event: any) => event.date)).toEqual(['2027-04-11']);
+  });
+
   it('ignores debits after the forecast date (replays)', () => {
     seed(db);
     // Replay as of 1 Sep 2026: only the August debit is known.
