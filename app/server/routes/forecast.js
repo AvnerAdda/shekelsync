@@ -2,6 +2,7 @@ const express = require('express');
 const path = require('path');
 const fs = require('fs');
 const forecastService = require('../services/forecast.js');
+const { scorePredictionConfidence } = require('../services/forecast-models/forecast-confidence.js');
 
 // Initialize database for category lookups
 const preferredDbPath = path.join(__dirname, '../../dist/shekelsync.sqlite');
@@ -245,6 +246,7 @@ function createForecastRouter({
       const serializePrediction = prediction => {
         const categoryDefinition = resolvePredictionCategory(prediction);
         const parentDefinition = categoryDefinitionsById[categoryDefinition?.parent_id];
+        const scoredConfidence = scorePredictionConfidence(prediction);
         return {
           patternId: prediction.patternId || null,
           occurrenceId: prediction.occurrenceId || null,
@@ -263,6 +265,9 @@ function createForecastRouter({
           expenseType: prediction.expenseType || null,
           amount: prediction.expectedAmount,
           probability: prediction.probability,
+          confidence: scoredConfidence.confidence,
+          confidenceTier: scoredConfidence.tier,
+          amountRange: prediction.amountRange || null,
           timingBasis: prediction.timingBasis || 'estimated',
           awaitingReceipt: Boolean(prediction.awaitingReceipt),
           expectedPaymentDate: prediction.expectedPaymentDate || null,
@@ -307,6 +312,30 @@ function createForecastRouter({
         return [...groups.values()];
       };
 
+      // Split each metric's weighted total by confidence tier. Any residual
+      // between the day total and the itemized predictions is uncertain, so
+      // the tiers always add up to the bar the chart draws today.
+      const buildConfidenceBreakdown = (predictions, totals) => {
+        const breakdown = {};
+        for (const metric of Object.keys(totals)) breakdown[metric] = { sure: 0, likely: 0, uncertain: 0 };
+        for (const prediction of Array.isArray(predictions) ? predictions : []) {
+          const categoryType = prediction.categoryType || resolvePredictionCategory(prediction)?.category_type;
+          const metric = { income: 'income', expense: 'expenses', investment: 'investments' }[categoryType];
+          const amount = resolvePredictionWeightedAmount(prediction);
+          if (!breakdown[metric] || !amount) continue;
+          const { tier } = scorePredictionConfidence(prediction);
+          if (tier !== 'uncertain') breakdown[metric][tier] += amount;
+        }
+        for (const [metric, total] of Object.entries(totals)) {
+          const tiers = breakdown[metric];
+          const round = value => Math.round(value * 100) / 100;
+          tiers.sure = round(tiers.sure);
+          tiers.likely = round(tiers.likely);
+          tiers.uncertain = round((Number(total) || 0) - tiers.sure - tiers.likely);
+        }
+        return breakdown;
+      };
+
       // Format minimal daily fields for response. When a generator doesn't
       // emit the operating split, the cumulative fallbacks accumulate the
       // same per-day fallback values so each cumulative series is always the
@@ -326,6 +355,11 @@ function createForecastRouter({
           expenses: d.expectedExpenses,
           investments: d.expectedInvestments ?? 0,
           chartBreakdown: buildChartBreakdown(d.predictions),
+          confidenceBreakdown: buildConfidenceBreakdown(d.predictions, {
+            income: d.expectedIncome,
+            expenses: d.expectedExpenses,
+            investments: d.expectedInvestments ?? 0,
+          }),
           operatingExpenses,
           nonOperatingExpenses,
           cashFlow: d.expectedCashFlow,

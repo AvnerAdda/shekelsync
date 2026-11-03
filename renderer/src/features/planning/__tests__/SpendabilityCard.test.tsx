@@ -52,6 +52,25 @@ describe('spending estimate', () => {
     expect(get.mock.calls.filter(([path]) => path === '/api/planning/projection')).toHaveLength(1);
   });
 
+  it('splits card commitments at the next income without changing the total', async () => {
+    get.mockImplementation(async (path: string) => ({ ok: true, data: path.endsWith('/projection')
+      ? { ...projection, card_commitments_before_income: 150, card_commitments_after_income: 50 } : { settings, goals: [], scenarios: [] } }));
+    show();
+    await screen.findByText('₪1,234');
+    const date = new Intl.DateTimeFormat('en', { day: 'numeric', month: 'short', year: 'numeric' }).format(new Date(`${nextIncome}T12:00:00`));
+    expect(screen.getByText(`Due by ${date}`).nextSibling).toHaveTextContent('₪150');
+    expect(screen.getByText(`Due after ${date}`).nextSibling).toHaveTextContent('₪50');
+    expect(screen.getByText(labels.commitmentsAfterNote)).toBeVisible();
+  });
+
+  it('omits the split when every card bill is due before the next income', async () => {
+    get.mockImplementation(async (path: string) => ({ ok: true, data: path.endsWith('/projection')
+      ? { ...projection, card_commitments_before_income: 200, card_commitments_after_income: 0 } : { settings, goals: [], scenarios: [] } }));
+    show();
+    await screen.findByText('₪1,234');
+    expect(screen.queryByText(/^Due after/)).not.toBeInTheDocument();
+  });
+
   it('checks an additional purchase against the amount remaining after commitments', async () => {
     show();
     await screen.findByText('₪1,234');

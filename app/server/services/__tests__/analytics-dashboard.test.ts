@@ -525,12 +525,12 @@ describe('analytics dashboard service', () => {
 
   it.each([
     ['daily', [
-      { date: '2025-02-03', investments: 700 },
+      { date: '2025-02-03', investments: 1100 },
       { date: '2025-02-04', investments: -80 },
       { date: '2025-02-05', investments: 0 },
     ]],
-    ['weekly', [{ date: '2025-02-03', investments: 620 }]],
-    ['monthly', [{ date: '2025-02-01', investments: 620 }]],
+    ['weekly', [{ date: '2025-02-03', investments: 1020 }]],
+    ['monthly', [{ date: '2025-02-01', investments: 1020 }]],
   ])('aggregates investment outflows and inflows into %s history', async (aggregation, expected) => {
     const db = new DatabaseSync(':memory:');
     try {
@@ -563,7 +563,8 @@ describe('analytics dashboard service', () => {
           ('food', 'card', '2025-02-05', -100, 3, NULL, 0),
           ('return', 'bank', '2025-02-03', 300, 4, NULL, 0),
           ('excluded', 'bank', '2025-02-03', -9000, 1, NULL, 0),
-          ('pikadon', 'bank', '2025-02-03', -8000, 1, NULL, 1),
+          ('pikadon', 'bank', '2025-02-03', -400, 1, NULL, 1),
+          ('pikadon-fee', 'bank', '2025-02-05', -60, 3, NULL, 1),
           ('outside-period', 'bank', '2025-01-31', -7000, 1, NULL, 0);
         INSERT INTO transaction_pairing_exclusions VALUES ('excluded', 'bank', NULL);
       `);
@@ -658,7 +659,7 @@ describe('analytics dashboard service', () => {
           ('repayment-unpaired', 'bank', '2025-02-03', -15, 8, NULL, 0),
           ('repayment-no-coverage', 'bank', '2025-02-03', -25, 8, NULL, 0),
           ('excluded', 'bank', '2025-02-03', -9000, 9, NULL, 0),
-          ('pikadon', 'bank', '2025-02-03', -8000, 9, NULL, 1),
+          ('pikadon-interest', 'bank', '2025-02-03', 8000, 5, NULL, 1),
           ('outside-period', 'bank', '2025-01-31', -7000, 9, NULL, 0);
         INSERT INTO transaction_pairing_exclusions VALUES
           ('excluded', 'bank', NULL),

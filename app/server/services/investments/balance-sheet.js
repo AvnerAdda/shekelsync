@@ -15,6 +15,8 @@ const {
 } = require('../accounts/repayment-category.js');
 
 let database = actualDatabase;
+// Lazy: loading the mortgage service pulls in the engine and market data.
+let realEstateRefresher = () => require('./mortgage/service.js').refreshValuationSnapshots();
 
 function toNumber(value) {
   if (value === null || value === undefined) return null;
@@ -202,6 +204,16 @@ async function fetchPendingCreditCardDebt() {
  * mortgages must not be entered again as standalone debt.
  */
 async function getInvestmentBalanceSheet(query = {}) {
+  // Properties with detailed mortgage tracks: make sure their net-equity
+  // snapshot reflects today's computed debt (incl. drawdowns still owed).
+  // Skipped when a test database is injected.
+  if (database === actualDatabase) {
+    try {
+      await realEstateRefresher();
+    } catch (_error) {
+      // Never block the balance sheet on mortgage data.
+    }
+  }
   const includeAccounts = coerceBoolean(query.includeAccounts);
   const includeManualLiabilities = coerceBoolean(query.includeLiabilities);
   const normalizeCurrencies = coerceBoolean(query.normalizeCurrencies);
@@ -500,6 +512,9 @@ async function getInvestmentBalanceSheet(query = {}) {
 
 module.exports = {
   getInvestmentBalanceSheet,
+  __setRealEstateRefresher(refresher) {
+    realEstateRefresher = refresher || (() => require('./mortgage/service.js').refreshValuationSnapshots());
+  },
   __setDatabase(mock) {
     database = mock || actualDatabase;
     fxService.__setDatabase(database);

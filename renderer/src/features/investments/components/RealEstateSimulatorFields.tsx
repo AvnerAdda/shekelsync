@@ -67,6 +67,8 @@ interface RealEstateSimulatorFieldsProps {
   currency?: string;
   onChange: (value: RealEstateProfileInput) => void;
   onApplyEstimate?: (estimate: RealEstateEstimatePreview) => void;
+  /** When detailed mortgage tracks exist, the single-mortgage fields are computed and read-only. */
+  mortgageManagedByTracks?: boolean;
 }
 
 const PROPERTY_TYPES = [
@@ -84,6 +86,7 @@ const VALUATION_METHODS = [
   { value: 'purchase_price', labelKey: 'valuationMethods.purchasePrice', fallback: 'Purchase price' },
   { value: 'rent_yield', labelKey: 'valuationMethods.rentYield', fallback: 'Rental yield' },
   { value: 'price_per_sqm', labelKey: 'valuationMethods.pricePerSqm', fallback: 'Price per sqm' },
+  { value: 'price_index', labelKey: 'valuationMethods.priceIndex', fallback: 'CBS price index' },
 ];
 
 const FEATURE_FIELDS = [
@@ -269,6 +272,7 @@ export default function RealEstateSimulatorFields({
   currency = 'ILS',
   onChange,
   onApplyEstimate,
+  mortgageManagedByTracks = false,
 }: RealEstateSimulatorFieldsProps) {
   const { t } = useTranslation('translation', { keyPrefix: 'investmentsPage.realEstate' });
   const estimate = React.useMemo(() => estimateRealEstatePreview(value), [value]);
@@ -463,6 +467,8 @@ export default function RealEstateSimulatorFields({
             label={t('fields.monthlyMortgagePayment', 'Monthly mortgage payment')}
             value={value.monthly_mortgage_payment || ''}
             onChange={(event) => updateField('monthly_mortgage_payment', event.target.value)}
+            disabled={mortgageManagedByTracks}
+            helperText={mortgageManagedByTracks ? t('fields.managedByTracks', 'Computed from your mortgage tracks') : undefined}
             slotProps={{
               input: { startAdornment: <InputAdornment position="start">{currencySymbol}</InputAdornment> }
             }}
@@ -476,6 +482,8 @@ export default function RealEstateSimulatorFields({
             label={t('fields.mortgageInterestRate', 'Mortgage rate')}
             value={value.mortgage_interest_rate || ''}
             onChange={(event) => updateField('mortgage_interest_rate', event.target.value)}
+            disabled={mortgageManagedByTracks}
+            helperText={mortgageManagedByTracks ? t('fields.managedByTracks', 'Computed from your mortgage tracks') : undefined}
             slotProps={{
               input: { endAdornment: <InputAdornment position="end">%</InputAdornment> }
             }}
@@ -489,6 +497,8 @@ export default function RealEstateSimulatorFields({
             label={t('fields.mortgageTermYears', 'Mortgage term')}
             value={value.mortgage_term_years || ''}
             onChange={(event) => updateField('mortgage_term_years', event.target.value)}
+            disabled={mortgageManagedByTracks}
+            helperText={mortgageManagedByTracks ? t('fields.managedByTracks', 'Computed from your mortgage tracks') : undefined}
             slotProps={{
               input: { endAdornment: <InputAdornment position="end">{t('units.years', 'yrs')}</InputAdornment> }
             }}
@@ -502,6 +512,8 @@ export default function RealEstateSimulatorFields({
             label={t('fields.mortgageBalance', 'Mortgage balance (total)')}
             value={value.mortgage_balance || ''}
             onChange={(event) => updateField('mortgage_balance', event.target.value)}
+            disabled={mortgageManagedByTracks}
+            helperText={mortgageManagedByTracks ? t('fields.managedByTracks', 'Computed from your mortgage tracks') : undefined}
             slotProps={{
               input: { startAdornment: <InputAdornment position="start">{currencySymbol}</InputAdornment> }
             }}

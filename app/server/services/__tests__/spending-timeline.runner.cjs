@@ -35,12 +35,16 @@ async function main() {
     const repayment = db.prepare("SELECT id FROM category_definitions WHERE name_en = 'Credit Card Repayment' LIMIT 1").get()?.id || category('Credit Card Repayment', 'expense', 'stability');
     const investment = category('Timeline investment', 'investment');
     const end = dateKey();
-    const insert = (id, day, amount, cat, status = 'completed', type = null) => db.prepare(`INSERT INTO transactions
+    // Stored like scraped rows: the UTC instant of a local time (noon unless given).
+    const insert = (id, local, amount, cat, status = 'completed', type = null) => db.prepare(`INSERT INTO transactions
       (identifier, vendor, date, name, price, type, category_definition_id, category_type, status)
-      VALUES (?, 'test', ?, ?, ?, 'normal', ?, ?, ?)`).run(id, day, id, amount, cat, type, status);
-    insert('salary', shiftDays(end, -29), 1000, income);
-    insert('outside', shiftDays(end, -30), -999, food);
-    insert('food', shiftDays(end, -10), -500, food);
+      VALUES (?, 'test', ?, ?, ?, 'normal', ?, ?, ?)`).run(id, new Date(local.length === 10 ? `${local}T12:00:00` : local).toISOString(),
+      id, amount, cat, type, status);
+    // Local midnight falls on the previous UTC day, so these rows pin local-day windows.
+    insert('salary', `${shiftDays(end, -29)}T00:05:00`, 1000, income);
+    insert('outside', `${shiftDays(end, -30)}T23:55:00`, -999, food);
+    insert('food', `${shiftDays(end, -29)}T00:10:00`, -500, food);
+    insert('next-local-day', `${shiftDays(end, 1)}T00:30:00`, -999, food);
     insert('refund', end + 'T23:50:00', 50, food);
     insert('learning', end, -100, learning);
     insert('unassigned', end, -50, null, 'completed', 'expense');

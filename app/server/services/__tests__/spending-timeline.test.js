@@ -98,7 +98,7 @@ describe('daily rolling spending allocation', () => {
   it('queries real SQLite and serves matching daily totals, targets and drilldowns', () => {
     const result = spawnSync(electronBinary, [path.join(__dirname, 'spending-timeline.runner.cjs')], {
       cwd: path.resolve(__dirname, '../../../..'), encoding: 'utf8',
-      env: { ...process.env, ELECTRON_RUN_AS_NODE: '1', NODE_ENV: 'test' }, timeout: 30000,
+      env: { ...process.env, ELECTRON_RUN_AS_NODE: '1', NODE_ENV: 'test', TZ: 'Asia/Jerusalem' }, timeout: 30000,
     });
     expect(result.status, result.stderr || result.stdout).toBe(0);
     expect(result.stdout).toContain('spending-timeline:ok');

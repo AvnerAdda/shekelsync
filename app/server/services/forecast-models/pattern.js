@@ -1,7 +1,14 @@
 const MODEL_ID = 'pattern-v6';
+const { createRecurringEvidenceFilter } = require('../financial-truth.js');
 const { loadProjectionCategories, prepareProjectionPolicy } = require('./projection-policy.js');
 const { buildIncomeSchedule, applyIncomeSchedule } = require('./income-schedule.js');
 const { buildInvestmentSchedule, applyInvestmentSchedule } = require('./investment-schedule.js');
+const {
+  applyMortgageExpenseSchedule,
+  buildMortgageScheduleEvents,
+  dropDuplicateMortgagePredictions,
+  loadMortgageForecastContext,
+} = require('./mortgage-schedule.js');
 const { buildInfrequentExpenseEstimates, applyInfrequentExpenseEstimates } = require('./infrequent-expenses.js');
 const {
   expectationCategoryIds,
@@ -9,6 +16,36 @@ const {
   buildInstallmentSchedule,
   applyInstallmentSchedule,
 } = require('./installment-schedule.js');
+
+// A predicted payment contributing under 5 NIS, or with under a 5% chance on
+// its day, is noise in the outlook. Typical daily spending is kept: each day's
+// share is small by construction, but together it is real monthly spending.
+const MIN_PREDICTION_AMOUNT = 5;
+const MIN_PREDICTION_PROBABILITY = 0.05;
+const isNegligiblePrediction = prediction => prediction.timingBasis !== 'daily_average' && !prediction.isBaselineForecast
+  && (Math.abs(Number(prediction.probabilityWeightedAmount) || 0) < MIN_PREDICTION_AMOUNT
+    || (Number(prediction.probability) || 0) < MIN_PREDICTION_PROBABILITY);
+
+function dropNegligiblePredictions(dailyForecasts, simulationEntriesByDay, engine) {
+  const simulationByDate = new Map(simulationEntriesByDay.map(day => [day.date, day]));
+  for (const day of dailyForecasts) {
+    const dropped = (day.predictions || []).filter(isNegligiblePrediction);
+    if (!dropped.length) continue;
+    day.predictions = day.predictions.filter(prediction => !isNegligiblePrediction(prediction));
+    for (const prediction of dropped) {
+      const amount = Number(prediction.probabilityWeightedAmount) || 0;
+      if (prediction.categoryType === 'income') {
+        day.expectedIncome -= amount;
+        if (prediction.incomeType === 'non_operating') day.expectedNonOperatingIncome -= amount;
+        else day.expectedOperatingIncome -= amount;
+      } else if (prediction.categoryType === 'expense') day.expectedExpenses -= amount;
+    }
+    const droppedKeys = new Set(dropped.map(prediction => prediction.patternKey).filter(Boolean));
+    const simulation = simulationByDate.get(day.date);
+    if (simulation) simulation.entries = simulation.entries.filter(entry => entry.occurrenceKey || !droppedKeys.has(entry.patternKey));
+    engine.refreshForecastDayPredictions(day);
+  }
+}
 
 function withCumulative(scenario) {
   if (!scenario) return null; // Daily-only callers intentionally skip simulations.
@@ -71,9 +108,15 @@ function generateForecast({
   const policy = prepareProjectionPolicy(historicalTransactions, truthSnapshot, engine, categoryDefinitions);
   const originalTruthSnapshot = truthSnapshot;
   truthSnapshot = policy.truthSnapshot;
-  const evidenceTransactions = policy.transactions.filter(transaction => !originalTruthSnapshot.excludedTransactionKeys.has(`${transaction.identifier}\u0000${transaction.vendor}`));
+  const isRecurringEvidence = createRecurringEvidenceFilter(originalTruthSnapshot, historicalTransactions);
+  const evidenceTransactions = policy.transactions.filter(transaction => !isRecurringEvidence(transaction));
   const expectationCategories = expectationCategoryIds(truthSnapshot);
-  allTransactions = evidenceTransactions.filter(transaction => !isScheduledInstallmentPayment(transaction, expectationCategories));
+  // Mortgages with detailed tracks are projected from their schedule, so their
+  // past debits must not also feed category averages (expense-categorized loans).
+  const mortgageContext = (engine.loadMortgageForecastContext || loadMortgageForecastContext)(db, now);
+  if (mortgageContext.error) console.warn('[Forecast] Mortgage schedule unavailable:', mortgageContext.error);
+  allTransactions = evidenceTransactions.filter(transaction => !isScheduledInstallmentPayment(transaction, expectationCategories))
+    .filter(transaction => !mortgageContext.matchesTransaction(transaction));
 
   // Investments require source-level timing; category averages mix standing orders and one-off transfers.
   const patterns = analyzeCategoryPatterns(allTransactions.filter(transaction => transaction.category_type !== 'investment'));
@@ -112,8 +155,16 @@ function generateForecast({
   injectResolvedRecurringPredictions(dailyForecasts, simulationEntriesByDay, truthSnapshot);
   const incomeSchedule = buildIncomeSchedule(historicalTransactions, dailyForecasts.map(day => day.date), now, engine, originalTruthSnapshot);
   applyIncomeSchedule(dailyForecasts, simulationEntriesByDay, incomeSchedule, engine);
-  const investmentSchedule = buildInvestmentSchedule(historicalTransactions, dailyForecasts.map(day => day.date), now, originalTruthSnapshot);
-  applyInvestmentSchedule(dailyForecasts, simulationEntriesByDay, investmentSchedule, engine);
+  const forecastDates = dailyForecasts.map(day => day.date);
+  const mortgageEvents = buildMortgageScheduleEvents(mortgageContext, forecastDates, historicalTransactions);
+  const investmentSchedule = buildInvestmentSchedule(historicalTransactions, forecastDates, now, originalTruthSnapshot)
+    .filter(event => !mortgageContext.matchesSource(event));
+  applyInvestmentSchedule(dailyForecasts, simulationEntriesByDay,
+    [...investmentSchedule, ...mortgageEvents.filter(event => event.categoryType !== 'expense')], engine);
+  applyMortgageExpenseSchedule(dailyForecasts, simulationEntriesByDay,
+    mortgageEvents.filter(event => event.categoryType === 'expense'), engine);
+  dropDuplicateMortgagePredictions(dailyForecasts, simulationEntriesByDay, mortgageContext, engine);
+  dropNegligiblePredictions(dailyForecasts, simulationEntriesByDay, engine);
   const monteCarloResults = runMonteCarloSimulation(
     dailyForecasts,
     simulationEntriesByDay,
@@ -229,4 +280,5 @@ module.exports = {
   id: MODEL_ID,
   generateForecast,
   withCumulative,
+  _internal: { dropNegligiblePredictions },
 };

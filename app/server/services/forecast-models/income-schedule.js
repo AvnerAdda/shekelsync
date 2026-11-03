@@ -43,7 +43,11 @@ function buildIncomeSchedule(transactions, dates, now, engine, truthSnapshot = {
     const byDate = new Map();
     for (const row of rows) byDate.set(dateOnly(row.date), (byDate.get(dateOnly(row.date)) || 0) + Number(row.price));
     const historyDates = [...byDate.keys()];
-    if (historyDates.length < 3) continue;
+    if (historyDates.length < 2) continue;
+    // A new job's second paycheck: two payments a month apart on the same day
+    // of the month already define the schedule, with lower confidence.
+    if (historyDates.length === 2 && (Math.abs(distance(historyDates[1], historyDates[0]) - 30.4375) > 4
+      || Math.abs(Number(historyDates[1].slice(8, 10)) - Number(historyDates[0].slice(8, 10))) > 3)) continue;
     const cadenceDates = historyDates.slice(-Math.max(4, observations + 1));
     const intervals = cadenceDates.slice(1).map((date, i) => distance(date, cadenceDates[i]));
     const gap = median(intervals);
@@ -128,7 +132,7 @@ function buildIncomeSchedule(transactions, dates, now, engine, truthSnapshot = {
         allocations.push({ date, probability });
       }
       if (allocations.length) output.events.push({ key: `${sourceKey}:${occurrenceDate}`, amount, stdDev, allocations,
-        expectedPaymentDate: occurrenceDate, awaitingReceipt: canCarry,
+        expectedPaymentDate: occurrenceDate, awaitingReceipt: canCarry, evidenceCount: historyDates.length,
         transactionName: rows.at(-1).name, vendor: rows.at(-1).vendor || null });
     }
   }
@@ -163,7 +167,7 @@ function applyIncomeSchedule(dailyForecasts, simulationEntriesByDay, schedule, e
         timingBasis: 'estimated',
         probability, expectedAmount: event.amount, probabilityWeightedAmount: event.amount * probability,
         amountRange: { low: Math.max(0, event.amount - event.stdDev), high: event.amount + event.stdDev },
-        predictionKind: 'recurring_income', isCalibrated: true });
+        predictionKind: 'recurring_income', forecastBasis: 'income_schedule', evidenceCount: event.evidenceCount, isCalibrated: true });
       simulation.entries.push({ patternKey: `income_schedule:${event.key}`, occurrenceKey: event.key,
         categoryType: 'income', incomeType: 'operating', patternType: 'income_schedule',
         probability, avgAmount: event.amount, stdDev: event.stdDev });

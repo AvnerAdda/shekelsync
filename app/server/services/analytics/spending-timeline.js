@@ -1,5 +1,6 @@
 const { dateKey, validDate, shiftDays, invalid } = require('../planning-math.js');
 const { getCreditCardRepaymentCategoryCondition } = require('../accounts/repayment-category.js');
+const { dialect } = require('../../../lib/sql-dialect.js');
 
 const ALLOCATIONS = ['essential', 'growth', 'stability', 'reward', 'unallocated'];
 const blank = () => Object.fromEntries(ALLOCATIONS.map((key) => [key, 0]));
@@ -70,13 +71,18 @@ function buildTimeline(rows, period) {
 // transfers and duplicate card repayments are excluded. Only the remaining income
 // is added to Growth, so invested money is not counted again as unspent income.
 const kindSql = "COALESCE(cd.category_type, t.category_type, CASE WHEN t.price < 0 THEN 'expense' END)";
+// Dates are stored as UTC instants; windows and buckets use the user's local day,
+// matching the dashboard. The ±1 day UTC range only keeps the date index usable.
+const localDaySql = dialect.useSqlite ? "DATE(t.date, 'localtime')" : 'DATE(t.date)';
+const windowArgs = (start, end) => [shiftDays(start, -1), shiftDays(end, 2), start, end];
 const allocationFor = (kind) => `COALESCE(NULLIF(scm.spending_category, 'other'), CASE WHEN ${kind} = 'investment' THEN 'growth' ELSE 'unallocated' END)`;
 const allocationSql = allocationFor(kindSql);
 const selection = `
   FROM transactions t
   LEFT JOIN category_definitions cd ON cd.id = t.category_definition_id
   LEFT JOIN spending_category_mappings scm ON scm.category_definition_id = cd.id
-  WHERE t.date >= $1 AND t.date < $2 AND t.status = 'completed'
+  WHERE t.date >= $1 AND t.date < $2 AND ${localDaySql} >= $3 AND ${localDaySql} <= $4
+    AND t.status = 'completed'
     AND (${kindSql} IN ('income', 'expense') OR (${kindSql} = 'investment' AND t.price < 0))
     AND (COALESCE(cd.category_type, t.category_type, 'expense') <> 'income' OR COALESCE(cd.is_counted_as_income, 1) = 1)
     AND COALESCE(cd.name, '') <> 'החזר קרן' AND COALESCE(cd.name_en, '') <> 'Capital Returns'
@@ -87,10 +93,10 @@ const selection = `
 
 async function getTimeline(client, params) {
   const period = timelinePeriod(params);
-  const rows = await client.query(`SELECT SUBSTR(t.date, 1, 10) AS date, ${kindSql} AS kind,
+  const rows = await client.query(`SELECT ${localDaySql} AS date, ${kindSql} AS kind,
     ${allocationSql} AS spending_category, SUM(t.price) AS amount, COUNT(*) AS transaction_count
-    ${selection} GROUP BY SUBSTR(t.date, 1, 10), ${kindSql}, ${allocationSql}
-    ORDER BY date`, [period.history_start, shiftDays(period.end, 1)]);
+    ${selection} GROUP BY ${localDaySql}, ${kindSql}, ${allocationSql}
+    ORDER BY date`, windowArgs(period.history_start, period.end));
   const targets = await client.query("SELECT spending_category, target_percentage FROM spending_category_targets WHERE is_active = 1");
   const categories = await client.query(`SELECT cd.id AS category_definition_id, cd.name AS category_name,
     cd.name_en AS category_name_en, cd.name_fr AS category_name_fr, cd.icon, ${allocationFor('cd.category_type')} AS spending_category
@@ -114,12 +120,12 @@ async function getTimelineTransactions(client, params) {
   const limit = Math.min(2000, Math.max(1, Number(params.limit) || 500));
   const offset = Math.max(0, Number(params.offset) || 0);
   if (!Number.isInteger(limit) || !Number.isInteger(offset)) throw invalid('Invalid pagination');
-  const filter = `${selection} AND ${kindSql} IN ('expense', 'investment') AND ${allocationSql} = $3`;
-  const args = [start, shiftDays(end, 1), params.spendingCategory];
+  const filter = `${selection} AND ${kindSql} IN ('expense', 'investment') AND ${allocationSql} = $5`;
+  const args = [...windowArgs(start, end), params.spendingCategory];
   const transactions = await client.query(`SELECT t.identifier, t.vendor, t.name, t.date, t.price,
     t.account_number, t.category_definition_id, ${kindSql} AS category_type, t.status,
     cd.name AS category_name, cd.name_en AS category_name_en, cd.name_fr AS category_name_fr
-    ${filter} ORDER BY t.date DESC, t.identifier LIMIT $4 OFFSET $5`, [...args, limit, offset]);
+    ${filter} ORDER BY t.date DESC, t.identifier LIMIT $6 OFFSET $7`, [...args, limit, offset]);
   const summary = await client.query(`SELECT COUNT(*) AS total_count, COALESCE(-SUM(t.price), 0) AS total_amount ${filter}`, args);
   return { period: { start, end }, spending_category: params.spendingCategory, transactions: transactions.rows,
     total_count: Number(summary.rows[0].total_count), total_amount: units(Math.round(Number(summary.rows[0].total_amount) * 100)), limit, offset };

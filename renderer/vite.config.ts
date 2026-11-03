@@ -129,6 +129,7 @@ export default defineConfig(({ command }) => ({
     minify: 'terser',
     terserOptions: {
       compress: {
+        passes: 3,
         drop_console: true, // Remove console.log in production
         drop_debugger: true,
       },
