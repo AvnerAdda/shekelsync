@@ -1,14 +1,14 @@
-9644f087bad1fd191a5b0ce0b8d6e0b98631bb7e:app/lib/server/__tests__/error-sanitizer.test.js:generic-api-key:261
-a9b3b42e4e29513b13d902770490ff80a98c6d77:renderer/src/features/analysis/pages/AnalysisPageNew.tsx:generic-api-key:482
-3ab4400a9bbf2b9994d249a67d4babaf8461a72e:renderer/src/features/analysis/components/PersonalizedFutureModal.tsx:generic-api-key:186
-3ab4400a9bbf2b9994d249a67d4babaf8461a72e:renderer/src/features/analysis/components/PersonalizedFutureModal.tsx:generic-api-key:196
-3ab4400a9bbf2b9994d249a67d4babaf8461a72e:renderer/src/features/analysis/components/PersonalizedFutureModal.tsx:generic-api-key:206
-de767ae16b4919fa3b163eb893d737a23e089bcc:renderer/src/features/dashboard/components/TransactionHistorySection.tsx:generic-api-key:777
-de767ae16b4919fa3b163eb893d737a23e089bcc:renderer/src/features/dashboard/components/TransactionHistorySection.tsx:generic-api-key:807
-de767ae16b4919fa3b163eb893d737a23e089bcc:renderer/src/features/dashboard/components/TransactionHistorySection.tsx:generic-api-key:818
-de767ae16b4919fa3b163eb893d737a23e089bcc:renderer/src/features/dashboard/components/TransactionHistorySection.tsx:generic-api-key:829
-982c980fada304ec227963aae1be8cb68fe25492:.env.example:generic-api-key:14
-# Synthetic token in the original log-redaction regression test.
-5ce1f03043aff46342ee3edfbbc53dba0b4074c2:electron/__tests__/log-redaction.test.js:generic-api-key:17
-# Synthetic Aptabase app key in the original analytics regression test.
-a17e175cfe65c5408f302d30ac009feb7ea51762:electron/__tests__/usage-analytics.test.js:generic-api-key:25
+# Known synthetic regression fixtures and UI-property false positives.
+# Fingerprints refreshed after the personal-data history rewrite.
+173ff2c1523a1b7512424349ea50a660c6c608ac:renderer/src/features/analysis/pages/AnalysisPageNew.tsx:generic-api-key:482
+63020de50378237c4209d5ab3fe2b6b611f6cd04:app/lib/server/__tests__/error-sanitizer.test.js:generic-api-key:261
+83376586cb65108cf3b9d1ed8bf245c8c67b44e6:.env.example:generic-api-key:14
+8c6c66a542047cd91248e1a10fc6e34ba4b020dd:renderer/src/features/dashboard/components/TransactionHistorySection.tsx:generic-api-key:777
+8c6c66a542047cd91248e1a10fc6e34ba4b020dd:renderer/src/features/dashboard/components/TransactionHistorySection.tsx:generic-api-key:807
+8c6c66a542047cd91248e1a10fc6e34ba4b020dd:renderer/src/features/dashboard/components/TransactionHistorySection.tsx:generic-api-key:818
+8c6c66a542047cd91248e1a10fc6e34ba4b020dd:renderer/src/features/dashboard/components/TransactionHistorySection.tsx:generic-api-key:829
+97bfdf1dc65cb0e5072fd0039510ad08d3155150:electron/__tests__/log-redaction.test.js:generic-api-key:17
+9b846153d4aad5234a5232f41f466436fd82c6f7:renderer/src/features/analysis/components/PersonalizedFutureModal.tsx:generic-api-key:186
+9b846153d4aad5234a5232f41f466436fd82c6f7:renderer/src/features/analysis/components/PersonalizedFutureModal.tsx:generic-api-key:196
+9b846153d4aad5234a5232f41f466436fd82c6f7:renderer/src/features/analysis/components/PersonalizedFutureModal.tsx:generic-api-key:206
+fadf7f26df37cacfb80fbf6f748825a652a30efc:electron/__tests__/usage-analytics.test.js:generic-api-key:25
