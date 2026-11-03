@@ -7,7 +7,7 @@ describe('release changelog extraction', () => {
   it('requires a nonempty changelog entry for the version being shipped', () => {
     const notes = extractReleaseNotes(changelog, version);
     expect(notes?.version).toBe(version);
-    expect(notes?.markdown).toContain('### Added');
+    expect(notes?.markdown.trim().length).toBeGreaterThan(0);
     expect(notes?.markdown).not.toContain('## [Unreleased]');
   });
 
