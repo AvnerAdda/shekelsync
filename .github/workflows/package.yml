@@ -59,6 +59,9 @@ jobs:
       - name: Install renderer dependencies
         run: npm --prefix renderer ci
 
+      - name: Validate build-tool glob compatibility
+        run: npm --prefix app test -- lib/__tests__/build-glob-compat.test.js
+
       - name: Validate tag matches app version
         if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
         shell: bash
