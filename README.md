@@ -73,6 +73,13 @@ See the [CHANGELOG](CHANGELOG.md) for what changed between releases.
   payments directed to the highest-interest or smallest-balance debt. It shows
   payoff timing, interest, and monthly schedules separately for each currency.
   Estimates assume fixed rates, monthly interest, and no new borrowing or fees.
+- **Wealth → Real estate** supports multi-track mortgages, drawdowns and
+  prepayments, payment reconciliation, and market-data status. Open a property
+  to explore repayment schedules, mortgage health, stress scenarios, refinancing,
+  and sale break-even estimates using your property assumptions and costs.
+- **Home → Projection** shows projected balances over a selectable horizon,
+  before or after investing. Forecast confidence tiers distinguish sure, likely,
+  and uncertain flows; saved plans can also be included in the cash-flow outlook.
 
 Goals, scenarios, and spending settings stay in the local database and are
 included in database backups.
@@ -161,8 +168,10 @@ npm --prefix app run dist
 
 ## Releases
 
-- Cross-platform packaging is manual via workflow dispatch (`.github/workflows/package.yml`).
+- Push a `v*` tag matching `app/package.json` to build and publish a release via
+  `.github/workflows/package.yml` after its dependency audit and platform builds pass.
 - The package workflow builds distributables for Linux, macOS, and Windows.
+- Manual workflow dispatch runs diagnostic builds without uploading or publishing.
 - Tag releases use Developer ID signing and notarization when the complete macOS credential set is configured.
 - With no macOS signing credentials, tag releases publish explicit unsigned artifacts. macOS users must approve the app in Privacy & Security, and updates are manual because in-app macOS auto-update remains disabled.
 - A partially configured macOS credential set fails closed instead of silently publishing an ambiguous build.
