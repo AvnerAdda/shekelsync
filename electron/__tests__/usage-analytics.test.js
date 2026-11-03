@@ -22,7 +22,7 @@ function createClient(overrides = {}) {
     isPackaged: true,
     getLocale: () => 'he',
     fetchImpl,
-    env: { SHEKELSYNC_APTABASE_APP_KEY: 'A-EU-1234567890' },
+    env: { SHEKELSYNC_APTABASE_APP_KEY: 'A-EU-1234567890' }, // gitleaks:allow -- synthetic Aptabase app key fixture
     platform: 'darwin',
     logger: silentLogger,
     ...overrides,
