@@ -21,6 +21,8 @@ import CheckIcon from '@mui/icons-material/CheckCircle';
 import ErrorIcon from '@mui/icons-material/Error';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import OpenInNewIcon from '@mui/icons-material/OpenInNew';
+import HistoryIcon from '@mui/icons-material/History';
+import { OPEN_RELEASE_NOTES_EVENT } from '@renderer/features/release-notes/constants';
 import { useTranslation } from 'react-i18next';
 import { useTheme } from '@mui/material/styles';
 
@@ -304,6 +306,12 @@ const UpdateButton: React.FC<UpdateButtonProps> = ({
             </Typography>
           </Box>
         )}
+
+        <Divider sx={{ borderColor: alpha(theme.palette.divider, 0.1) }} />
+        <MenuItem onClick={() => handleAction(() => window.dispatchEvent(new Event(OPEN_RELEASE_NOTES_EVENT)))}>
+          <ListItemIcon><HistoryIcon fontSize="small" /></ListItemIcon>
+          <ListItemText>{t('releaseNotes.menu')}</ListItemText>
+        </MenuItem>
 
         {updateState.updateInfo?.releaseNotes && (
           <>

@@ -1,4 +1,14 @@
 {
+  "releaseNotes": {
+    "title": "Les nouveautés",
+    "subtitle": "Les dernières améliorations de ShekelSync.",
+    "version": "Version {{version}}",
+    "close": "C’est compris",
+    "fullChangelog": "Historique complet",
+    "menu": "Les nouveautés de cette version",
+    "englishNote": "Les notes de version sont disponibles en anglais.",
+    "empty": "Consultez l’historique complet pour découvrir les changements de cette version."
+  },
   "deleteConfirmation": {
     "title": "Supprimer « {{name}} » ?",
     "message": "Veuillez confirmer la suppression de cet élément. Cette action est irréversible.",

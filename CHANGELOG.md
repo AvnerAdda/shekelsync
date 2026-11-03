@@ -12,7 +12,22 @@ Release binaries are published at
 
 ## [Unreleased]
 
+## [0.2.5] - 2026-11-03
+
+### Security
+- Return safe public errors from analytics, export, and pattern APIs without
+  exposing internal database details or stack traces.
+- Bound diagnostic filename processing to prevent excessive regex backtracking.
+- Rate-limit signed Stripe webhook requests and preserve signature verification.
+- Backport the minimatch glob-pattern amplification fix without breaking the
+  interfaces required by existing build tools; verify patched copies in CI.
+- Restrict security-audit and Windows-build workflow tokens to read-only contents
+  access, and keep account data separate from logging format strings.
+
 ### Added
+- Show a formatted, offline "What's new" dialog once per installed version,
+  with release notes from this changelog and a way to reopen it from the update menu.
+- Open GitHub Discussions directly from the desktop feedback menu.
 - Optional, anonymous usage statistics via Aptabase, **off by default**. The app
   asks once; you can change it in Settings → Privacy & Security. When on, it
   sends only: app starts and which main screen is opened; institution added and
@@ -22,6 +37,11 @@ Release binaries are published at
   age as ranges; and startup, update and app error reason codes. Plus app
   version, language and OS. No financial data, identifiers, messages or free
   text are ever sent. See `PRIVACY.md`.
+
+### Changed
+- Align dependency audit gates across CI and release builds while keeping
+  moderate and low development-tool advisories visible.
+- Keep the database schema unchanged from v0.2.4; no manual migration is required.
 
 ## [0.2.4] - 2026-11-03
 
@@ -338,7 +358,9 @@ Initial public release series. Highlights across these versions:
 - Numerous scraping-reliability, double-counting, and schema-safety fixes,
   including guarding against unsafe SQLite schema reinitialization.
 
-[Unreleased]: https://github.com/AvnerAdda/shekelsync/compare/v0.2.3...HEAD
+[Unreleased]: https://github.com/AvnerAdda/shekelsync/compare/v0.2.5...HEAD
+[0.2.5]: https://github.com/AvnerAdda/shekelsync/compare/v0.2.4...v0.2.5
+[0.2.4]: https://github.com/AvnerAdda/shekelsync/compare/v0.2.3...v0.2.4
 [0.2.3]: https://github.com/AvnerAdda/shekelsync/compare/v0.2.2...v0.2.3
 [0.2.2]: https://github.com/AvnerAdda/shekelsync/compare/v0.2.1...v0.2.2
 [0.2.1]: https://github.com/AvnerAdda/shekelsync/compare/v0.2.0...v0.2.1
