@@ -75,10 +75,16 @@ describe('income schedules across payment patterns', () => {
     rows.push(tx('2026-03-07'),tx('2026-04-07'),tx('2026-05-07'));
     expect(total(build(rows,'2026-06-01'))).toBe(1000);
   });
-  it('does not invent a recurring stream from one or two deposits', () => {
+  it('does not invent a recurring stream from one deposit or two irregular ones', () => {
     expect(build(monthly.slice(0, 1)).size).toBe(0);
-    expect(build(monthly.slice(0, 2)).size).toBe(0);
+    expect(build([tx('2026-01-07'), tx('2026-02-20')]).size).toBe(0);
+    expect(build([tx('2026-01-07'), tx('2026-02-12')]).size).toBe(0);
     expect(build([]).size).toBe(0);
+  });
+  it('starts a new job\'s schedule from two paychecks a month apart, marking the thin evidence', () => {
+    const model = build(monthly.slice(0, 2)).get('category:1');
+    expect(model.daily.get('2026-04-07')).toBe(1000);
+    expect(model.events[0]).toMatchObject({ expectedPaymentDate: '2026-04-07', evidenceCount: 2 });
   });
   it('keeps multiple sources and multiple banks separate', () => {
     const rows = [...monthly, ...monthly.map(t => ({ ...t, price: 300, name: 'Second job' })),

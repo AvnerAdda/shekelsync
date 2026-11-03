@@ -5,7 +5,7 @@ let database = actualDatabase;
 let schemaEnsured = false;
 
 const PROPERTY_TYPES = new Set(['apartment', 'house', 'land', 'commercial', 'other']);
-const VALUATION_METHODS = new Set(['blended', 'manual', 'purchase_growth', 'purchase_price', 'rent_yield', 'price_per_sqm']);
+const VALUATION_METHODS = new Set(['blended', 'manual', 'purchase_growth', 'purchase_price', 'rent_yield', 'price_per_sqm', 'price_index']);
 const CONFIDENCE_LEVELS = new Set(['manual', 'high', 'medium', 'low']);
 
 const DEFAULT_ANNUAL_GROWTH_RATE = 3;
@@ -163,6 +163,12 @@ function estimateRealEstateValue(input = {}, options = {}) {
     ));
   } else if (profile.purchase_price !== null) {
     sources.push(buildSource('purchase_price', profile.purchase_price, ownershipPercentage));
+  }
+
+  // CBS dwelling-price index since purchase (ratio supplied by the caller).
+  const priceIndexRatio = toNumber(options.priceIndexRatio);
+  if (profile.purchase_price !== null && priceIndexRatio !== null && priceIndexRatio > 0) {
+    sources.push(buildSource('price_index', profile.purchase_price * priceIndexRatio, ownershipPercentage));
   }
 
   const rentalYieldRate = profile.rental_yield_rate ?? DEFAULT_RENTAL_YIELD_RATE;
@@ -409,6 +415,8 @@ async function upsertRealEstateProfile(accountId, payload = {}, dbAdapter = data
   const profile = normalizeProfilePayload(payload);
   const estimate = estimateRealEstateValue(profile, {
     valuationDate: profile.last_valuation_date,
+    // Transient: computed by the mortgage service from cached CBS data.
+    priceIndexRatio: toNumber(payload.price_index_ratio),
   });
   const confidence = CONFIDENCE_LEVELS.has(estimate.confidence) ? estimate.confidence : 'low';
   const assumptionsJson = JSON.stringify({
@@ -655,6 +663,7 @@ function buildRealEstateOverviewProperty(row) {
       ? null
       : safeDivide(annualRent, annualDebtService),
     valuationMethod: profile?.valuation_method || null,
+    annualGrowthRate: profile?.annual_growth_rate ?? null,
     confidence: profile?.confidence || null,
     lastValuationDate: profile?.last_valuation_date || row.holding_as_of_date || null,
     scenarioConservative: profile?.scenario_conservative ?? null,
@@ -786,6 +795,7 @@ module.exports = {
   upsertRealEstateProfile,
   applyRealEstateValuation,
   getRealEstateOverview,
+  summarizeOverview,
   ensureSchema,
   __setDatabase(mockDatabase) {
     database = mockDatabase || actualDatabase;

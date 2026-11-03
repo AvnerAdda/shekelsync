@@ -162,6 +162,10 @@ const PIKADON_MATCH_SQL = `
   )
 `;
 
+// Term-deposit placements count as investments, matching Spending allocation.
+// Other pikadon-flagged rows stay out of the income and expense totals.
+const COUNTED_PIKADON_SQL = `(cd.category_type = 'investment' OR ${dialect.excludePikadon('t')})`;
+
 const COUNTED_INCOME_SQL = `
   (
     (cd.category_type = 'income' AND t.price > 0 AND COALESCE(cd.is_counted_as_income, 1) = 1)
@@ -402,7 +406,7 @@ async function getDashboardAnalytics(query = {}) {
         AND t.vendor = tpe.transaction_vendor
       WHERE t.date >= $1 AND t.date <= $2
         AND tpe.transaction_identifier IS NULL
-        AND ${dialect.excludePikadon('t')}
+        AND ${COUNTED_PIKADON_SQL}
       GROUP BY ${historyGroupBy}
     ),
     paired_repayment_history AS (
@@ -619,7 +623,7 @@ async function getDashboardAnalytics(query = {}) {
           AND t.vendor = tpe.transaction_vendor
         WHERE t.date >= $1 AND t.date <= $2
           AND tpe.transaction_identifier IS NULL
-          AND ${dialect.excludePikadon('t')}`,
+          AND ${COUNTED_PIKADON_SQL}`,
         [start, end, BANK_CATEGORY_NAME],
       ),
 

@@ -13,6 +13,7 @@ function createPlanningRouter({ service = planningService } = {}) {
   };
   router.get('/', handle(() => service.getPlanningData()));
   router.get('/projection', handle((req) => service.getProjection(req.query)));
+  router.get('/forecast-overlay', handle((req) => service.getForecastOverlay(req.query)));
   router.put('/settings', handle((req) => service.updateSettings(req.body || {})));
   router.post('/goals', handle((req) => service.saveGoal(req.body || {}), 201));
   router.put('/goals/:id', handle((req) => service.saveGoal(req.body || {}, req.params.id)));

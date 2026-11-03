@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { apiClient, type ApiResponse } from '@/lib/api-client';
+import { MAX_PROJECTION_DAYS } from '../components/net-position-projection-helpers';
 
 export interface DashboardBudgetOutlookItem {
   actualSpent: number;
@@ -60,7 +61,7 @@ export function useDashboardInsights(): UseDashboardInsightsResult {
     setForecastError(null);
 
     const [forecastResult, healthResult] = await Promise.allSettled([
-      apiClient.get<DashboardForecastData>(`/api/forecast/daily?days=30${noCache ? '&noCache=1' : ''}`),
+      apiClient.get<DashboardForecastData>(`/api/forecast/daily?days=${MAX_PROJECTION_DAYS}${noCache ? '&noCache=1' : ''}`),
       apiClient.get<DashboardHealthSnapshot>('/api/analytics/personal-intelligence?days=60'),
     ]);
 

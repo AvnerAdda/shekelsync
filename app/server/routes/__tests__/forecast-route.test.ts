@@ -657,4 +657,32 @@ describe('Shared /api/forecast routes', () => {
     expect(response.body.predictionIntervals).toEqual(result.predictionIntervals);
     expect(response.body.dailyForecasts[0].predictions[0].timingBasis).toBe('daily_average');
   });
+
+  it('splits each daily total into confidence tiers that add up to the charted total', async () => {
+    const result: any = buildForecastResult({ days: 1, totalIncome: 1000 });
+    Object.assign(result.dailyForecasts[0], { expectedIncome: 9000, expectedExpenses: 1430, expectedInvestments: 0 });
+    result.dailyForecasts[0].predictions = [
+      { category: 'Salary', categoryType: 'income', timingBasis: 'scheduled', expectedAmount: 9000,
+        probability: 1, probabilityWeightedAmount: 9000, amountRange: { low: 8900, high: 9100 } },
+      { category: 'Sofa', categoryType: 'expense', predictionKind: 'installment_payment', timingBasis: 'scheduled',
+        expectedAmount: 500, probability: 1, probabilityWeightedAmount: 500, amountRange: { low: 500, high: 500 } },
+      { category: 'Electricity', categoryType: 'expense', forecastBasis: 'recurring_bill', timingBasis: 'estimated',
+        expectedAmount: 600, probability: 1, probabilityWeightedAmount: 600, amountRange: { low: 450, high: 750 } },
+      { category: 'Groceries', categoryType: 'expense', timingBasis: 'daily_average',
+        expectedAmount: 300, probability: 1, probabilityWeightedAmount: 300, amountRange: { low: 200, high: 400 } },
+    ];
+    const { app } = buildApp(vi.fn().mockResolvedValue(result));
+    const response = await request(app).get('/api/forecast/daily?days=1').expect(200);
+    const day = response.body.dailyForecasts[0];
+
+    expect(day.predictions.map((prediction: Record<string, string>) => prediction.confidenceTier))
+      .toEqual(['sure', 'sure', 'likely', 'uncertain']);
+    expect(day.predictions[2].amountRange).toEqual({ low: 450, high: 750 });
+    // 30 shekels of the expense total are not itemized and therefore uncertain.
+    expect(day.confidenceBreakdown).toEqual({
+      income: { sure: 9000, likely: 0, uncertain: 0 },
+      expenses: { sure: 500, likely: 600, uncertain: 330 },
+      investments: { sure: 0, likely: 0, uncertain: 0 },
+    });
+  });
 });

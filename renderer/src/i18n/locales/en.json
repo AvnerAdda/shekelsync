@@ -1107,26 +1107,33 @@
     },
     "tabs": {
       "history": "Daily Income vs Expenses",
-      "calendar": "Calendar",
-      "netPosition": "Net Position",
+      "netPosition": "Projection",
       "allocation": "Rolling Allocation",
       "scenarios": "End of Month Scenarios"
     },
-    "calendar": {
-      "subtitle": "Click a day to inspect its transactions.",
-      "today": "Today",
-      "retry": "Retry",
-      "error": "Failed to load calendar",
-      "emptyMonth": "No income or expense activity in this month.",
-      "monthIncome": "Month income",
-      "monthExpenses": "Month expenses",
-      "monthNet": "Month net",
-      "previousMonth": "Previous month",
-      "nextMonth": "Next month"
+    "projection": {
+      "toolbar": "Projection controls",
+      "basisLabel": "Investments",
+      "basis": {
+        "before": "Before investing",
+        "after": "After investing"
+      },
+      "horizon": {
+        "eom": "EOM",
+        "30": "30D",
+        "custom": "Custom"
+      },
+      "until": "Projection until:",
+      "customDate": "Project until",
+      "cancel": "Cancel",
+      "apply": "Apply",
+      "forecastUntil": "forecast until {{date}}",
+      "today": "Today"
     },
     "forecast": {
       "beforeInvesting": "Forecast before investing",
       "afterInvesting": "Forecast after investing",
+      "actualAfterInvesting": "Actual after investing",
       "loading": "Loading forecast...",
       "error": "Failed to load forecast",
       "noData": "No forecast data available",
@@ -1150,6 +1157,20 @@
       "scheduledPayment": "Scheduled payment",
       "dailyAverage": "Typical daily spending",
       "dailyEstimate": "Daily estimate: {{amount}}",
+      "otherDailySpending": "Other typical daily spending ({{count}})",
+      "otherDailySpendingHint": "Small daily shares of categories you spend on occasionally",
+      "confidenceTier": {
+        "sure": "Sure",
+        "likely": "Likely",
+        "uncertain": "Uncertain"
+      },
+      "confidenceTierHint": {
+        "sure": "Known date and amount",
+        "likely": "Regular, but the date or amount varies",
+        "uncertain": "Estimated from typical spending"
+      },
+      "amountRange": "Usually {{low}}–{{high}}",
+      "confidenceLegendHint": "Darker segments are more certain. Sure: known date and amount. Likely: regular, but the date or amount varies. Uncertain: estimated from typical spending.",
       "probability": "{{percent}}% probability",
       "remainingForecast": "Other forecast contributions",
       "roundingAdjustment": "Rounding",
@@ -1592,6 +1613,42 @@
         "noData": "No data available"
       },
       "future": {
+        "historyRange": {
+          "label": "History",
+          "3": "3M",
+          "6": "6M",
+          "all": "All"
+        },
+        "plans": {
+          "button": "Plans",
+          "buttonCount": "Plans ({{count}})",
+          "menuLabel": "Plans shown on the chart",
+          "goals": "Savings goals",
+          "goalsHint": "{{count}} goals · monthly contributions",
+          "scenariosTitle": "What if? scenarios",
+          "noScenarios": "No saved scenarios yet",
+          "line": "With my plans",
+          "floor": "Reserved",
+          "title": "With your plans",
+          "closing": "Closing balance with plans",
+          "difference": "{{amount}} vs expected",
+          "lowest": "Lowest point",
+          "lowestOn": "{{amount}} on {{date}}",
+          "available": "Available to spend",
+          "availableUntil": "{{amount}} until {{date}}",
+          "availableDelta": "{{amount}} with selected scenarios",
+          "availableUnavailable": "Not available yet. See Planning for what is missing.",
+          "dip": "Your plans dip into reserved money on {{date}}.",
+          "floorNote": "Reserved = cash buffer + savings kept in your bank accounts + planned contributions to them. Scenario changes and contributions to goals held elsewhere move the plans line.",
+          "manage": "Manage plans",
+          "empty": "Add savings goals or What if? scenarios in Planning to see their impact here.",
+          "loadFailed": "Plans could not be loaded."
+        },
+        "investmentBasis": {
+          "label": "Investments",
+          "before": "Before investing",
+          "after": "After investing"
+        },
         "title": "Cash-flow outlook",
         "scenarios": {
           "bad": "Lower estimate",
@@ -2337,6 +2394,7 @@
       "title": "Real estate simulator",
       "unsavedSuffix": " - unsaved changes",
       "fields": {
+        "managedByTracks": "Computed from your mortgage tracks",
         "city": "City",
         "neighborhood": "Neighborhood",
         "propertyType": "Property type",
@@ -2378,6 +2436,7 @@
         "other": "Other"
       },
       "valuationMethods": {
+        "priceIndex": "CBS price index",
         "blended": "Blended",
         "manual": "Manual value",
         "purchaseGrowth": "Purchase growth",
@@ -2416,6 +2475,549 @@
       }
     },
     "realEstateTab": {
+      "refinance": {
+        "title": "Refinance (מחזור)",
+        "subtitle": "Would replacing a track pay off, after early-repayment fees and switching costs?",
+        "check": {
+          "title": "If you got today's market average rate",
+          "subtitle": "Same track type and end date, at the Bank of Israel average for new mortgages; switching costs {{costs}}.",
+          "track": "Track",
+          "balance": "Balance",
+          "rates": "Yours → market",
+          "monthly": "Monthly payment",
+          "saving": "Net saving (today's value)",
+          "verdict": "Verdict",
+          "noBenchmark": "No public market average: ask your bank for an offer and compare it below."
+        },
+        "offer": {
+          "title": "Compare a bank's offer",
+          "subtitle": "Pick the tracks the new loan would repay, then enter the offered tracks as the bank quotes them.",
+          "type": "Offered track",
+          "primeMargin": "Prime ±",
+          "margin": "Margin",
+          "rate": "Rate %",
+          "convention": "Quoted as",
+          "term": "Months",
+          "addTrack": "Add offered track",
+          "switchingCosts": "Switching costs ₪",
+          "switchingHint": "Appraiser, file fee, lawyer",
+          "financeFees": "Add the costs to the new loan",
+          "compare": "Compare"
+        },
+        "verdicts": {
+          "worth_it": "Worth it",
+          "marginal": "Marginal",
+          "not_worth_it": "No gain"
+        },
+        "result": {
+          "monthly": "Monthly payment",
+          "saving": "Net saving",
+          "pv": "{{amount}} in today's value ({{rate}}%/yr)",
+          "costs": "Costs to switch",
+          "costsHint": "Early-repayment fee {{fee}} + switching {{switching}}",
+          "breakEven": "Pays for itself after",
+          "never": "Never",
+          "months": "{{count}} months",
+          "ends": "Ends {{date}}",
+          "chart": "Monthly payment: current vs offer",
+          "current": "Current loan",
+          "offer": "With the offer"
+        },
+        "warnings": {
+          "planned": "Drawdowns after the refinance date stay on the original terms."
+        },
+        "confirmApply": "Record this refinance? The replaced tracks will be closed on {{date}} and the new tracks added.",
+        "apply": "I did this refinance: update my tracks",
+        "applied": "Tracks updated",
+        "disclaimer": "Estimates. Early-repayment fees are an upper bound; compare under the base scenario (prime flat, market inflation expectations)."
+      },
+      "stress": {
+        "title": "Stress test",
+        "subtitle": "How your monthly payment moves if prime or inflation change from today on. The base case keeps prime at today's rate and uses market inflation expectations.",
+        "customTitle": "Build your own scenario",
+        "custom": "Your scenario: prime {{prime}}, inflation {{cpi}}%/yr",
+        "primeShift": "Prime change: {{value}}",
+        "primeShiftLabel": "Prime change",
+        "inflation": "Inflation: {{value}}% per year",
+        "inflationLabel": "Inflation",
+        "presets": {
+          "base": "Base case",
+          "prime1": "Prime +1%",
+          "prime2": "Prime +2%",
+          "prime3": "Prime +3%",
+          "cpi4": "Inflation 4%/yr",
+          "combined": "Prime +2% & inflation 4%"
+        },
+        "chartTitle": "Monthly payment by scenario",
+        "nominalNote": "Amounts in future shekels: CPI-linked payments grow with inflation even when nothing else changes.",
+        "table": {
+          "scenario": "Scenario",
+          "in1y": "In 1 year",
+          "in5y": "In 5 years",
+          "peak": "Highest payment",
+          "costDelta": "Extra cost over the loan",
+          "pti": "Peak payment / income"
+        },
+        "incomeNote": "Against a net income of {{income}} per month. Banks cap new loans at 50%."
+      },
+      "reconciliation": {
+        "composition": {
+          "paying": "{{track}}: {{amount}} on {{date}}",
+          "notYet": "{{track}}: no payment yet, first one on {{date}}"
+        },
+        "editTracks": "Edit tracks",
+        "noHistory": "{{count}} earlier months are not checked: your bank history starts {{date}}.",
+        "title": "Computed vs debited by the bank",
+        "matcher": {
+          "inUse": "This debit is already used.",
+          "saved": "Saved: this debit is used to check your payments.",
+          "current": "Matching debits \"{{pattern}}\"{{vendor}} ({{source}}). {{count}} found.",
+          "none": "No mortgage debit found in your transactions yet. Pick the right one below once your bank account is synced.",
+          "sources": {
+            "saved": "chosen by you",
+            "linked_transactions": "from payments linked to this property",
+            "detected": "detected automatically"
+          },
+          "pick": "Mortgage debit",
+          "occurrences": "{{count}}×, last {{amount}}",
+          "save": "Use this debit"
+        },
+        "suggestions": {
+          "largeGap": "In {{month}} the bank debited {{actual}} but your tracks only add up to {{expected}}. A track is probably missing, or its draw or first-payment date is wrong.",
+          "consistentDrift": "The bank charges {{amount}} more or less than computed every month. Enter your bank's balance per track in \"Bank statement check\", and check whether its rates are quoted nominal or effective.",
+          "latestDrift": "The last debit differs from the computed payment. A first payment often includes extra days of interest; if it repeats, check your tracks.",
+          "missing": "No mortgage debit found last month. If the bank account is not synced, sync it; otherwise check the payment matcher below.",
+          "firstPayment": "A debit before the first computed payment usually means interest for the days between the draw and the first payment date, or an earlier draw date."
+        },
+        "table": {
+          "month": "Month",
+          "expected": "Computed",
+          "actual": "Debited",
+          "difference": "Difference",
+          "status": "Status"
+        },
+        "statuses": {
+          "ok": "Matches",
+          "drift": "Differs",
+          "missing": "Missing",
+          "unexpected": "Unexpected",
+          "pending": "Upcoming"
+        }
+      },
+      "detailTabs": {
+        "stress": "Stress & refinance",
+        "mortgage": "Mortgage",
+        "sale": "Sale & break-even",
+        "health": "Credit health",
+        "healthNeedsMortgage": "Add your mortgage tracks to see the credit health."
+      },
+      "sale": {
+        "index": {
+          "title": "Value from the CBS dwelling-price index",
+          "noData": "No index data published since your purchase yet (latest: {{to}}). Indexed value = purchase price {{value}}.",
+          "body": "{{series}}: {{pct}} from {{from}} to {{to}}, so your purchase price is now worth about {{value}} (your current estimate: {{estimate}}).",
+          "lag": "The index is published about 3 months late and averages two months of deals.",
+          "active": "Used for your valuation, updated automatically",
+          "use": "Use for my valuation",
+          "series": {
+            "cbs.hpi.national": "National dwelling prices",
+            "cbs.hpi.new_dwellings": "New dwelling prices",
+            "cbs.hpi.district.jerusalem": "Jerusalem district",
+            "cbs.hpi.district.north": "North district",
+            "cbs.hpi.district.haifa": "Haifa district",
+            "cbs.hpi.district.center": "Center district",
+            "cbs.hpi.district.tel_aviv": "Tel Aviv district",
+            "cbs.hpi.district.south": "South district"
+          }
+        },
+        "title": "Sale & break-even",
+        "editAssumptions": "Assumptions & purchase costs",
+        "cards": {
+          "today": "If you sold today",
+          "todayProfit": "{{amount}} vs the cash you put in",
+          "clearDebt": "Price to clear all debt",
+          "vsValue": "{{pct}} vs today's value",
+          "recoverCash": "Price to get all your cash back",
+          "cashInvested": "Cash put in: {{amount}}",
+          "alternative": "Owning vs renting & investing",
+          "aheadFrom": "Ahead from {{year}}",
+          "alwaysBehind": "Behind over the loan term",
+          "breakEvenAppreciation": "Needs ≥ {{pct}}/yr price growth to win over 10 years"
+        },
+        "breakdown": {
+          "title": "Selling today, step by step",
+          "price": "Sale price (your share)",
+          "saleCosts": "Broker, lawyer and VAT",
+          "tax": "Capital gains tax (מס שבח)",
+          "mortgage": "Mortgage payoff (incl. accrued interest)",
+          "undrawn": "Still owed for drawdowns to come",
+          "fees": "Early-repayment fees (estimate)",
+          "net": "In your pocket",
+          "invested": "Cash you put in (down payment, costs, payments)",
+          "result": "Gain / loss",
+          "valueNote": "Based on an estimated value of {{value}}."
+        },
+        "assumptions": {
+          "costsFromLinked": "Cash put in is read from the payments linked to this property (down payment, lawyer…). Review them in the assumptions.",
+          "downPaymentDerived": "Down payment assumed = purchase price − loan. Add your real purchase costs for accurate figures.",
+          "purchaseTaxMissing": "No purchase tax (מס רכישה) entered."
+        },
+        "sensitivity": {
+          "title": "Gain or loss by sale price",
+          "subtitle": "If sold today at a price above or below the estimated value.",
+          "price": "Price",
+          "netProceeds": "In your pocket",
+          "profit": "Gain / loss"
+        },
+        "alternative": {
+          "title": "Owning vs renting and investing the difference",
+          "subtitle": "Owning: what you would keep after selling that year. Alternative: the same cash (down payment, costs, payments minus rent) invested at {{rate}}/yr, after tax. Property grows at your growth assumption.",
+          "noRent": "Add the rent of an equivalent home in the assumptions: without it, owning gets no credit for the rent you save.",
+          "crossover": "Owning pulls ahead",
+          "own": "Owning (net if sold)",
+          "alt": "Renting + investing"
+        },
+        "disclaimer": "Estimates. Early-repayment fees are an upper bound (no discounts for loan age or notice); capital gains tax uses a simplified real-gain calculation. Check with your bank and a tax advisor before deciding."
+      },
+      "health": {
+        "title": "Credit health",
+        "overallHint": "The overall verdict is the weakest of the four areas below.",
+        "verdicts": {
+          "good": "Good",
+          "watch": "Watch",
+          "risk": "At risk",
+          "unknown": "Not enough data"
+        },
+        "rates": {
+          "title": "Your rates vs the market",
+          "summary": "Compared with the Bank of Israel average for new mortgages of the same type.",
+          "noBenchmark": "No public market average for this track type",
+          "marginLine": "Margin {{yours}} vs market {{benchmark}} ({{period}})",
+          "rateLine": "Rate {{yours}} vs market {{benchmark}} ({{period}})"
+        },
+        "exposure": {
+          "title": "Exposure to rates and inflation",
+          "summary": "How much of your loan moves with prime or variable rates, and what a bad scenario would cost.",
+          "mix": "Mix",
+          "fixed": "fixed",
+          "mixHint": "Prime {{prime}} · variable {{variable}} · CPI-linked {{cpi}}",
+          "perPrimePoint": "Each +1% on prime",
+          "perMonth": "per month",
+          "steady": "Monthly payment",
+          "steadyHint": "from {{month}}",
+          "worst": "Worst case",
+          "worstHint": "+{{pct}} · prime +2% & inflation 4%",
+          "fixedThird": "Less than a third of the loan is at a fixed rate (Bank of Israel guideline)."
+        },
+        "affordability": {
+          "title": "Affordability",
+          "summary": "Mortgage payment as a share of your net household income. Banks may lend up to 50%; 30% or less is comfortable.",
+          "noIncome": "No income detected yet. Categorize your salary as income, or enter it in the assumptions.",
+          "pti": "Payment / income",
+          "stressed": "In the worst case",
+          "cap": "50% cap",
+          "meterLabel": "Payment-to-income {{value}}",
+          "stressedMarker": "Worst case",
+          "incomeManual": "Income: {{amount}} per month (entered manually)",
+          "incomeDetected": "Income: {{amount}} per month, median of the last {{count}} months with income in your transactions"
+        },
+        "equity": {
+          "title": "Equity",
+          "summary": "How much of the property you own, counting drawdowns still to come as debt.",
+          "ltv": "Loan to value",
+          "cushion": "Price drop that wipes your equity",
+          "cushionHint": "before selling costs",
+          "principalShare": "Principal in each payment",
+          "principalFrom": "More principal than interest from {{month}}",
+          "ltv60": "Below 60% LTV",
+          "flatPrices": "at today's price"
+        },
+        "prepayment": {
+          "title": "What would an early repayment do?",
+          "body": "Repaying {{amount}} on your {{track}} track ({{rate}}) after the last drawdown would save about {{saved}} in interest and finish it {{months}} months earlier. Estimated early-repayment fee today: {{fee}}.",
+          "caveat": "Money used to prepay is not invested elsewhere: compare the saving with what that cash could earn."
+        }
+      },
+      "assumptions": {
+        "valueIndex": {
+          "cbs_hpi_national": "National",
+          "cbs_hpi_new_dwellings": "New dwellings",
+          "cbs_hpi_district_jerusalem": "Jerusalem district",
+          "cbs_hpi_district_north": "North district",
+          "cbs_hpi_district_haifa": "Haifa district",
+          "cbs_hpi_district_center": "Center district",
+          "cbs_hpi_district_tel_aviv": "Tel Aviv district",
+          "cbs_hpi_district_south": "South district"
+        },
+        "title": "Assumptions & purchase costs",
+        "saveFailed": "Failed to save",
+        "cancel": "Cancel",
+        "save": "Save",
+        "usage": {
+          "valueIndexAuto": "Automatic (new dwellings if off-plan, else national)",
+          "valueIndex": "Price index for automatic value",
+          "offPlan": "Bought off-plan (from a developer)",
+          "title": "How you use the property",
+          "type": "Usage",
+          "owner_occupied": "I live in it",
+          "rented": "Rented out",
+          "vacant": "Vacant",
+          "rentReceived": "Monthly rent received",
+          "rentSaved": "Rent of an equivalent home",
+          "delivery": "Delivery / move-in date",
+          "deliveryHint": "Off-plan: rent is saved only from delivery",
+          "rentGrowth": "Rent growth",
+          "vacancy": "Vacancy",
+          "rentalTax": "Tax on rent",
+          "rentalTaxHint": "0 if under the exemption ceiling, 10 on the flat track"
+        },
+        "sale": {
+          "title": "Selling",
+          "broker": "Broker",
+          "lawyer": "Lawyer",
+          "vat": "VAT",
+          "other": "Other costs",
+          "exemption": "Single-apartment exemption from capital gains tax",
+          "cgt": "Capital gains tax"
+        },
+        "alternative": {
+          "title": "Comparison and income",
+          "return": "Return if invested instead",
+          "tax": "Tax on investment gains",
+          "income": "Net monthly income",
+          "incomeDetected": "Leave empty to use the detected {{amount}}",
+          "incomeNone": "Not detected from transactions"
+        },
+        "costs": {
+          "title": "Purchase costs and own funds",
+          "hint": "What you paid from your own pocket. Without a down payment entry, it is assumed to be the purchase price minus the loan.",
+          "type": "Type",
+          "amount": "Amount",
+          "date": "Date",
+          "status": "Status",
+          "paid": "Paid",
+          "planned": "Planned",
+          "add": "Add cost",
+          "types": {
+            "down_payment": "Down payment (own funds)",
+            "purchase_tax": "Purchase tax (מס רכישה)",
+            "lawyer": "Lawyer",
+            "broker": "Broker",
+            "appraisal": "Appraiser",
+            "renovation": "Renovation",
+            "mortgage_fees": "Mortgage fees",
+            "other": "Other"
+          }
+        }
+      },
+      "market": {
+        "title": "Market data",
+        "empty": "Not synced yet. Sync to price prime and CPI-linked tracks with real data.",
+        "policyRate": "BoI rate",
+        "policyRateHint": "Bank of Israel policy rate, since {{date}}",
+        "prime": "Prime",
+        "primeHint": "BoI rate + 1.5%. Next decision: {{date}}",
+        "cpi": "CPI 12m",
+        "cpiHint": "Latest CPI: {{period}}. Index known today: {{known}}",
+        "inflationExpectation": "Expected inflation 1y",
+        "inflationExpectationHint": "Bank of Israel composite expectation, used to project CPI-linked tracks",
+        "housePrices": "Home prices 12m",
+        "housePricesHint": "CBS dwelling price index, {{period}} (published with ~3 months delay)",
+        "stale": "Some data is out of date",
+        "lastSynced": "Last synced {{date}}",
+        "sync": "Sync",
+        "syncError": "Some series could not be refreshed: {{error}}",
+        "sources": "Sources: Bank of Israel and the Central Bureau of Statistics public APIs. Values are cached locally."
+      },
+      "mortgage": {
+        "primeLag": {
+          "next": "From the next payment",
+          "later": "One payment later"
+        },
+        "dates": {
+          "fix": "Set to {{date}}",
+          "onDraw": "The first payment ({{payment}}) should come after the draw ({{draw}}), usually one month later.",
+          "longGap": "The first payment ({{payment}}) is {{days}} days after the draw ({{draw}}). Banks usually charge the first payment one month after the draw.",
+          "applyAll": "Use these dates for all tracks",
+          "applyAllHint": "Copies this track's draw date and first payment date to the other tracks: a mortgage's tracks are usually drawn and paid together."
+        },
+        "editorTitle": "Mortgage tracks",
+        "editorTitleFor": "Mortgage tracks — {{name}}",
+        "editorIntro": "Enter each track (מסלול) as it appears in your mortgage contract. Prime follows the Bank of Israel rate and CPI-linked tracks follow the published index automatically.",
+        "confirmRemove": "Remove the detailed tracks? The property keeps its last computed balance.",
+        "legacyNotice": "This projection is estimated from the single mortgage balance, rate and payment. Set up your tracks (prime, fixed, CPI-linked…) for an accurate schedule that follows the Bank of Israel rate and the CPI.",
+        "trackTypes": {
+          "prime": "Prime",
+          "fixed_unlinked": "Fixed, unlinked (קל\"צ)",
+          "fixed_cpi": "Fixed, CPI-linked (ק\"צ)",
+          "variable_unlinked": "Variable, unlinked",
+          "variable_cpi": "Variable, CPI-linked",
+          "fx_linked": "Foreign currency",
+          "legacy": "Mortgage (single)"
+        },
+        "fields": {
+          "primeLagHint": "Some banks reprice prime only from the installment after a Bank of Israel decision. Compare with your debits.",
+          "primeLag": "Prime changes apply",
+          "type": "Track type",
+          "label": "Label (optional)",
+          "primeMargin": "Margin vs prime",
+          "margin": "Margin over anchor",
+          "primeNow": "Today: {{rate}}% ({{effective}}% effective)",
+          "currentRate": "Current rate",
+          "rate": "Interest rate",
+          "equalsNominal": "= {{rate}}% nominal",
+          "equalsEffective": "= {{rate}}% effective",
+          "conventionHint": "Banks often quote the effective annual rate (ריבית אפקטיבית). Check your mortgage report.",
+          "variableUnlinkedHint": "Resets every few years to a bond anchor. For \"prime ± x\" choose Prime.",
+          "nominal": "Nominal",
+          "effective": "Effective",
+          "resetPeriod": "Rate changes every",
+          "term": "Term",
+          "years": "{{years}} years",
+          "firstPayment": "First payment date",
+          "amortization": "Repayment method",
+          "grace": "Grace period",
+          "graceEnd": "Grace ends",
+          "cpiFloor": "Deflation floor (balance never below the base index)",
+          "lender": "Lender",
+          "approvedAmount": "Approved loan amount",
+          "drawnSummary": "Drawn {{drawn}} · planned {{planned}}",
+          "brokenPeriod": "First-period interest"
+        },
+        "units": {
+          "months": "months"
+        },
+        "amortization": {
+          "spitzer": "Spitzer (equal payments)",
+          "equal_principal": "Equal principal",
+          "balloon": "Balloon (interest only)",
+          "bullet": "Bullet (all at maturity)"
+        },
+        "grace": {
+          "none": "None",
+          "partial": "Partial (interest only)",
+          "full": "Full (interest added to balance)"
+        },
+        "brokenPeriod": {
+          "separate": "Charged apart on the next payment day (interest only)",
+          "monthly": "Regular month",
+          "actual_days": "Actual days since the draw"
+        },
+        "tranches": {
+          "title": "Drawdowns",
+          "date": "Draw date",
+          "amount": "Amount",
+          "status": "Status",
+          "drawn": "Drawn",
+          "planned": "Planned",
+          "rate": "Rate (if different)",
+          "marketRate": "Empty = market average",
+          "add": "Add drawdown"
+        },
+        "statement": {
+          "toggle": "Bank statement check",
+          "hint": "Enter the balance shown in your bank report for this track. The projection restarts from it, so small differences in bank conventions don't accumulate.",
+          "date": "Statement date",
+          "balance": "Balance on statement",
+          "remaining": "Payments remaining"
+        },
+        "offPlan": {
+          "resplit": "Re-split with the same mix",
+          "alreadyPlanned": "{{amount}} is already planned: {{split}}. Re-split it to follow the mix of what was drawn, on the delivery date below.",
+          "title": "Buying off-plan? Add the remaining drawdown",
+          "hint": "Splits the amount across tracks in the same proportions as what was already drawn. Fixed tracks without a rate are priced at the Bank of Israel market average.",
+          "date": "Expected delivery",
+          "amount": "Amount still to draw",
+          "apply": "Add with the same mix"
+        },
+        "events": {
+          "title": "Prepayments and changes",
+          "type": "Event",
+          "track": "Track",
+          "date": "Date",
+          "amount": "Amount",
+          "mode": "Then",
+          "prepay_partial": "Partial prepayment",
+          "prepay_full": "Full repayment",
+          "rate_override": "Rate change",
+          "reduce_payment": "Lower the payment",
+          "reduce_term": "Shorten the term",
+          "rate": "New rate",
+          "fee": "Fee paid",
+          "add": "Add event"
+        },
+        "preview": {
+          "balance": "Balance",
+          "next": "Next",
+          "nextPayment": "Next payment",
+          "totalCost": "Total interest + indexation",
+          "incomplete": "Fill in the required fields to see the payment."
+        },
+        "actions": {
+          "removeTrack": "Remove track",
+          "addTrack": "Add track",
+          "cancel": "Cancel",
+          "save": "Save mortgage",
+          "editTracks": "Edit tracks",
+          "setupTracks": "Set up tracks",
+          "removeTracks": "Remove tracks",
+          "close": "Close"
+        },
+        "errors": {
+          "saveFailed": "Failed to save mortgage"
+        },
+        "source": {
+          "tracks": "Detailed tracks",
+          "legacy": "Estimated"
+        },
+        "empty": {
+          "title": "No mortgage schedule yet",
+          "description": "Add your mortgage tracks to see the balance over time, interest vs principal, and how prime or CPI changes affect your payment."
+        },
+        "scenarios": {
+          "title": "What if rates change?",
+          "subtitle": "Shifts apply from today on. The base case keeps prime at today's rate and projects CPI from market inflation expectations.",
+          "base": "Base case",
+          "prime1": "Prime +1%",
+          "prime2": "Prime +2%",
+          "cpi4": "Inflation 4%/yr",
+          "combined": "Prime +2% & inflation 4%",
+          "paymentIn": "Monthly payment in {{years}} year(s)",
+          "vsBase": "vs base"
+        },
+        "summary": {
+          "balance": "Balance today",
+          "undrawn": "+ {{amount}} still to draw",
+          "nextPayment": "Next payment",
+          "rate": "Weighted rate",
+          "rateEffective": "{{rate}}% effective",
+          "interestPaid": "Interest paid so far",
+          "interestRemaining": "{{amount}} still to come",
+          "indexation": "CPI indexation so far",
+          "indexationHint": "Added to linked balances",
+          "totalCost": "Cost of the loan",
+          "totalCostHint": "Interest + indexation over the full term",
+          "payoff": "Paid off"
+        },
+        "charts": {
+          "balanceTitle": "Balance and equity over time",
+          "balanceSubtitle": "Remaining balance per track (stacked) and your equity: property value grown at your assumption, minus the debt.",
+          "equity": "Your equity",
+          "today": "Today",
+          "compositionTitle": "Where your payments go, per year",
+          "compositionSubtitle": "Principal repaid vs interest paid, plus CPI indexation added to linked balances.",
+          "principal": "Principal",
+          "interest": "Interest",
+          "indexation": "CPI indexation",
+          "showTable": "Show yearly table",
+          "hideTable": "Hide yearly table"
+        },
+        "table": {
+          "year": "Year",
+          "payments": "Payments",
+          "endBalance": "Balance at year end"
+        }
+      },
       "marketDataNotice": "Valuation is currently based on your saved simulator assumptions. Comparable sale data by address/type is not connected yet.",
       "propertiesTitle": "Properties",
       "propertiesSubtitle": "Review value, debt, equity and monthly payment assumptions.",
@@ -2427,6 +3029,7 @@
         "loanToValue": "Loan to value"
       },
       "hints": {
+        "mortgageLive": "Computed for today from your tracks, or as entered",
         "marketValue": "Current simulator value before debt",
         "netEquity": "Owned value minus mortgage share",
         "mortgage": "Total mortgage balance entered",
@@ -2434,6 +3037,9 @@
         "loanToValue": "Mortgage divided by property value"
       },
       "property": {
+        "mortgageProjected": "projected today: {{amount}}",
+        "mortgageUndrawn": "incl. {{amount}} still to draw",
+        "mortgageLive": "live · {{rate}}%",
         "unknownLocation": "Location not set",
         "noConfidence": "draft",
         "marketValue": "Market value",
@@ -2446,6 +3052,7 @@
         "updated": "Valuation date"
       },
       "actions": {
+        "mortgage": "Mortgage",
         "edit": "Edit"
       },
       "empty": {

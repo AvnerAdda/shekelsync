@@ -95,11 +95,16 @@ async function main() {
     assert.equal(automatic.next_income_source, 'detected');
     assert.equal(automatic.card_commitments, 700);
     assert.equal(automatic.card_commitments_source, 'imported');
+    // The 10 Sep bill is due on payday: before the next income, and still deducted.
+    assert.equal(automatic.card_commitments_before_income, 700);
+    assert.equal(automatic.card_commitments_after_income, 0);
     // Exercise credential discovery through SQLite: a fresh login cannot hide a
     // stale or never-synced second login at the same provider.
     db.exec('SAVEPOINT card_credential_freshness');
     await service.updateSettings({ card_commitments_amount: 0 });
-    assert.equal((await service.getProjection()).card_commitments_source, 'manual');
+    const manualCards = await service.getProjection();
+    assert.equal(manualCards.card_commitments_source, 'manual');
+    assert.equal(manualCards.card_commitments_after_income, null, 'a manual amount has no billing dates to split');
     const secondCardCredential = db.prepare("INSERT INTO vendor_credentials (vendor, last_scrape_success) VALUES ('max', ?)").run(today).lastInsertRowid;
     let cardProjection = await service.getProjection();
     assert.equal(cardProjection.status, 'ready');
@@ -206,6 +211,20 @@ async function main() {
     assert.equal(result.body.comparison.available_spend_delta, -1000);
     assert.equal(result.body.comparison.end_balance_delta, -1000);
     assert.equal(db.prepare('SELECT COUNT(*) AS count FROM cash_scenarios').get().count, 1, 'preview does not persist');
+    result = await request(app).get(`/api/planning/forecast-overlay?horizon_days=60&scenario_ids=${scenarioId}`);
+    assert.equal(result.status, 200);
+    const overlay = result.body;
+    assert.equal(overlay.daily.length, 60);
+    assert.equal(overlay.daily.find((day) => day.date === '2026-09-10').scenario_change, -1000);
+    assert.equal(overlay.daily.find((day) => day.date === '2026-10-01').external_contributions, 300, 'external goal leaves the bank');
+    assert.equal(overlay.daily.find((day) => day.date === '2026-10-01').reserved_floor, overlay.starting_floor);
+    assert.equal(overlay.available_spend - overlay.available_spend_baseline, -1000);
+    assert.deepEqual(overlay.scenarios.map((item) => [item.id, item.selected]), [[scenarioId, true]]);
+    const unplanned = (await request(app).get('/api/planning/forecast-overlay?horizon_days=60&goals=0')).body;
+    assert.ok(unplanned.daily.every((day) => day.external_contributions === 0 && day.scenario_change === 0));
+    assert.equal(unplanned.available_spend, unplanned.available_spend_baseline);
+    assert.equal((await request(app).get('/api/planning/forecast-overlay?scenario_ids=abc')).status, 400);
+    assert.equal((await request(app).get('/api/planning/forecast-overlay?horizon_days=999')).status, 400);
     assert.equal((await request(app).put(`/api/planning/scenarios/${scenarioId}`).send({ ...scenario, name: 'New car' })).status, 200);
     assert.equal((await request(app).post('/api/planning/scenarios/preview').send({ ...scenario, horizon_days: 999 })).status, 400);
     assert.equal((await request(app).post('/api/planning/scenarios').send({ ...scenario, changes: [{ ...scenario.changes[0], date: today }] })).status, 400);

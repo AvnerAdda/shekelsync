@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-const { detectNextIncome, detectCardCommitments } = require('../planning-automation.js');
+const { detectNextIncome, detectCardCommitments, splitCardCommitments } = require('../planning-automation.js');
 
 const today = '2026-09-08';
 const salary = { patternKey: 'salary', patternType: 'monthly', monthsOfHistory: 4, confidence: 0.8, lastOccurrence: '2026-08-10' };
@@ -10,10 +10,34 @@ const infer = (days, patterns = [salary], date = today) => detectNextIncome({ ca
 const bank = { account_number: '123', last_update_date: today };
 const charge = { vendor: 'max', account_number: '1111', status: 'completed', price: -100,
   charged_currency: 'ILS', date: '2026-09-01', processed_date: '2026-09-10' };
-const cards = (transactions, overrides = {}) => detectCardCommitments({ today, banks: [bank],
+const detectCards = (transactions, overrides = {}) => detectCardCommitments({ today, banks: [bank],
   cards: [{ vendor: 'max', last_scrape_success: today }], transactions, pairings: [], ...overrides });
+// Totals and sources; the per-bill breakdown is covered separately.
+const cards = (transactions, overrides = {}) => {
+  const result = { ...detectCards(transactions, overrides) };
+  delete result.bills;
+  return result;
+};
 
 describe('automatic planning inputs', () => {
+  it('splits outstanding card bills at the next income date', () => {
+    const result = detectCards([
+      charge, { ...charge, price: 5 },
+      { ...charge, processed_date: '2026-10-02', price: -400 },
+      { ...charge, account_number: '2222', processed_date: '2026-10-10', price: -50 },
+      { ...charge, processed_date: '2026-09-05', status: 'pending', price: -30 },
+    ]);
+    expect(result.amount).toBe(575);
+    expect(result.bills).toEqual([
+      { due_date: '2026-09-05', amount: 30 }, { due_date: '2026-09-10', amount: 95 },
+      { due_date: '2026-10-02', amount: 400 }, { due_date: '2026-10-10', amount: 50 },
+    ]);
+    // Bills due on payday count before it; overdue pending charges too.
+    expect(splitCardCommitments(result.bills, '2026-10-02')).toEqual({ before_income: 525, after_income: 50 });
+    expect(splitCardCommitments([{ due_date: null, amount: 12 }], '2026-10-02')).toEqual({ before_income: 12, after_income: 0 });
+    expect(splitCardCommitments(undefined, '2026-10-02')).toBeNull();
+  });
+
   it('uses the chosen recurring payday, ignoring probability tails, transfers and one-off income', () => {
     expect(infer([
       day('2026-09-09', { probability: 0.05, isChosenOccurrence: false }),
