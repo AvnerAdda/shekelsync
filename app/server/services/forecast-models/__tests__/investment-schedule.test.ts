@@ -80,7 +80,8 @@ describe('investment schedules learned from transaction history', () => {
       { ...row, price: -600, date: `${row.date}T17:00:00` },
     ]);
     expect(total(build(rows))).toBe(1000);
-    expect(build(rows.slice(0, 4))).toEqual([]);
+    // Two same-day transfers count once: two months of history, not four payments.
+    expect(build(rows.slice(0, 4))).toEqual([expect.objectContaining({ amount: 1000, evidenceCount: 2 })]);
   });
 
   it('does not mix a one-time lump sum into recurring transfers in the same category', () => {
@@ -137,18 +138,25 @@ describe('investment schedules learned from transaction history', () => {
   it('does not invent schedules from missing, sparse, irregular, or stale history', () => {
     expect(build([])).toEqual([]);
     expect(build(monthly.slice(0, 1))).toEqual([]);
-    expect(build(monthly.slice(0, 2))).toEqual([]);
+    // Two contributions a month apart are a new standing order; irregular ones are not.
+    expect(build(monthly.slice(0, 2), '2026-03-01')).toEqual([expect.objectContaining({ date: '2026-03-07', evidenceCount: 2 })]);
+    expect(build([tx('2026-01-07'), tx('2026-02-20')], '2026-03-01')).toEqual([]);
     expect(build(['2026-01-01', '2026-02-02', '2026-02-03', '2026-03-23'].map(date => tx(date)))).toEqual([]);
     expect(build(monthly, '2026-07-01')).toEqual([]);
     expect(total(build(monthly, '2026-05-01', 31))).toBe(1000);
   });
 
-  it('ignores future evidence, invalid amounts, non-investments, and pikadon-related rows', () => {
+  it('ignores future evidence, invalid amounts, and non-investments', () => {
     expect(total(build([...monthly, tx('2026-05-07', -999999), tx('bad-date'),
       tx('2026-03-20', NaN), tx('2026-03-21', 0)]))).toBe(1000);
     expect(build(monthly.map(row => ({ ...row, category_type: 'expense' })))).toEqual([]);
-    expect(build(monthly.map(row => ({ ...row, is_pikadon_related: 1 })))).toEqual([]);
-    expect(build([...monthly.slice(0, 2), tx('2026-04-07')])).toEqual([]);
+    expect(build([monthly[0], tx('2026-04-07')])).toEqual([]);
+  });
+
+  it('forecasts a standing monthly deposit placement but not a rolling weekly deposit', () => {
+    expect(total(build(monthly.map(row => ({ ...row, price: -100, is_pikadon_related: 1 }))))).toBe(100);
+    const weekly = ['2026-03-04', '2026-03-11', '2026-03-18', '2026-03-25'].map(date => tx(date, -680000, { is_pikadon_related: 1 }));
+    expect(build(weekly)).toEqual([]);
   });
 
   it.each([
@@ -186,6 +194,22 @@ describe('new mortgage payment inference', () => {
     vi.stubEnv('TZ', 'Asia/Jerusalem');
     const rows = [tx('2026-09-09T21:00:00.000Z', -5469, { name: 'דסק-משכנתא חיוב' })];
     expect(build(rows, '2026-10-01', 31).map(event => event.date)).toEqual(['2026-10-10']);
+  });
+
+  it('uses the latest debit of a new mortgage, whose first payment covered a partial month', () => {
+    const rows = [tx('2026-09-10', -3469.45, { name: 'דסק-משכנתא חיוב' }), tx('2026-10-11', -6700.8, { name: 'דסק-משכנתא חיוב' })];
+    expect(build(rows, '2026-10-30', 31)).toEqual([
+      expect.objectContaining({ date: '2026-11-11', amount: 6700.8, inference: 'mortgage_payment', evidenceCount: 2,
+        stdDev: expect.closeTo(201.02, 2) }),
+    ]);
+  });
+
+  it('keeps learning a mortgage when another payment in its category was confirmed', () => {
+    const rows = [tx('2026-05-25', -682500, { name: 'תשלום שוברי גביה' }), tx('2026-06-02', -3791, { name: 'תשלום שוברי גביה' }),
+      tx('2026-09-10', -6700.8, { name: 'דסק-משכנתא חיוב' }), tx('2026-10-11', -6700.8, { name: 'דסק-משכנתא חיוב' })];
+    const snapshot = { patterns: [{ categoryDefinitionId: 9, displayName: 'תשלום שוברי גביה', source: 'legacy_subscription',
+      confirmed: true, state: 'active' }] };
+    expect(build(rows, '2026-10-30', 31, snapshot).map(event => event.transactionName)).toEqual(['דסק-משכנתא חיוב']);
   });
 
   it('does not repeat stale one-off mortgage payments or classify a withdrawal as a payment', () => {

@@ -1,5 +1,5 @@
 import TransactionActions from '@renderer/shared/components/TransactionActions';
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { lazy, Suspense, useState, useCallback, useEffect } from 'react';
 import {
   Paper,
   Box,
@@ -21,9 +21,11 @@ import {
 import MuiTooltip from '@mui/material/Tooltip';
 import { ResponsiveContainer, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ReferenceLine, ReferenceArea, ComposedChart, Area, Bar } from 'recharts';
 import { useTheme, alpha, lighten, darken } from '@mui/material/styles';
-import { format, subDays, addDays } from 'date-fns';
+import { DatePicker } from '@mui/x-date-pickers/DatePicker';
+import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
+import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
+import { format, subDays, addDays, isValid } from 'date-fns';
 import AccountBalanceIcon from '@mui/icons-material/AccountBalance';
-import CalendarMonthIcon from '@mui/icons-material/CalendarMonth';
 import TimelineIcon from '@mui/icons-material/Timeline';
 import NotesIcon from '@mui/icons-material/Notes';
 import LocalOfferIcon from '@mui/icons-material/LocalOffer';
@@ -31,7 +33,6 @@ import TuneIcon from '@mui/icons-material/Tune';
 import StackedLineChartIcon from '@mui/icons-material/StackedLineChart';
 import InstitutionBadge from '@renderer/shared/components/InstitutionBadge';
 import CategoryIcon from '@renderer/features/breakdown/components/CategoryIcon';
-import IncomeExpenseCalendar from './IncomeExpenseCalendar';
 import RollingAllocationPanel from './RollingAllocationPanel';
 import { useRollingCashflow } from '../hooks/useRollingCashflow';
 import { buildRollingCashflow } from './rolling-cashflow';
@@ -42,10 +43,20 @@ import TransactionDetailModal, { TransactionForModal } from '@renderer/shared/mo
 import type { DashboardForecastData } from '@renderer/features/dashboard/hooks/useDashboardInsights';
 import { getIncomeExpenseYAxisConfig } from './transaction-history-axis';
 import { grossNumber, hasPairedCardData, preferOperatingNumber } from '../utils/cashflow';
-import FinancialCorrectionDialog from '@renderer/features/financial-truth/FinancialCorrectionDialog';
 import type { CorrectionTarget } from '@renderer/features/financial-truth/types';
 import { buildSplitBarData, type BarSplitBy, type BarFlow, type SplitBarSeries, type SplitBarDetail } from './transaction-history-splits';
 import { getTransactionPeriod, type TransactionPeriod } from '../utils/transaction-period';
+import {
+  PROJECTION_HORIZONS,
+  applyInvestmentBasis,
+  getDefaultProjectionHorizon,
+  getProjectionDateLimits,
+  resolveHorizonEndDate,
+  type InvestmentBasis,
+  type ProjectionHorizon,
+} from './net-position-projection-helpers';
+
+const FinancialCorrectionDialog = lazy(() => import('@renderer/features/financial-truth/FinancialCorrectionDialog'));
 
 interface TransactionHistorySectionProps {
   data: any;
@@ -74,10 +85,71 @@ interface TransactionHistorySectionProps {
 
 type IncomeExpenseChartType = 'bar' | 'line';
 
+const toolbarToggleGroupSx = {
+  borderRadius: '9px',
+  '& .MuiToggleButton-root': {
+    border: 'none',
+    borderRadius: '7px !important',
+    px: 1.25,
+    py: 0.5,
+    color: 'text.secondary',
+    '&.Mui-selected': {
+      bgcolor: 'background.paper',
+      color: 'primary.main',
+      boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
+      fontWeight: 600,
+    },
+    '&:hover': {
+      bgcolor: 'rgba(0,0,0,0.05)',
+    },
+  },
+} as const;
+
 function getForecastInvestments(item: any): number | undefined {
   return typeof item?.investments === 'number' && Number.isFinite(item.investments)
     ? item.investments
     : undefined;
+}
+
+const CONFIDENCE_TIERS = ['sure', 'likely', 'uncertain'] as const;
+type ConfidenceTier = typeof CONFIDENCE_TIERS[number];
+const FORECAST_FLOWS = [
+  { flow: 'income', key: 'Income' },
+  { flow: 'expenses', key: 'Expenses' },
+  { flow: 'investments', key: 'Investments' },
+] as const;
+const tierDataKey = (key: string, tier: ConfidenceTier) => `forecast${key}${tier[0].toUpperCase()}${tier.slice(1)}`;
+const originalTierDataKey = (key: string, tier: ConfidenceTier) => `originalF${tierDataKey(key, tier).slice(1)}`;
+
+// Chart fields for the server's per-day confidence split. Tiers add up to the
+// day total, so the stacked segments keep the height of the single bar.
+function getForecastTierFields(item: any): Record<string, number> {
+  const breakdown = item?.confidenceBreakdown;
+  if (!breakdown) return {};
+  const fields: Record<string, number> = {};
+  for (const { flow, key } of FORECAST_FLOWS) {
+    if (flow === 'investments' && getForecastInvestments(item) === undefined) continue;
+    for (const tier of CONFIDENCE_TIERS) {
+      const value = Number(breakdown[flow]?.[tier]);
+      fields[tierDataKey(key, tier)] = Number.isFinite(value) ? value : 0;
+    }
+  }
+  return fields;
+}
+
+// Log bars cannot stack raw logarithms (log a + log b ≠ log(a + b)). Keep the
+// bar's log height and divide it by each tier's share of the day total; the
+// original amounts stay available to the tooltip.
+function getLogForecastTierFields(item: any, key: string, logTotal: number | undefined): Record<string, number> {
+  const values = CONFIDENCE_TIERS.map(tier => item[tierDataKey(key, tier)]);
+  if (values.some(value => typeof value !== 'number') || logTotal === undefined) return {};
+  const magnitude = values.reduce((sum, value) => sum + Math.abs(value), 0);
+  const fields: Record<string, number> = {};
+  CONFIDENCE_TIERS.forEach((tier, index) => {
+    fields[tierDataKey(key, tier)] = magnitude ? logTotal * Math.abs(values[index]) / magnitude : 0;
+    fields[originalTierDataKey(key, tier)] = values[index];
+  });
+  return fields;
 }
 
 function getNetFlowForHistory(item: any, useOperatingBasis: boolean): number {
@@ -129,9 +201,8 @@ const TransactionHistorySection: React.FC<TransactionHistorySectionProps> = ({
   } = useDashboardFilters();
   const { t, i18n } = useTranslation('translation', { keyPrefix: 'transactionHistory' });
   const TAB_HISTORY = 0;
-  const TAB_CALENDAR = 1;
-  const TAB_NET_POSITION = 2;
-  const TAB_ALLOCATION = 3;
+  const TAB_NET_POSITION = 1;
+  const TAB_ALLOCATION = 2;
 
   // Tab state
   const [activeTab, setActiveTab] = useState(TAB_HISTORY);
@@ -142,6 +213,25 @@ const TransactionHistorySection: React.FC<TransactionHistorySectionProps> = ({
   const [includeCapitalReturns, setIncludeCapitalReturns] = useState(false);
   const [showRollingAverages, setShowRollingAverages] = useState(true);
   const [showForecast, setShowForecast] = useState(true);
+  // Null follows the period preset until the user picks a horizon.
+  const [selectedProjectionHorizon, setSelectedProjectionHorizon] = useState<ProjectionHorizon | null>(null);
+  const projectionHorizon = selectedProjectionHorizon ?? getDefaultProjectionHorizon(periodPreset);
+  const [customProjectionEnd, setCustomProjectionEnd] = useState<string | null>(null);
+  const [customProjectionAnchor, setCustomProjectionAnchor] = useState<HTMLElement | null>(null);
+  const [draftProjectionEnd, setDraftProjectionEnd] = useState<Date | null>(null);
+  const projectionEndDate = resolveHorizonEndDate(projectionHorizon, new Date(), customProjectionEnd);
+  const projectionDateLimits = getProjectionDateLimits(new Date());
+  const openCustomProjection = (target: HTMLElement) => {
+    setDraftProjectionEnd(parseLocalDate(projectionEndDate));
+    setCustomProjectionAnchor(target);
+  };
+  const applyCustomProjection = () => {
+    if (!draftProjectionEnd || !isValid(draftProjectionEnd)) return;
+    setCustomProjectionEnd(format(draftProjectionEnd, 'yyyy-MM-dd'));
+    setSelectedProjectionHorizon('custom');
+    setCustomProjectionAnchor(null);
+  };
+  const [investmentBasis, setInvestmentBasis] = useState<InvestmentBasis>('after');
   const [incomeExpenseChartType, setIncomeExpenseChartType] = useState<IncomeExpenseChartType>('bar');
   const [barSplitBy, setBarSplitBy] = useState<BarSplitBy>('none');
   
@@ -249,6 +339,9 @@ const TransactionHistorySection: React.FC<TransactionHistorySectionProps> = ({
     );
   }, [aggregationPeriod, forecastData, rangeEndsToday]);
   const hasInvestmentForecastSeries = investmentForecastDays.length > 0;
+  // Older responses have no confidence split and keep the single forecast bar.
+  const showConfidenceTiers = hasForecastSeries
+    && Boolean(forecastData?.dailyForecasts?.some((item: any) => item?.confidenceBreakdown));
   const hasInvestmentWithdrawals = chartHistory.some((item: any) => item.investments < 0)
     || (showForecast && investmentForecastDays.some((item: any) => item.investments < 0));
 
@@ -401,16 +494,22 @@ const TransactionHistorySection: React.FC<TransactionHistorySectionProps> = ({
       getTransactionPeriod(item.date, aggregationPeriod, startDate, endDate) !== null
     );
 
+    // Investments sit outside income and expenses, so the after-investing
+    // position subtracts their signed net (withdrawals add back).
     let cumulative = 0;
+    let investedCumulative = 0;
     return filteredHistory.map((item: any) => {
       const netFlow = getNetFlowForHistory(item, useOperatingBasis);
       cumulative += netFlow;
+      investedCumulative += grossNumber(item?.investments);
       return {
         date: item.date,
         netFlow,
         cumulative,
         historicalNetFlow: netFlow,
         historicalCumulative: cumulative,
+        historicalInvestedCumulative: investedCumulative,
+        historicalAfterInvesting: cumulative - investedCumulative,
         isForecast: false,
       };
     });
@@ -517,6 +616,7 @@ const TransactionHistorySection: React.FC<TransactionHistorySectionProps> = ({
         originalForecastIncome: d.income || 0,
         originalForecastExpenses: d.expenses || 0,
         originalForecastInvestments: getForecastInvestments(d),
+        ...getForecastTierFields(d),
       }));
 
     const combinedData = [...historicalData, ...forecastEntries];
@@ -528,13 +628,19 @@ const TransactionHistorySection: React.FC<TransactionHistorySectionProps> = ({
 
         if (item.isForecast) {
           // Forecast items - transform forecast values
+          const forecastIncome = toLog(item.forecastIncome);
+          const forecastExpenses = toLog(item.forecastExpenses);
+          const forecastInvestments = item.forecastInvestments === undefined
+            ? undefined
+            : Math.sign(item.forecastInvestments) * toLog(Math.abs(item.forecastInvestments));
           return {
             ...item,
-            forecastIncome: toLog(item.forecastIncome),
-            forecastExpenses: toLog(item.forecastExpenses),
-            forecastInvestments: item.forecastInvestments === undefined
-              ? undefined
-              : Math.sign(item.forecastInvestments) * toLog(Math.abs(item.forecastInvestments)),
+            forecastIncome,
+            forecastExpenses,
+            forecastInvestments,
+            ...getLogForecastTierFields(item, 'Income', forecastIncome),
+            ...getLogForecastTierFields(item, 'Expenses', forecastExpenses),
+            ...getLogForecastTierFields(item, 'Investments', forecastInvestments),
             originalForecastIncome: item.originalForecastIncome,
             originalForecastExpenses: item.originalForecastExpenses,
           };
@@ -605,6 +711,51 @@ const TransactionHistorySection: React.FC<TransactionHistorySectionProps> = ({
     return shade % 2 ? lighten(base, 0.15 + Math.floor(shade / 2) * 0.13)
       : darken(base, Math.floor(shade / 2) * 0.14);
   };
+  const tieredForecastBars = showForecast && showConfidenceTiers && !splitBars && incomeExpenseChartType === 'bar';
+  const forecastTierOpacity: Record<ConfidenceTier, number> = theme.palette.mode === 'dark'
+    ? { sure: 0.8, likely: 0.5, uncertain: 0.24 }
+    : { sure: 0.75, likely: 0.45, uncertain: 0.18 };
+  // One dashed bar per flow, or three stacked confidence segments that share its stack.
+  const renderForecastBars = (flow: BarFlow) => {
+    const { key } = FORECAST_FLOWS.find(item => item.flow === flow)!;
+    const color = flowColor(flow);
+    const name = `${t(`forecast.${flow}`)} (${t('forecast.expected')})`;
+    const segments = tieredForecastBars
+      ? CONFIDENCE_TIERS.map(tier => ({ dataKey: tierDataKey(key, tier), opacity: forecastTierOpacity[tier],
+        name: `${name} · ${t(`forecast.confidenceTier.${tier}`)}`, top: tier === 'uncertain' }))
+      : [{ dataKey: `forecast${key}`, opacity: 0.38, name, top: true }];
+    return segments.map(segment => (
+      <Bar isAnimationActive={false}
+        key={segment.dataKey}
+        dataKey={segment.dataKey}
+        stackId={flow}
+        fill={alpha(color, segment.opacity)}
+        stroke={color}
+        strokeDasharray="4 2"
+        radius={segment.top ? [2, 2, 0, 0] : 0}
+        maxBarSize={36}
+        name={segment.name}
+        {...(tieredForecastBars ? { legendType: 'none' as const } : {})}
+      />
+    ));
+  };
+  const renderForecastTierDetails = (row: any, flow: BarFlow) => {
+    const { key } = FORECAST_FLOWS.find(item => item.flow === flow)!;
+    if (!row.isForecast || splitBars || row[tierDataKey(key, 'sure')] === undefined) return null;
+    const amount = (tier: ConfidenceTier) => row[originalTierDataKey(key, tier)] ?? row[tierDataKey(key, tier)];
+    const tiers = CONFIDENCE_TIERS.filter(tier => Math.abs(amount(tier)) >= 0.005);
+    if (tiers.length === 0) return null;
+    return (
+      <Typography variant="caption" color="text.secondary" sx={{ display: 'block', pl: 1, mb: 0.5 }}>
+        {tiers.map(tier => {
+          const value = amount(tier);
+          return `${t(`forecast.confidenceTier.${tier}`)} ${value < 0 ? '-' : ''}${formatCurrency(Math.abs(value), {
+            minimumFractionDigits: 2, maximumFractionDigits: 2,
+          })}`;
+        }).join(' · ')}
+      </Typography>
+    );
+  };
   const renderSplitDetails = (row: any, flow: BarFlow) => splitBars && (
     <Box sx={{ pl: 1, mb: 0.5 }}>
       {(row.splitDetails || []).filter((detail: SplitBarDetail) => detail.flow === flow).map((detail: SplitBarDetail) => (
@@ -620,14 +771,13 @@ const TransactionHistorySection: React.FC<TransactionHistorySectionProps> = ({
   );
 
   // Get combined net position data (historical + forecast with P10/P50/P90 scenarios)
-  // Current ranges include the next 30 forecast days; past custom ranges stay historical.
+  // Current ranges project to the selected horizon; past custom ranges stay historical.
   const getCombinedNetPositionData = useCallback(() => {
     const baseHistoricalData = getNetPositionData();
     
-    // Calculate forecast end date (30 days from today)
     const today = new Date();
     const todayStr = format(today, 'yyyy-MM-dd');
-    const forecastEndDateStr = format(addDays(today, 30), 'yyyy-MM-dd');
+    const forecastEndDateStr = projectionEndDate;
 
     // Only add forecast data in daily aggregation mode
     if (!rangeEndsToday || aggregationPeriod !== 'daily' || !forecastData?.dailyForecasts || baseHistoricalData.length === 0) {
@@ -635,6 +785,7 @@ const TransactionHistorySection: React.FC<TransactionHistorySectionProps> = ({
         ...item,
         forecastCumulative: undefined,
         forecastAfterInvesting: undefined,
+        forecastInvestedCumulative: undefined,
         p10Cumulative: undefined,
         p50Cumulative: undefined,
         p90Cumulative: undefined,
@@ -645,7 +796,6 @@ const TransactionHistorySection: React.FC<TransactionHistorySectionProps> = ({
     // Use today as the actual end date for historical data
     const actualEndDate = todayStr;
     const actualHistoricalData = baseHistoricalData.filter((item: any) => item.date <= actualEndDate);
-    // Forecast extends 30 days from today
     const chartEndDate = forecastEndDateStr;
 
     if (actualHistoricalData.length === 0) {
@@ -653,6 +803,7 @@ const TransactionHistorySection: React.FC<TransactionHistorySectionProps> = ({
         ...item,
         forecastCumulative: undefined,
         forecastAfterInvesting: undefined,
+        forecastInvestedCumulative: undefined,
         p10Cumulative: undefined,
         p50Cumulative: undefined,
         p90Cumulative: undefined,
@@ -663,11 +814,15 @@ const TransactionHistorySection: React.FC<TransactionHistorySectionProps> = ({
     const lastHistorical = actualHistoricalData[actualHistoricalData.length - 1];
     const lastHistoricalDate = lastHistorical.date;
     const startingCumulative = lastHistorical.cumulative;
+    const startingAfterInvesting = lastHistorical.historicalAfterInvesting;
+    const startingInvested = lastHistorical.historicalInvestedCumulative;
     
     // Get scenario daily data
-    const p10Daily = forecastData.scenarios?.p10?.daily || [];
-    const p50Daily = forecastData.scenarios?.p50?.daily || [];
-    const p90Daily = forecastData.scenarios?.p90?.daily || [];
+    const scenarioByDate = (daily: any[] | undefined) => new Map<string, any>((daily || [])
+      .map((day: any) => [day.date, day]));
+    const p10ByDate = scenarioByDate(forecastData.scenarios?.p10?.daily);
+    const p50ByDate = scenarioByDate(forecastData.scenarios?.p50?.daily);
+    const p90ByDate = scenarioByDate(forecastData.scenarios?.p90?.daily);
     const intervalsByDate = new Map<string, any>((forecastData.predictionIntervals?.daily || [])
       .map((day: any) => [day.date, day]));
     const hasIntervals = intervalsByDate.size > 0;
@@ -681,6 +836,7 @@ const TransactionHistorySection: React.FC<TransactionHistorySectionProps> = ({
         historicalCumulative: item.cumulative,
         forecastCumulative: undefined,
         forecastAfterInvesting: undefined,
+        forecastInvestedCumulative: undefined,
         p10Cumulative: undefined,
         p50Cumulative: undefined,
         p90Cumulative: undefined,
@@ -694,7 +850,8 @@ const TransactionHistorySection: React.FC<TransactionHistorySectionProps> = ({
       historicalData[historicalData.length - 1] = {
         ...historicalData[historicalData.length - 1],
         forecastCumulative: startingCumulative,
-        forecastAfterInvesting: startingCumulative,
+        forecastAfterInvesting: startingAfterInvesting,
+        forecastInvestedCumulative: startingInvested,
         p10Cumulative: startingCumulative,
         p50Cumulative: startingCumulative,
         p90Cumulative: startingCumulative,
@@ -704,7 +861,8 @@ const TransactionHistorySection: React.FC<TransactionHistorySectionProps> = ({
     
     // Build forecast entries with scenario cumulative values
     let expectedCumulative = startingCumulative;
-    let afterInvesting: number | undefined = startingCumulative;
+    let afterInvesting: number | undefined = startingAfterInvesting;
+    let investedCumulative: number | undefined = startingInvested;
     let p10Cumulative = startingCumulative;
     let p50Cumulative = startingCumulative;
     let p90Cumulative = startingCumulative;
@@ -720,11 +878,13 @@ const TransactionHistorySection: React.FC<TransactionHistorySectionProps> = ({
         afterInvesting = afterInvesting !== undefined && investments !== undefined
           ? afterInvesting + expectedCashFlow - investments
           : undefined;
+        investedCumulative = investedCumulative !== undefined && investments !== undefined
+          ? investedCumulative + investments
+          : undefined;
 
-        // Find matching scenario data for this date
-        const p10Day = p10Daily.find((s: any) => s.date === d.date);
-        const p50Day = p50Daily.find((s: any) => s.date === d.date);
-        const p90Day = p90Daily.find((s: any) => s.date === d.date);
+        const p10Day = p10ByDate.get(d.date);
+        const p50Day = p50ByDate.get(d.date);
+        const p90Day = p90ByDate.get(d.date);
 
         p10Cumulative += getCashFlowForForecast(p10Day || d, useOperatingBasis);
         p50Cumulative += getCashFlowForForecast(p50Day || d, useOperatingBasis);
@@ -741,6 +901,7 @@ const TransactionHistorySection: React.FC<TransactionHistorySectionProps> = ({
           cumulative: expectedCumulative,
           forecastCumulative: expectedCumulative,
           forecastAfterInvesting: afterInvesting,
+          forecastInvestedCumulative: investedCumulative,
           p10Cumulative: lower ?? p10Cumulative,
           p50Cumulative: median ?? p50Cumulative,
           p90Cumulative: upper ?? p90Cumulative,
@@ -751,9 +912,18 @@ const TransactionHistorySection: React.FC<TransactionHistorySectionProps> = ({
       });
 
     return [...historicalData, ...forecastEntries];
-  }, [getNetPositionData, forecastData, aggregationPeriod, gapPeriodInfo, rangeEndsToday, useOperatingBasis]);
+  }, [getNetPositionData, forecastData, aggregationPeriod, gapPeriodInfo, rangeEndsToday, useOperatingBasis, projectionEndDate]);
 
-  const netPositionData = activeTab === TAB_NET_POSITION ? getCombinedNetPositionData() : [];
+  const rawNetPositionData = activeTab === TAB_NET_POSITION ? getCombinedNetPositionData() : [];
+  // The before/after investing switch only matters when money actually moved.
+  const hasInvestmentActivity = rawNetPositionData.some((day: any) =>
+    (day.historicalInvestedCumulative ?? 0) !== 0 || (day.forecastInvestedCumulative ?? 0) !== 0);
+  const netPositionBasis: InvestmentBasis = hasInvestmentActivity ? investmentBasis : 'before';
+  const netPositionData = applyInvestmentBasis(rawNetPositionData, netPositionBasis);
+  const hasProjection = netPositionData.some((day: any) => day.isForecast);
+  // The shared formatter drops signs; this chart is read relative to zero.
+  const formatSignedCurrencyValue = (value: number) => `${value < 0 ? '-' : ''}${formatCurrencyValue(Math.abs(value))}`;
+  const hasNetPositionBand = netPositionData.some((day: any) => Array.isArray(day.forecastRange));
 
   return (
     <Paper
@@ -806,23 +976,6 @@ const TransactionHistorySection: React.FC<TransactionHistorySectionProps> = ({
                 }}
               >
                 <TimelineIcon fontSize="small" />
-              </IconButton>
-            </MuiTooltip>
-            <MuiTooltip title={t('tabs.calendar')}>
-              <IconButton
-                size="small"
-                onClick={() => setActiveTab(TAB_CALENDAR)}
-                sx={{
-                  bgcolor: activeTab === TAB_CALENDAR ? 'primary.main' : 'transparent',
-                  color: activeTab === TAB_CALENDAR ? 'primary.contrastText' : 'text.secondary',
-                  borderRadius: '8px',
-                  transition: 'all 0.2s',
-                  '&:hover': {
-                    bgcolor: activeTab === TAB_CALENDAR ? 'primary.dark' : 'action.hover',
-                  },
-                }}
-              >
-                <CalendarMonthIcon fontSize="small" />
               </IconButton>
             </MuiTooltip>
             <MuiTooltip title={t('tabs.netPosition')}>
@@ -882,25 +1035,7 @@ const TransactionHistorySection: React.FC<TransactionHistorySectionProps> = ({
               exclusive 
               onChange={(_, newScale) => newScale && setYAxisScale(newScale)} 
               size="small"
-              sx={{
-                borderRadius: '9px',
-                '& .MuiToggleButton-root': {
-                  border: 'none',
-                  borderRadius: '7px !important',
-                  px: 1.25,
-                  py: 0.5,
-                  color: 'text.secondary',
-                  '&.Mui-selected': {
-                    bgcolor: 'background.paper',
-                    color: 'primary.main',
-                    boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
-                    fontWeight: 600,
-                  },
-                  '&:hover': {
-                    bgcolor: 'rgba(0,0,0,0.05)',
-                  }
-                }
-              }}
+              sx={toolbarToggleGroupSx}
             >
               <MuiTooltip title={shouldUseLogScale(chartHistory) && yAxisScale === 'linear' ? t('scales.logRecommendedHint') : t('scales.linear')}>
                 <ToggleButton 
@@ -983,6 +1118,95 @@ const TransactionHistorySection: React.FC<TransactionHistorySectionProps> = ({
             </MuiTooltip>
           </Box>
         )}
+        {activeTab === TAB_NET_POSITION && rangeEndsToday && aggregationPeriod === 'daily' && (
+          <Box
+            aria-label={t('projection.toolbar', { defaultValue: 'Projection controls' })}
+            sx={{
+              display: 'flex',
+              gap: 0.5,
+              alignItems: 'center',
+              flexWrap: 'wrap',
+              p: 0.5,
+              borderRadius: '12px',
+              bgcolor: (theme) => theme.palette.mode === 'dark'
+                ? 'rgba(255,255,255,0.05)'
+                : 'rgba(0,0,0,0.03)',
+            }}
+          >
+            {hasInvestmentActivity && (
+              <>
+                <ToggleButtonGroup
+                  value={investmentBasis}
+                  exclusive
+                  onChange={(_, basis: InvestmentBasis | null) => basis && setInvestmentBasis(basis)}
+                  size="small"
+                  aria-label={t('projection.basisLabel', { defaultValue: 'Investments' })}
+                  sx={toolbarToggleGroupSx}
+                >
+                  <ToggleButton value="before">{t('projection.basis.before', { defaultValue: 'Before investing' })}</ToggleButton>
+                  <ToggleButton value="after">{t('projection.basis.after', { defaultValue: 'After investing' })}</ToggleButton>
+                </ToggleButtonGroup>
+                <Divider orientation="vertical" flexItem sx={{ mx: 0.25 }} />
+              </>
+            )}
+            <Typography id="projection-until-label" variant="caption" sx={{ color: 'text.secondary', px: 0.75 }}>
+              {t('projection.until', { defaultValue: 'Projection until:' })}
+            </Typography>
+            <ToggleButtonGroup
+              value={projectionHorizon}
+              exclusive
+              onChange={(event, horizon: ProjectionHorizon | null) => {
+                // Custom only applies once a date is confirmed in the picker.
+                if (horizon === 'custom') openCustomProjection(event.currentTarget as HTMLElement);
+                else if (horizon) setSelectedProjectionHorizon(horizon);
+              }}
+              size="small"
+              aria-labelledby="projection-until-label"
+              sx={toolbarToggleGroupSx}
+            >
+              {PROJECTION_HORIZONS.map((horizon) => (
+                <ToggleButton
+                  key={horizon}
+                  value={horizon}
+                  onClick={horizon === 'custom' && projectionHorizon === 'custom'
+                    ? (event) => openCustomProjection(event.currentTarget)
+                    : undefined}
+                >
+                  {t(`projection.horizon.${horizon}`, { defaultValue: { eom: 'EOM', '30': '30D', custom: 'Custom' }[horizon] })}
+                </ToggleButton>
+              ))}
+            </ToggleButtonGroup>
+          </Box>
+        )}
+        <Popover
+          open={Boolean(customProjectionAnchor)}
+          anchorEl={customProjectionAnchor}
+          onClose={() => setCustomProjectionAnchor(null)}
+          anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+          transformOrigin={{ vertical: 'top', horizontal: 'right' }}
+          slotProps={{ paper: { sx: { mt: 1, p: 2, borderRadius: 2, width: 280 } } }}
+        >
+          <LocalizationProvider dateAdapter={AdapterDateFns}>
+            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+              <DatePicker
+                label={t('projection.customDate', { defaultValue: 'Project until' })}
+                value={draftProjectionEnd}
+                onChange={setDraftProjectionEnd}
+                minDate={projectionDateLimits.min}
+                maxDate={projectionDateLimits.max}
+                slotProps={{ textField: { size: 'small', fullWidth: true } }}
+              />
+              <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 1 }}>
+                <Button size="small" onClick={() => setCustomProjectionAnchor(null)}>
+                  {t('projection.cancel', { defaultValue: 'Cancel' })}
+                </Button>
+                <Button size="small" variant="contained" disabled={!draftProjectionEnd || !isValid(draftProjectionEnd)} onClick={applyCustomProjection}>
+                  {t('projection.apply', { defaultValue: 'Apply' })}
+                </Button>
+              </Box>
+            </Box>
+          </LocalizationProvider>
+        </Popover>
       </Box>
       <Popover
         open={settingsOpen}
@@ -1205,16 +1429,19 @@ const TransactionHistorySection: React.FC<TransactionHistorySectionProps> = ({
                     {t('legend.income')}: {formatAmount(income)}{isInGap ? ` (${t('legend.noData')})` : ''}
                   </Typography>
                   {renderSplitDetails(data, 'income')}
+                  {renderForecastTierDetails(data, 'income')}
                   <Typography variant="body2" color={isInGap ? 'text.secondary' : 'error.main'}>
                     {t('legend.expenses')}: {formatAmount(expenses)}{isInGap ? ` (${t('legend.noData')})` : ''}
                   </Typography>
                   {renderSplitDetails(data, 'expenses')}
+                  {renderForecastTierDetails(data, 'expenses')}
                   {investments !== undefined && (
                     <Typography variant="body2" color={isInGap ? 'text.secondary' : 'info.main'}>
                       {t('legend.investments')}: {investments < 0 ? '-' : ''}{formatAmount(Math.abs(investments))}{isInGap ? ` (${t('legend.noData')})` : ''}
                     </Typography>
                   )}
                   {renderSplitDetails(data, 'investments')}
+                  {renderForecastTierDetails(data, 'investments')}
                   {hasRollingAverages && data.rolling && <Box sx={{ mt: 1, pt: 1, borderTop: 1, borderColor: 'divider' }}>
                     <Typography variant="caption" sx={{ fontWeight: 600 }}>{t('rolling.title')}</Typography>
                     <Typography variant="caption" sx={{ display: 'block' }}>
@@ -1228,7 +1455,7 @@ const TransactionHistorySection: React.FC<TransactionHistorySectionProps> = ({
               );
             }}
           />
-          <Legend content={splitBars ? () => (
+          <Legend content={splitBars || tieredForecastBars ? () => (
             <Box sx={{ display: 'flex', justifyContent: 'center', flexWrap: 'wrap', gap: 2, pt: 1 }}>
               {(['income', 'expenses', 'investments'] as BarFlow[]).map(flow => (
                 <Box key={flow} sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
@@ -1236,7 +1463,19 @@ const TransactionHistorySection: React.FC<TransactionHistorySectionProps> = ({
                   <Typography variant="caption" color={flowColor(flow)}>{t(`legend.${flow}`)}</Typography>
                 </Box>
               ))}
-              {showForecast && hasForecastSeries && (
+              {tieredForecastBars ? (
+                <MuiTooltip title={t('forecast.confidenceLegendHint')}>
+                  <Box aria-label={t('forecast.confidenceLegendHint')} sx={{ display: 'flex', alignItems: 'center', gap: 1.5, cursor: 'help' }}>
+                    {CONFIDENCE_TIERS.map(tier => (
+                      <Box key={tier} sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
+                        <Box sx={{ width: 12, height: 12, border: '1px dashed', borderColor: 'text.secondary',
+                          bgcolor: alpha(theme.palette.text.primary, forecastTierOpacity[tier]) }} />
+                        <Typography variant="caption" color="text.secondary">{t(`forecast.confidenceTier.${tier}`)}</Typography>
+                      </Box>
+                    ))}
+                  </Box>
+                </MuiTooltip>
+              ) : showForecast && hasForecastSeries && (
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
                   <Box sx={{ width: 12, height: 12, border: '1px dashed', borderColor: 'text.secondary', bgcolor: 'action.hover' }} />
                   <Typography variant="caption" color="text.secondary">{t('forecast.expected')}</Typography>
@@ -1287,42 +1526,9 @@ const TransactionHistorySection: React.FC<TransactionHistorySectionProps> = ({
                 maxBarSize={36}
                 name={t('legend.investments')}
               />
-              {showForecast && hasForecastSeries && (
-                <Bar isAnimationActive={false}
-                  dataKey="forecastIncome"
-                  stackId="income"
-                  fill={alpha(theme.palette.success.main, 0.38)}
-                  stroke={theme.palette.success.main}
-                  strokeDasharray="4 2"
-                  radius={[2, 2, 0, 0]}
-                  maxBarSize={36}
-                  name={`${t('forecast.income')} (${t('forecast.expected')})`}
-                />
-              )}
-              {showForecast && hasForecastSeries && (
-                <Bar isAnimationActive={false}
-                  dataKey="forecastExpenses"
-                  stackId="expenses"
-                  fill={alpha(theme.palette.error.main, 0.38)}
-                  stroke={theme.palette.error.main}
-                  strokeDasharray="4 2"
-                  radius={[2, 2, 0, 0]}
-                  maxBarSize={36}
-                  name={`${t('forecast.expenses')} (${t('forecast.expected')})`}
-                />
-              )}
-              {showForecast && hasInvestmentForecastSeries && (
-                <Bar isAnimationActive={false}
-                  dataKey="forecastInvestments"
-                  stackId="investments"
-                  fill={alpha(theme.palette.info.main, 0.38)}
-                  stroke={theme.palette.info.main}
-                  strokeDasharray="4 2"
-                  radius={[2, 2, 0, 0]}
-                  maxBarSize={36}
-                  name={`${t('forecast.investments')} (${t('forecast.expected')})`}
-                />
-              )}
+              {showForecast && hasForecastSeries && renderForecastBars('income')}
+              {showForecast && hasForecastSeries && renderForecastBars('expenses')}
+              {showForecast && hasInvestmentForecastSeries && renderForecastBars('investments')}
             </>
           ) : (
             <>
@@ -1712,20 +1918,7 @@ const TransactionHistorySection: React.FC<TransactionHistorySectionProps> = ({
         </>
       )}
       {activeTab === TAB_ALLOCATION && <RollingAllocationPanel />}
-      {/* Tab 1: Income and expense calendar */}
-      {activeTab === TAB_CALENDAR && (
-        <IncomeExpenseCalendar
-          includeCardRepayments={includeCardRepayments}
-          includeCapitalReturns={includeCapitalReturns}
-          formatCurrency={formatCurrency}
-          selectedDate={hoveredDate}
-          onSelectDate={(date) => {
-            fetchTransactionsByDate(date);
-            setHoveredDate(date);
-          }}
-        />
-      )}
-      {/* Tab 2: Net Position (Cumulative Cash Flow with Forecast) */}
+      {/* Tab 1: Net Position (Cumulative Cash Flow with Forecast) */}
       {activeTab === TAB_NET_POSITION && (
         <Box>
           {forecastLoading && (
@@ -1756,7 +1949,10 @@ const TransactionHistorySection: React.FC<TransactionHistorySectionProps> = ({
                     mb: 2,
                     textAlign: 'center'
                   }}>
-                  {selectedPeriodLabel} + {t('forecast.next30Days', { defaultValue: '30 day forecast' })} • {t('forecast.forecastData')}
+                  {selectedPeriodLabel} + {t('projection.forecastUntil', {
+                    defaultValue: 'forecast until {{date}}',
+                    date: format(parseLocalDate(projectionEndDate), 'MMM dd'),
+                  })}
                 </Typography>
               )}
               {aggregationPeriod !== 'daily' && (
@@ -1792,28 +1988,36 @@ const TransactionHistorySection: React.FC<TransactionHistorySectionProps> = ({
                   />
                   <YAxis 
                     tick={{ fill: theme.palette.text.secondary, fontSize: 12 }} 
-                    tickFormatter={formatCurrencyValue} 
+                    tickFormatter={formatSignedCurrencyValue} 
                     axisLine={false}
                     tickLine={false}
                   />
                   <Tooltip 
                     formatter={(value, name) => [Array.isArray(value)
-                      ? `${formatCurrencyValue(Number(value[0]))} – ${formatCurrencyValue(Number(value[1]))}`
-                      : formatCurrencyValue(typeof value === 'number' ? value : 0), name ?? '']}
+                      ? `${formatSignedCurrencyValue(Number(value[0]))} – ${formatSignedCurrencyValue(Number(value[1]))}`
+                      : formatSignedCurrencyValue(typeof value === 'number' ? value : 0), name ?? '']}
                     labelFormatter={(label) => format(parseLocalDate(String(label ?? '')), 'MMM dd, yyyy')}
                   />
                   <Legend />
                   <ReferenceLine y={0} stroke={theme.palette.divider} strokeWidth={2} />
-                  {/* Pointwise cumulative range; no band for legacy scenario paths. */}
-                  {netPositionData.some((day: any) => Array.isArray(day.forecastRange)) && <Area
+                  {hasProjection && (
+                    <ReferenceLine
+                      x={format(new Date(), 'yyyy-MM-dd')}
+                      stroke={theme.palette.text.secondary}
+                      strokeDasharray="2 4"
+                      label={{ value: t('projection.today', { defaultValue: 'Today' }), position: 'insideTopLeft', fill: theme.palette.text.secondary, fontSize: 11 }}
+                    />
+                  )}
+                  {/* Pointwise cumulative range around net; no band for legacy scenario paths. */}
+                  {hasNetPositionBand && <Area
                     className="forecast-range-band"
                     type="linear"
                     dataKey="forecastRange"
-                    fill={theme.palette.info.main}
+                    fill={theme.palette.primary.main}
                     fillOpacity={theme.palette.mode === 'dark' ? 0.24 : 0.16}
                     // Recharts uses the stroke colour for legend text too.
                     // Hide only the outline so the legend remains readable.
-                    stroke={theme.palette.info.main}
+                    stroke={theme.palette.primary.main}
                     strokeOpacity={0}
                     legendType="rect"
                     name={t('forecast.confidenceBand')}
@@ -1827,7 +2031,9 @@ const TransactionHistorySection: React.FC<TransactionHistorySectionProps> = ({
                     fill="url(#netFlowGradient)" 
                     stroke={theme.palette.primary.main}
                     strokeWidth={3}
-                    name={`${t('forecast.actualNet')}`}
+                    name={netPositionBasis === 'after'
+                      ? t('forecast.actualAfterInvesting', { defaultValue: 'Actual after investing' })
+                      : t('forecast.actualNet')}
                     connectNulls={true}
                   />
                   {/* No data zone - grey shaded area for gap period (no scraped data) */}
@@ -1860,21 +2066,13 @@ const TransactionHistorySection: React.FC<TransactionHistorySectionProps> = ({
                       if (props.value === null || props.value === undefined || !Number.isFinite(props.cx) || !Number.isFinite(props.cy)) return null;
                       return <circle cx={props.cx} cy={props.cy} r={2} fill={theme.palette.warning.main} />;
                     }}
-                    name={t('forecast.beforeInvesting', { defaultValue: 'Forecast before investing' })}
+                    name={netPositionBasis === 'after'
+                      ? t('forecast.afterInvesting', { defaultValue: 'Forecast after investing' })
+                      : t('forecast.beforeInvesting', { defaultValue: 'Forecast before investing' })}
                     connectNulls={true}
                   />
-                  {netPositionData.some((item: { isForecast: boolean; forecastAfterInvesting?: number }) => item.isForecast && item.forecastAfterInvesting !== undefined) && (
-                    <Line
-                      type="monotone"
-                      dataKey="forecastAfterInvesting"
-                      stroke={theme.palette.secondary.main}
-                      strokeWidth={2.5}
-                      strokeDasharray="5 5"
-                      dot={false}
-                      name={t('forecast.afterInvesting', { defaultValue: 'Forecast after investing' })}
-                      connectNulls={false}
-                    />
-                  )}
+                  {/* Scenario lines only for legacy responses; the band already spans P10–P90. */}
+                  {!hasNetPositionBand && <>
                   {/* P90 Best Case - green dashed */}
                   <Line 
                     type="monotone" 
@@ -1908,6 +2106,7 @@ const TransactionHistorySection: React.FC<TransactionHistorySectionProps> = ({
                     name={`${t('forecast.worstCase')} (P10)`}
                     connectNulls={true}
                   />
+                  </>}
                 </ComposedChart>
               </ResponsiveContainer>
             </>
@@ -2124,21 +2323,25 @@ const TransactionHistorySection: React.FC<TransactionHistorySectionProps> = ({
           }
         }}
       />
-      <FinancialCorrectionDialog
-        open={Boolean(correctionTarget)}
-        target={correctionTarget}
-        sourceFeature="dashboard_forecast"
-        sourceKey={correctionTarget?.occurrenceId || (correctionTarget?.patternId ? `financial_pattern:${correctionTarget.patternId}` : undefined)}
-        onClose={() => setCorrectionTarget(null)}
-        onApplied={(patternId, action) => {
-          if (action === 'skip_occurrence' && correctionTarget?.occurrenceId) {
-            setHiddenPredictionIds((current) => new Set(current).add(correctionTarget.occurrenceId!));
-          } else if (patternId) {
-            setHiddenPatternIds((current) => new Set(current).add(patternId));
-          }
-          refreshForecast();
-        }}
-      />
+      {correctionTarget && (
+        <Suspense fallback={null}>
+          <FinancialCorrectionDialog
+            open
+            target={correctionTarget}
+            sourceFeature="dashboard_forecast"
+            sourceKey={correctionTarget.occurrenceId || (correctionTarget.patternId ? `financial_pattern:${correctionTarget.patternId}` : undefined)}
+            onClose={() => setCorrectionTarget(null)}
+            onApplied={(patternId, action) => {
+              if (action === 'skip_occurrence' && correctionTarget.occurrenceId) {
+                setHiddenPredictionIds((current) => new Set(current).add(correctionTarget.occurrenceId!));
+              } else if (patternId) {
+                setHiddenPatternIds((current) => new Set(current).add(patternId));
+              }
+              refreshForecast();
+            }}
+          />
+        </Suspense>
+      )}
     </Paper>
   );
 };

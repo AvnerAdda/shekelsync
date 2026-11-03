@@ -130,6 +130,66 @@ function expandChanges(changes, today, horizon) {
   return byDate;
 }
 
+/**
+ * Goal contributions in cents, reserved on the first of each upcoming month up
+ * to each goal's remaining amount and target date. `external` goals move money
+ * out of the included bank accounts; `included_cash` goals only earmark it.
+ */
+function goalContributionsByDate(goals, today, horizon) {
+  const cents = (value) => Math.round(value * 100);
+  const state = goals.map((goal) => ({
+    remaining: Math.max(0, cents(goal.target_amount) - cents(goal.saved_amount)),
+    amount: cents(goal.monthly_contribution),
+    target: goal.target_date,
+    external: goal.reserve_location === 'external',
+  }));
+  const byDate = new Map();
+  for (let dayIndex = 1; dayIndex <= horizon; dayIndex += 1) {
+    const date = shiftDays(today, dayIndex);
+    if (!date.endsWith('-01')) continue;
+    const entry = { total: 0, external: 0, included: 0 };
+    state.forEach((goal) => {
+      if (goal.target && date > goal.target) return;
+      const amount = Math.min(goal.remaining, goal.amount);
+      goal.remaining -= amount;
+      entry.total += amount;
+      entry[goal.external ? 'external' : 'included'] += amount;
+    });
+    if (entry.total) byDate.set(date, entry);
+  }
+  return byDate;
+}
+
+/**
+ * Daily plan adjustments for the bank-balance outlook (units, not cents).
+ * The balance moves by scenario changes and external goal contributions; the
+ * reserved floor is the buffer plus included-cash savings and contributions.
+ */
+function planCashFlows({ today, horizon, goals = [], changes = [], cashBuffer = 0 }) {
+  const cents = (value) => Math.round(value * 100);
+  const units = (value) => value / 100;
+  const contributions = goalContributionsByDate(goals, today, horizon);
+  const changesByDate = expandChanges(changes, today, horizon);
+  let floor = cents(cashBuffer) + goals.filter((goal) => goal.reserve_location === 'included_cash')
+    .reduce((sum, goal) => sum + cents(goal.saved_amount), 0);
+  const startingFloor = floor;
+  const daily = [];
+  for (let dayIndex = 1; dayIndex <= horizon; dayIndex += 1) {
+    const date = shiftDays(today, dayIndex);
+    const contribution = contributions.get(date) || { external: 0, included: 0 };
+    const change = changesByDate.get(date) || { net: 0 };
+    floor += contribution.included;
+    daily.push({
+      date,
+      scenario_change: units(change.net),
+      external_contributions: units(contribution.external),
+      included_contributions: units(contribution.included),
+      reserved_floor: units(floor),
+    });
+  }
+  return { starting_floor: units(startingFloor), daily };
+}
+
 /** All ledger arithmetic uses cents; future income never increases spendability. */
 function calculateProjection({ today, horizon, cashBalance, settings, spendingUntil = settings.next_income_date, goals, forecastDays, cardCommitments, changes = [] }) {
   const cents = (value) => Math.round(value * 100);
@@ -143,7 +203,7 @@ function calculateProjection({ today, horizon, cashBalance, settings, spendingUn
   let commitmentsUntilIncome = 0;
   let contributionsUntilIncome = 0;
   let contributionsTotal = 0;
-  const contributions = goals.map((goal) => ({ remaining: Math.max(0, cents(goal.target_amount) - cents(goal.saved_amount)), amount: cents(goal.monthly_contribution), target: goal.target_date }));
+  const contributionsByDate = goalContributionsByDate(goals, today, horizon);
   const byDate = new Map(forecastDays.map((day) => [day.date, day]));
   const changesByDate = expandChanges(changes, today, horizon);
   const daily = [];
@@ -154,15 +214,7 @@ function calculateProjection({ today, horizon, cashBalance, settings, spendingUn
     const income = cents(predicted.expectedOperatingIncome);
     const expenses = cents(predicted.expectedOperatingExpenses);
     const change = changesByDate.get(date) || { net: 0, outflow: 0 };
-    let contribution = 0;
-    if (date.endsWith('-01')) {
-      contributions.forEach((goal) => {
-        if (goal.target && date > goal.target) return;
-        const amount = Math.min(goal.remaining, goal.amount);
-        contribution += amount;
-        goal.remaining -= amount;
-      });
-    }
+    const contribution = contributionsByDate.get(date)?.total || 0;
     contributionsTotal += contribution;
     // The next income date itself is included: bill debits may precede salary credit.
     if (spendingUntil && date <= spendingUntil) {
@@ -196,4 +248,4 @@ function calculateProjection({ today, horizon, cashBalance, settings, spendingUn
   };
 }
 
-module.exports = { invalid, dateKey, validDate, shiftDays, monthlyOccurrence, money, title, validateGoal, describeGoal, validateChanges, validateHorizon, expandChanges, calculateProjection };
+module.exports = { invalid, dateKey, validDate, shiftDays, monthlyOccurrence, money, title, validateGoal, describeGoal, validateChanges, validateHorizon, expandChanges, goalContributionsByDate, planCashFlows, calculateProjection };
