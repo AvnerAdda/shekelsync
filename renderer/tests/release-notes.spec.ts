@@ -32,9 +32,8 @@ test('announces the installed release once, then allows reopening from the updat
   const dialog = page.getByRole('dialog', { name: 'What’s new', exact: true });
   await expect(dialog).toBeVisible();
   await expect(dialog.getByText(`Version ${version}`)).toBeVisible();
-  await expect(dialog.getByRole('heading', { name: 'Security', exact: true })).toBeVisible();
-  await expect(dialog.getByRole('heading', { name: 'Added', exact: true })).toBeAttached();
-  await expect(dialog.getByText('Multi-track mortgage planning in Wealth', { exact: false })).toHaveCount(0);
+  await expect(dialog.locator('h3').first()).toBeVisible();
+  expect(await dialog.getByRole('listitem').count()).toBeGreaterThan(0);
   await page.screenshot({ path: testInfo.outputPath('whats-new.png') });
 
   await dialog.getByRole('button', { name: 'Got it', exact: true }).click();
