@@ -14,6 +14,10 @@ Release binaries are published at
 
 ## [0.2.4] - 2026-11-03
 
+### Security
+- Update build-tool dependencies `follow-redirects` and `joi` to resolve
+  high-severity advisories.
+
 ### Added
 - Multi-track mortgage planning in Wealth, including repayment schedules,
   drawdowns, prepayments, payment reconciliation, and Bank of Israel / CBS
