@@ -234,7 +234,8 @@ function authenticationMiddleware(req, res, next) {
  * Must be used after authentication middleware
  */
 function rateLimitMiddleware(req, res, next) {
-  // Skip rate limiting for paths that bypass authentication.
+  // Stripe webhook requests have their own token-independent limiter in the
+  // donations router; health checks do not need a limiter.
   if (isUnauthenticatedPath(req.path)) {
     return next();
   }

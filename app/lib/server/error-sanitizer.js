@@ -82,6 +82,7 @@ function sanitizeError(error, options = {}) {
     includeStack = isDev,
     statusCode = 500,
     defaultMessage = 'An error occurred',
+    exposeMessage = true,
   } = options;
 
   if (!error) {
@@ -92,7 +93,7 @@ function sanitizeError(error, options = {}) {
   }
 
   const sanitized = {
-    error: error.message || defaultMessage,
+    error: exposeMessage ? (error.message || defaultMessage) : defaultMessage,
     statusCode: error.statusCode || statusCode,
   };
 
@@ -107,6 +108,27 @@ function sanitizeError(error, options = {}) {
   }
 
   return sanitized;
+}
+
+/**
+ * Build a public response for services that throw structured errors. Only
+ * explicitly allowed validation codes/messages may cross the API boundary.
+ */
+function sanitizeStructuredError(error, { defaultMessage, defaultCode, clientErrors = {} }) {
+  const candidateCode = error?.error?.code;
+  const isClientError = typeof candidateCode === 'string' &&
+    Object.prototype.hasOwnProperty.call(clientErrors, candidateCode);
+
+  return {
+    statusCode: isClientError ? 400 : 500,
+    response: {
+      success: false,
+      error: {
+        code: isClientError ? candidateCode : defaultCode,
+        message: isClientError ? clientErrors[candidateCode] : defaultMessage,
+      },
+    },
+  };
 }
 
 /**
@@ -186,6 +208,7 @@ function wrapAsyncHandler(handler) {
 
 module.exports = {
   sanitizeError,
+  sanitizeStructuredError,
   sanitizeErrorForLogging,
   redactSensitiveData,
   createErrorHandler,

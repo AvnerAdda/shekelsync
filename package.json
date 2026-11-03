@@ -12,6 +12,7 @@
     "test": "npm --prefix app run test:coverage && npm --prefix renderer run test:unit && npm --prefix renderer run test:e2e",
     "test:ci": "npm --prefix app run test:coverage && npm --prefix renderer run test:unit",
     "test:security": "npm --prefix app run test",
+    "test:dependency-security": "node scripts/verify-minimatch-security.cjs",
     "test:security:coverage": "npm --prefix app run test:coverage",
     "test:security:watch": "npm --prefix app exec -- vitest watch",
     "audit:security": "npm audit --omit=dev --audit-level=moderate && npm --prefix app audit --omit=dev --audit-level=moderate && npm --prefix renderer audit --omit=dev --audit-level=moderate && npm audit --audit-level=high && npm --prefix app audit --audit-level=high && npm --prefix renderer audit --audit-level=high && npm run test:security:coverage",

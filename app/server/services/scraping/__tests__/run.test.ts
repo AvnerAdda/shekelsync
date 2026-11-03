@@ -243,6 +243,24 @@ describe('scraping run service', () => {
     mapInstitutionToVendorCodeMock.mockResolvedValue(null);
   });
 
+  describe('diagnostic filenames', () => {
+    it.each([
+      [' --Bank / Account!-- ', 'Bank-Account'],
+      ['---', 'unknown'],
+      ['', 'unknown'],
+      ['bank_account-123', 'bank_account-123'],
+    ])('normalizes %s without path separators', (input, expected) => {
+      expect(runService._internal.sanitizeDebugFilenamePart(input)).toBe(expected);
+    });
+
+    it('bounds adversarial and multibyte names before processing', () => {
+      const sanitize = runService._internal.sanitizeDebugFilenamePart;
+      expect(sanitize('a' + '-'.repeat(1_000_000) + 'a')).toBe('a');
+      expect(sanitize('x'.repeat(1_000_000))).toHaveLength(100);
+      expect(sanitize('א'.repeat(1_000_000), 'credential')).toBe('credential');
+    });
+  });
+
   describe('runScrape', () => {
     it('throws error for missing companyId', async () => {
       await expect(
@@ -2259,7 +2277,8 @@ describe('scraping run service', () => {
 
       expect(result).toEqual({ bankTransactions: 0 });
       expect(logger.error).toHaveBeenCalledWith(
-        expect.stringContaining('Failed to update balance for undefined:'),
+        '[Scrape] Failed to update balance:',
+        { vendor: 'hapoalim', accountNumber: undefined },
         'balance lookup failed',
       );
     });
