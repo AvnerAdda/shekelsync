@@ -74,7 +74,7 @@ jobs:
       - name: Install renderer dependencies
         run: npm --prefix renderer ci
 
-      # Policy: anything that ships to users must have no moderate+ advisories.
+      # Policy: production dependencies must have no moderate+ advisories.
       # Build/lint tooling only blocks on high/critical; its moderate findings
       # (often unfixable until upstream tools update) are reported as warnings.
       - name: Audit production dependencies (blocking, moderate+)
@@ -89,22 +89,23 @@ jobs:
           npm --prefix app audit --audit-level=high
           npm --prefix renderer audit --audit-level=high
 
-      - name: Report moderate advisories in build and dev tooling
+      - name: Report moderate and low dependency advisories
         if: always()
+        shell: bash
         run: |
           {
-            echo "## Dev/build dependency advisories (non-blocking)"
+            echo "## Moderate and low dependency advisories"
             echo ""
             echo "| Scope | Moderate | Low |"
             echo "|---|---|---|"
           } >> "$GITHUB_STEP_SUMMARY"
           for scope in . app renderer; do
-            counts=$(npm --prefix "$scope" audit --json 2>/dev/null | jq -r '.metadata.vulnerabilities | "\(.moderate // 0) \(.low // 0)"')
+            counts=$(npm --prefix "$scope" audit --json --audit-level=high | jq -er 'select(.error == null) | .metadata.vulnerabilities | select(type == "object") | "\(.moderate // 0) \(.low // 0)"')
             read -r moderate low <<< "$counts"
             name=$([ "$scope" = "." ] && echo root || echo "$scope")
             echo "| $name | $moderate | $low |" >> "$GITHUB_STEP_SUMMARY"
             if [ "${moderate:-0}" -gt 0 ]; then
-              echo "::warning title=Dev dependency advisories ($name)::$moderate moderate advisories in build/dev tooling. (Production dependencies are checked by the blocking step above.) Run 'npm --prefix $scope audit' for details."
+              echo "::warning title=Dependency advisories ($name)::$moderate moderate advisories remain. Production moderate+ and all high+ advisories are checked by the blocking steps above. Run 'npm --prefix $scope audit' for details."
             fi
           done
 
@@ -430,7 +431,8 @@ jobs:
           echo "" >> security-report.md
           echo "## Checks Completed:" >> security-report.md
           echo "- ✅ Security test suite passed" >> security-report.md
-          echo "- ✅ Dependency audit clean" >> security-report.md
+          echo "- ✅ Dependency audit policy passed (production: moderate+ blocked; all dependencies: high+ blocked)" >> security-report.md
+          echo "- Moderate/low findings remain visible in the Dependency Security Audit job summary." >> security-report.md
           echo "- ✅ Security linting passed" >> security-report.md
           echo "- ✅ Security headers verified" >> security-report.md
           echo "- ✅ Authentication implementation verified" >> security-report.md

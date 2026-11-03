@@ -21,12 +21,15 @@ jobs:
         with:
           node-version: "24"
 
-      # Releases must not ship known high/critical advisories in runtime dependencies.
-      - name: Audit production dependencies
+      # Match the CI policy: production moderate+ and all high+ advisories block.
+      - name: Audit dependencies
         run: |
-          npm audit --omit=dev --audit-level=high
-          npm --prefix app audit --omit=dev --audit-level=high
-          npm --prefix renderer audit --omit=dev --audit-level=high
+          npm audit --omit=dev --audit-level=moderate
+          npm --prefix app audit --omit=dev --audit-level=moderate
+          npm --prefix renderer audit --omit=dev --audit-level=moderate
+          npm audit --audit-level=high
+          npm --prefix app audit --audit-level=high
+          npm --prefix renderer audit --audit-level=high
 
   build:
     name: Build Electron (${{ matrix.os }})
