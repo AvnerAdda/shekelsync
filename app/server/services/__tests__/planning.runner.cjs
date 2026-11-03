@@ -95,11 +95,16 @@ async function main() {
     assert.equal(automatic.next_income_source, 'detected');
     assert.equal(automatic.card_commitments, 700);
     assert.equal(automatic.card_commitments_source, 'imported');
+    // The 10 Sep bill is due on payday: before the next income, and still deducted.
+    assert.equal(automatic.card_commitments_before_income, 700);
+    assert.equal(automatic.card_commitments_after_income, 0);
     // Exercise credential discovery through SQLite: a fresh login cannot hide a
     // stale or never-synced second login at the same provider.
     db.exec('SAVEPOINT card_credential_freshness');
     await service.updateSettings({ card_commitments_amount: 0 });
-    assert.equal((await service.getProjection()).card_commitments_source, 'manual');
+    const manualCards = await service.getProjection();
+    assert.equal(manualCards.card_commitments_source, 'manual');
+    assert.equal(manualCards.card_commitments_after_income, null, 'a manual amount has no billing dates to split');
     const secondCardCredential = db.prepare("INSERT INTO vendor_credentials (vendor, last_scrape_success) VALUES ('max', ?)").run(today).lastInsertRowid;
     let cardProjection = await service.getProjection();
     assert.equal(cardProjection.status, 'ready');

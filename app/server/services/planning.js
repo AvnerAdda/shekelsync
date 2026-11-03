@@ -1,6 +1,6 @@
 const { createHash } = require('crypto');
 const math = require('./planning-math.js');
-const { detectNextIncome, detectCardCommitments } = require('./planning-automation.js');
+const { detectNextIncome, detectCardCommitments, splitCardCommitments } = require('./planning-automation.js');
 const { recentSpendingEstimate } = require('./planning-history.js');
 const { normalizePlanningCurrency } = require('./planning-currency.js');
 
@@ -256,8 +256,9 @@ function createPlanningService(dependencies = {}) {
     const cardCommitments = cash.hasCards && cardConfirmed ? Number(settings.card_commitments_amount) : cash.automaticCards.amount;
     const cardSource = cash.hasCards && cardConfirmed ? 'manual' : cash.automaticCards.source;
     if (cardCommitments === null) codes.push(cash.automaticCards.reason || 'CARD_DATA_MISSING');
+    const cardSplit = cardSource === 'manual' || !cash.hasCards ? null : splitCardCommitments(cash.automaticCards.bills, spendingUntil);
     return { today, horizon, goals: data.goals, settings: { ...publicSettings(settings), next_income_date: incomeDate }, cash, days,
-      codes: [...new Set(codes)], completeForecast, cardCommitments, cardSource, incomeSource, spendingUntil, spendingSource, historyDays };
+      codes: [...new Set(codes)], completeForecast, cardCommitments, cardSource, cardSplit, incomeSource, spendingUntil, spendingSource, historyDays };
   }
 
   function project(input, changes = []) {
@@ -272,6 +273,9 @@ function createPlanningService(dependencies = {}) {
       next_income_source: incomeSource, spending_period_end: spendingUntil,
       spending_source: input.spendingSource, spending_history_days: input.historyDays,
       card_commitments: cardCommitments, card_commitments_source: cardSource, card_confirmation_required: false, latest_balance_date: cash.latestBalanceDate,
+      // Informational only: every outstanding bill is still deducted now.
+      card_commitments_before_income: input.cardSplit && cardCommitments !== null ? input.cardSplit.before_income : null,
+      card_commitments_after_income: input.cardSplit && cardCommitments !== null ? input.cardSplit.after_income : null,
       ...calculated,
       available_spend: codes.length ? null : calculated.available_spend,
       shortfall: codes.length ? null : calculated.shortfall,
