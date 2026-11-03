@@ -1,0 +1,53 @@
+diff --git a/node_modules/@electron/asar/lib/asar.js b/node_modules/@electron/asar/lib/asar.js
+index fd94e84..40e91a6 100644
+--- a/node_modules/@electron/asar/lib/asar.js
++++ b/node_modules/@electron/asar/lib/asar.js
+@@ -38,7 +38,7 @@ exports.extractAll = extractAll;
+ exports.uncache = uncache;
+ exports.uncacheAll = uncacheAll;
+ const path = __importStar(require("path"));
+-const minimatch_1 = __importDefault(require("minimatch"));
++const minimatch_1 = require("minimatch");
+ const wrapped_fs_1 = __importDefault(require("./wrapped-fs"));
+ const filesystem_1 = require("./filesystem");
+ const disk = __importStar(require("./disk"));
+@@ -51,7 +51,7 @@ const crawlfs_1 = require("./crawlfs");
+  * @param unpackDirs - Array of directory paths previously marked as unpacked
+  */
+ function isUnpackedDir(dirPath, pattern, unpackDirs) {
+-    if (dirPath.startsWith(pattern) || (0, minimatch_1.default)(dirPath, pattern)) {
++    if (dirPath.startsWith(pattern) || (0, minimatch_1.minimatch)(dirPath, pattern)) {
+         if (!unpackDirs.includes(dirPath)) {
+             unpackDirs.push(dirPath);
+         }
+@@ -144,7 +144,7 @@ async function createPackageFromFiles(src, dest, filenames, metadata = {}, optio
+         const shouldUnpackPath = function (relativePath, unpack, unpackDir) {
+             let shouldUnpack = false;
+             if (unpack) {
+-                shouldUnpack = (0, minimatch_1.default)(filename, unpack, { matchBase: true });
++                shouldUnpack = (0, minimatch_1.minimatch)(filename, unpack, { matchBase: true });
+             }
+             if (!shouldUnpack && unpackDir) {
+                 shouldUnpack = isUnpackedDir(relativePath, unpackDir, unpackDirs);
+diff --git a/node_modules/@electron/asar/lib/crawlfs.js b/node_modules/@electron/asar/lib/crawlfs.js
+index bc614ab..71f3add 100644
+--- a/node_modules/@electron/asar/lib/crawlfs.js
++++ b/node_modules/@electron/asar/lib/crawlfs.js
+@@ -32,7 +32,7 @@ const util_1 = require("util");
+ const glob_1 = require("glob");
+ const wrapped_fs_1 = __importDefault(require("./wrapped-fs"));
+ const path = __importStar(require("path"));
+-const glob = (0, util_1.promisify)(glob_1.glob);
++const glob = glob_1.glob;
+ async function determineFileType(filename) {
+     const stat = await wrapped_fs_1.default.lstat(filename);
+     if (stat.isFile()) {
+@@ -48,7 +48,7 @@ async function determineFileType(filename) {
+ }
+ async function crawl(dir, options) {
+     const metadata = {};
+-    const crawled = await glob(dir, options);
++    const crawled = await glob(dir, { ...options, windowsPathsNoEscape: process.platform === 'win32' });
+     const results = await Promise.all(crawled.map(async (filename) => [filename, await determineFileType(filename)]));
+     const links = [];
+     const filenames = results
