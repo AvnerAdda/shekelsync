@@ -101,17 +101,9 @@ const TitleBar: React.FC<TitleBarProps> = ({ sessionDisplayName, authLoading }) 
   const { mode, setMode, actualTheme } = useThemeMode();
   const { locale, setLocale } = useLocaleSettings();
 
-  const openFeedbackPage = useCallback(async () => {
-    const rawVersion = window.electronAPI?.app?.getVersion?.();
-    const version = typeof rawVersion === 'string'
-      ? rawVersion
-      : await Promise.resolve(rawVersion ?? 'unknown');
-    const platform = window.electronAPI?.platform;
-    const os = platform?.isWindows ? 'windows' : platform?.isMacOS ? 'macos' : platform?.isLinux ? 'linux' : 'unknown';
-    const localePrefix = locale !== 'he' ? `${locale}/` : '';
-    const url = `https://shekelsync.com/${localePrefix}feedback?version=${encodeURIComponent(version)}&os=${encodeURIComponent(os)}&locale=${encodeURIComponent(locale)}&source=app`;
-    window.open(url, '_blank', 'noopener,noreferrer');
-  }, [locale]);
+  const openFeedbackPage = useCallback(() => {
+    window.open('https://github.com/AvnerAdda/shekelsync/discussions', '_blank', 'noopener,noreferrer');
+  }, []);
 
   // Update manager
   const { updateState, checkForUpdates, downloadUpdate, openManualUpdatePage, installUpdate } = useUpdateManager();
@@ -1027,7 +1019,7 @@ const TitleBar: React.FC<TitleBarProps> = ({ sessionDisplayName, authLoading }) 
           <MenuItem
             onClick={() => {
               setMoreActionsAnchor(null);
-              void openFeedbackPage();
+              openFeedbackPage();
             }}
           >
             <ListItemIcon><FeedbackIcon fontSize="small" color="info" /></ListItemIcon>
