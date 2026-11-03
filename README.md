@@ -140,6 +140,14 @@ Their scoped peer overrides can be removed once both plugins declare ESLint 10
 support. Bank scraper fixes in `app/patches` are applied during installation;
 rebase and verify those patches when upgrading the scraper package.
 
+Build tooling overrides `minimatch` to 11.0.4+ and `glob` to 14.0.3+ to address
+GHSA-g3hv-75wg-m249. Compatibility patches in `app/patches` update legacy Electron
+build callers; shared patches in `patches` update the React and accessibility
+ESLint plugins in both installations. Postinstall applies these patches and
+fails if they cannot be applied. Recheck the patches when updating those tools;
+`app/lib/__tests__/build-glob-compat.test.js` covers the security regression,
+archive creation, file filters, cleanup, and affected lint rules.
+
 ## Development
 
 ```bash

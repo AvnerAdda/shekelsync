@@ -18,7 +18,7 @@
     "start": "electron .",
     "rebuild": "electron-rebuild -f -w better-sqlite3",
     "rebuild:sqlite": "CC=gcc-11 CXX=g++-11 npm rebuild better-sqlite3 --build-from-source",
-    "postinstall": "patch-package && electron-builder install-app-deps",
+    "postinstall": "patch-package --error-on-fail && patch-package --patch-dir ../patches --error-on-fail && electron-builder install-app-deps",
     "lint": "npm run lint:app && npm run lint:renderer",
     "lint:app": "eslint \"**/*.{ts,tsx}\"",
     "lint:renderer": "npm --prefix ../renderer run lint",
@@ -53,6 +53,8 @@
     "yargs": "^18.2.0"
   },
   "overrides": {
+    "minimatch": "^11.0.4",
+    "glob": "^14.0.3",
     "puppeteer-core": "^25.12.0",
     "eslint-plugin-react": {
       "eslint": "$eslint"

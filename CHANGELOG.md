@@ -12,6 +12,11 @@ Release binaries are published at
 
 ## [Unreleased]
 
+### Security
+- Upgrade build and lint dependencies to patched `minimatch` 11 and `glob` 14,
+  with compatibility fixes for existing tooling, resolving GHSA-g3hv-75wg-m249
+  and its transitive audit findings.
+
 ## [0.2.4] - 2026-11-03
 
 ### Security
