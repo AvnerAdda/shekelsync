@@ -1,5 +1,6 @@
 const crypto = require('crypto');
 const express = require('express');
+const { rateLimit } = require('express-rate-limit');
 
 const STRIPE_TOLERANCE_SECONDS = 300;
 
@@ -433,7 +434,20 @@ function createDonationsRouter({ services = {} } = {}) {
     }
   });
 
-  router.post('/stripe/webhook', async (req, res) => {
+  router.post('/stripe/webhook', rateLimit({
+    windowMs: 60 * 1000,
+    limit: 120,
+    // This is a loopback API. Share a bounded bucket across all senders rather
+    // than trusting caller-controlled forwarding headers or session tokens.
+    keyGenerator: () => 'stripe-webhook',
+    standardHeaders: 'draft-8',
+    legacyHeaders: false,
+    message: {
+      success: false,
+      error: 'Too many webhook requests. Try again shortly.',
+      code: 'STRIPE_WEBHOOK_RATE_LIMITED',
+    },
+  }), async (req, res) => {
     try {
       const webhookSecret = typeof process.env.STRIPE_WEBHOOK_SECRET === 'string'
         ? process.env.STRIPE_WEBHOOK_SECRET.trim()

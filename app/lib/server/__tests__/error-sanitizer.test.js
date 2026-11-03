@@ -152,6 +152,15 @@ describe('Error Sanitizer', () => {
   });
 
   describe('Error Sanitization for Client', () => {
+    test('can suppress internal messages independently of stack traces', () => {
+      const sanitized = sanitizeError(new Error('/private/database.sqlite'), {
+        defaultMessage: 'Operation failed',
+        exposeMessage: false,
+        includeStack: false,
+      });
+      expect(sanitized).toEqual({ error: 'Operation failed', statusCode: 500 });
+    });
+
     test('should sanitize basic error', () => {
       const error = new Error('Something went wrong');
       error.statusCode = 400;

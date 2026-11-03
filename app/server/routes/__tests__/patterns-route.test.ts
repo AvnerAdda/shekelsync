@@ -87,12 +87,11 @@ describe('Shared /api/patterns routes', () => {
       stack: 'list-stack',
     });
     const listRes = await request(app).get('/api/patterns').expect(503);
-    expect(listRes.body.error).toMatch(/list unavailable/i);
-    expect(listRes.body.details).toBe('list-stack');
+    expect(listRes.body).toEqual({ error: 'Failed to fetch duplicate patterns' });
 
     vi.spyOn(duplicatePatternsService, 'updatePattern').mockRejectedValue(new Error('update boom'));
     const updateRes = await request(app).put('/api/patterns').send({ id: 'x' }).expect(500);
-    expect(updateRes.body.error).toMatch(/update boom|failed to update/i);
+    expect(updateRes.body).toEqual({ error: 'Failed to update duplicate pattern' });
 
     vi.spyOn(duplicatePatternsService, 'deletePattern').mockRejectedValue({
       status: 410,
@@ -101,6 +100,18 @@ describe('Shared /api/patterns routes', () => {
     });
     const deleteRes = await request(app).delete('/api/patterns?id=2').expect(410);
     expect(deleteRes.body.error).toMatch(/already deleted/i);
-    expect(deleteRes.body.details).toBe('delete-stack');
+    expect(deleteRes.body).toEqual({ error: 'already deleted' });
+  });
+
+  it('keeps validation errors useful without returning stack traces', async () => {
+    vi.spyOn(duplicatePatternsService, 'createPattern').mockRejectedValue({
+      status: 400,
+      message: 'Pattern ID required',
+      stack: 'PRIVATE_STACK_TRACE',
+    });
+
+    const res = await request(app).post('/api/patterns').send({}).expect(400);
+
+    expect(res.body).toEqual({ error: 'Pattern ID required' });
   });
 });

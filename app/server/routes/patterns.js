@@ -1,6 +1,18 @@
 const express = require('express');
 
 const duplicatePatternsService = require('../services/patterns/duplicate-patterns.js');
+const { sanitizeError } = require('../../lib/server/error-sanitizer.js');
+
+function sendPatternError(res, error, defaultMessage) {
+  const status = error?.status || 500;
+  const sanitized = sanitizeError(error, {
+    statusCode: status,
+    defaultMessage,
+    exposeMessage: status >= 400 && status < 500,
+    includeStack: false,
+  });
+  res.status(status).json({ error: sanitized.error });
+}
 
 function createPatternsRouter() {
   const router = express.Router();
@@ -11,10 +23,7 @@ function createPatternsRouter() {
       res.json(result);
     } catch (error) {
       console.error('Duplicate patterns list error:', error);
-      res.status(error?.status || 500).json({
-        error: error?.message || 'Failed to fetch duplicate patterns',
-        details: error?.stack,
-      });
+      sendPatternError(res, error, 'Failed to fetch duplicate patterns');
     }
   });
 
@@ -24,10 +33,7 @@ function createPatternsRouter() {
       res.status(201).json(result);
     } catch (error) {
       console.error('Duplicate pattern create error:', error);
-      res.status(error?.status || 500).json({
-        error: error?.message || 'Failed to create duplicate pattern',
-        details: error?.stack,
-      });
+      sendPatternError(res, error, 'Failed to create duplicate pattern');
     }
   });
 
@@ -37,10 +43,7 @@ function createPatternsRouter() {
       res.json(result);
     } catch (error) {
       console.error('Duplicate pattern update error:', error);
-      res.status(error?.status || 500).json({
-        error: error?.message || 'Failed to update duplicate pattern',
-        details: error?.stack,
-      });
+      sendPatternError(res, error, 'Failed to update duplicate pattern');
     }
   });
 
@@ -50,10 +53,7 @@ function createPatternsRouter() {
       res.json(result);
     } catch (error) {
       console.error('Duplicate pattern delete error:', error);
-      res.status(error?.status || 500).json({
-        error: error?.message || 'Failed to delete duplicate pattern',
-        details: error?.stack,
-      });
+      sendPatternError(res, error, 'Failed to delete duplicate pattern');
     }
   });
 

@@ -246,6 +246,34 @@ describe('API Security', () => {
       );
     });
 
+    test.each([
+      ['POST', '/api/analytics/quests/1/verify', 200],
+      ['POST', '/api/credentials', 30],
+      ['PUT', '/api/credentials', 30],
+      ['PUT', '/api/credentials/1', 30],
+      ['PATCH', '/api/credentials', 30],
+      ['PATCH', '/api/credentials/1', 30],
+      ['DELETE', '/api/credentials', 30],
+      ['DELETE', '/api/credentials/1', 30],
+      ['POST', '/api/donations/entitlement', 200],
+    ])('protects %s %s through shared middleware', (method, path, limit) => {
+      const token = createToken();
+      const protectedReq = {
+        method,
+        path,
+        headers: { authorization: `Bearer ${token}` },
+      };
+
+      for (let attempt = 0; attempt <= limit; attempt += 1) {
+        authenticationMiddleware(protectedReq, res, () => {
+          rateLimitMiddleware(protectedReq, res, next);
+        });
+      }
+
+      expect(next).toHaveBeenCalledTimes(limit);
+      expect(res.status).toHaveBeenLastCalledWith(429);
+    });
+
     test('should block requests exceeding rate limit', () => {
       // Make 31 requests (limit is 30 for credentials)
       for (let i = 0; i < 31; i++) {
