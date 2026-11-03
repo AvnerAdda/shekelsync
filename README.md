@@ -168,6 +168,9 @@ npm --prefix app run dist
 
 ## Releases
 
+- After an update, a "What's new" dialog displays the installed version's
+  `CHANGELOG.md` section once. It works offline and can be reopened from the
+  update menu. Keep the versioned changelog entry current when preparing releases.
 - Push a `v*` tag matching `app/package.json` to build and publish a release via
   `.github/workflows/package.yml` after its dependency audit and platform builds pass.
 - The package workflow builds distributables for Linux, macOS, and Windows.

@@ -1,4 +1,14 @@
 {
+  "releaseNotes": {
+    "title": "What’s new",
+    "subtitle": "The latest improvements to ShekelSync.",
+    "version": "Version {{version}}",
+    "close": "Got it",
+    "fullChangelog": "Full changelog",
+    "menu": "What’s new in this version",
+    "englishNote": "Release notes are available in English.",
+    "empty": "See the full changelog for the changes in this release."
+  },
   "deleteConfirmation": {
     "title": "Delete “{{name}}”?",
     "message": "Please confirm that you want to delete this item. This action cannot be undone.",

@@ -91,6 +91,7 @@ declare global {
   }
 
   interface ElectronAppSettings {
+    lastSeenReleaseVersion?: string;
     appLocale?: 'he' | 'en' | 'fr';
     backgroundSync?: BackgroundSyncSettings;
     telegram?: TelegramSettings;

@@ -19,6 +19,7 @@ import GlobalTransactionSearch, {
 } from '@renderer/features/search/components/GlobalTransactionSearch';
 import { DonationReminderDialog, useDonationStatus } from '@renderer/features/support';
 import { UsageAnalyticsConsentDialog, trackScreenView } from '@renderer/features/usage-analytics';
+import { useReleaseNotes } from '@renderer/features/release-notes/useReleaseNotes';
 import { useAuth } from '@app/contexts/AuthContext';
 import TransactionDetailModal, {
   type TransactionForModal,
@@ -34,6 +35,7 @@ import {
 
 const FinancialChatbot = lazy(() => import('@renderer/features/chatbot/components/FinancialChatbot'));
 const FinancialOptimizer = lazy(() => import('@renderer/features/optimizer/components/FinancialOptimizer'));
+const ReleaseNotesDialog = lazy(() => import('@renderer/features/release-notes/ReleaseNotesDialog'));
 
 const ChatbotLoadedSignal = ({
   openOnMount,
@@ -233,6 +235,9 @@ const AppLayoutContent: React.FC<AppLayoutContentProps> = ({ authLoading, sessio
   const [donationReminderBusy, setDonationReminderBusy] = useState(false);
   const pendingDataRefreshRef = useRef(false);
   const { status: donationStatus, loading: donationStatusLoading, markReminderShown } = useDonationStatus();
+  const releaseNotes = useReleaseNotes({
+    suppressed: authLoading || donationStatusLoading || donationReminderOpen || searchOpen || transactionDetailOpen,
+  });
 
   useEffect(() => {
     setCurrentPage(pathToPage(location.pathname));
@@ -537,7 +542,12 @@ const AppLayoutContent: React.FC<AppLayoutContentProps> = ({ authLoading, sessio
         onDismissForMonth={handleDismissDonationReminder}
       />
 
-      <UsageAnalyticsConsentDialog suppressed={donationReminderOpen} />
+      {releaseNotes.open && (
+        <Suspense fallback={null}>
+          <ReleaseNotesDialog onClose={releaseNotes.dismiss} />
+        </Suspense>
+      )}
+      <UsageAnalyticsConsentDialog suppressed={donationReminderOpen || releaseNotes.pending} />
     </Box>
   );
 };

@@ -134,6 +134,7 @@ interface UsageAnalyticsSettings {
 }
 
 interface ElectronAppSettings {
+  lastSeenReleaseVersion?: string;
   backgroundSync?: BackgroundSyncSettings;
   usageAnalytics?: UsageAnalyticsSettings;
   [key: string]: unknown;

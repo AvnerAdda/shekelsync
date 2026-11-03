@@ -10,6 +10,7 @@ const refreshSession = vi.fn();
 
 let latestSearchProps: any = null;
 let latestSidebarProps: any = null;
+let releaseNotesPending = false;
 let mockAuthState: {
   session: { user: { email: string; name: string } } | null;
   loading: boolean;
@@ -65,6 +66,17 @@ vi.mock('@renderer/features/support', () => ({
     loading: false,
     markReminderShown: vi.fn(),
   }),
+}));
+
+vi.mock('@renderer/features/release-notes/useReleaseNotes', () => ({
+  useReleaseNotes: () => ({ open: false, pending: releaseNotesPending, dismiss: vi.fn() }),
+}));
+
+vi.mock('@renderer/features/usage-analytics', () => ({
+  trackScreenView: vi.fn(),
+  UsageAnalyticsConsentDialog: ({ suppressed }: { suppressed: boolean }) => (
+    <div data-testid="analytics-consent" data-suppressed={suppressed} />
+  ),
 }));
 
 vi.mock('@app/contexts/AuthContext', () => ({
@@ -165,6 +177,7 @@ function renderAppLayout(initialEntries: string[] = ['/']) {
 
 describe('AppLayout', () => {
   beforeEach(() => {
+    releaseNotesPending = false;
     delete document.body.dataset.appReady;
     mockGet.mockReset();
     showNotification.mockReset();
@@ -192,6 +205,13 @@ describe('AppLayout', () => {
     await waitFor(() => {
       expect(document.body.dataset.appReady).toBe('true');
     });
+  });
+
+  it('holds analytics consent while the release announcement is pending', () => {
+    releaseNotesPending = true;
+    renderAppLayout();
+    expect(screen.getByTestId('analytics-consent')).toHaveAttribute('data-suppressed', 'true');
+    releaseNotesPending = false;
   });
 
   it('blocks the application and retries when the persisted session cannot be loaded', () => {
