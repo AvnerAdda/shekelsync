@@ -85,10 +85,16 @@ declare global {
     lastDigestResult?: TelegramDigestResult;
   }
 
+  interface UsageAnalyticsSettings {
+    enabled?: boolean;
+    decidedAt?: string | null;
+  }
+
   interface ElectronAppSettings {
     appLocale?: 'he' | 'en' | 'fr';
     backgroundSync?: BackgroundSyncSettings;
     telegram?: TelegramSettings;
+    usageAnalytics?: UsageAnalyticsSettings;
     [key: string]: unknown;
   }
 
@@ -311,6 +317,15 @@ declare global {
     onChange?: (callback: (settings: ElectronAppSettings) => void) => ElectronEventUnsubscribe | void;
   }
 
+  interface ElectronAnalyticsApi {
+    getStatus?: () => Promise<{
+      success: boolean;
+      status?: { available: boolean; enabled: boolean };
+      error?: string;
+    }>;
+    track?: (eventName: 'screen_viewed' | 'app_error', props?: Record<string, string>) => void;
+  }
+
   interface ElectronTelegramStatus {
     enabled: boolean;
     deliveryMode: 'both';
@@ -364,6 +379,7 @@ declare global {
     log?: ElectronLogBridge;
     diagnostics?: ElectronDiagnosticsApi;
     settings?: ElectronSettingsApi;
+    analytics?: ElectronAnalyticsApi;
     telegram?: ElectronTelegramApi;
     updater?: ElectronUpdaterApi;
     database?: ElectronDatabaseMaintenanceApi;
