@@ -80,6 +80,10 @@ export default function SpendabilityCard({ compact = false }: { compact?: boolea
   };
   const ready = !loading && !error && projection?.status === 'ready'
     && typeof projection.available_spend === 'number' && Number.isFinite(projection.available_spend);
+  // Shown only when some bills fall after the next income; all are still deducted now.
+  const cardSplit = projection && typeof projection.card_commitments_before_income === 'number'
+    && typeof projection.card_commitments_after_income === 'number' && projection.card_commitments_after_income > 0
+    ? { before: projection.card_commitments_before_income, after: projection.card_commitments_after_income } : null;
   const dateLabel = (value: string | null | undefined) => value
     ? new Intl.DateTimeFormat(i18n.language, { day: 'numeric', month: 'short', year: 'numeric' })
       .format(new Date(`${value}T12:00:00`))
@@ -149,9 +153,20 @@ export default function SpendabilityCard({ compact = false }: { compact?: boolea
                 <Box key={label} sx={{ display: 'contents' }}>
                   <Typography component="dt" variant="body2" color="text.secondary">{t(label)}</Typography>
                   <Typography component="dd" variant="body2" sx={{ m: 0 }}>{formatCurrency(value)}</Typography>
+                  {label === 'commitments' && cardSplit && ([
+                    ['commitmentsBeforeIncome', cardSplit.before], ['commitmentsAfterIncome', cardSplit.after],
+                  ] as const).map(([splitLabel, splitValue]) => (
+                    <Box key={splitLabel} sx={{ display: 'contents' }}>
+                      <Typography component="dt" variant="caption" color="text.secondary" sx={{ pl: 2 }}>
+                        {t(splitLabel, { date: dateLabel(projection.spending_period_end || projection.next_income_date) })}
+                      </Typography>
+                      <Typography component="dd" variant="caption" color="text.secondary" sx={{ m: 0, textAlign: 'end' }}>{formatCurrency(splitValue)}</Typography>
+                    </Box>
+                  ))}
                 </Box>
               ))}
             </Box>
+            {cardSplit && <Typography variant="caption" color="text.secondary">{t('commitmentsAfterNote')}</Typography>}
             <Typography variant="caption" color="text.secondary">{t('asOf', { date: dateLabel(projection.latest_balance_date) })}</Typography>
             <TextField
               label={t('purchase')} value={purchase} onChange={(event) => setPurchase(event.target.value)}

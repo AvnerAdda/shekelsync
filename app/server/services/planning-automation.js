@@ -84,12 +84,34 @@ function detectCardCommitments({ today, banks, cards, transactions, pairings }) 
     if (normalizePlanningCurrency(transaction.charged_currency) !== 'ILS') {
       return { amount: null, source: 'unavailable', reason: 'UNSUPPORTED_CARD_CURRENCY' };
     }
-    const key = JSON.stringify([transaction.vendor, transaction.account_number || '', math.validDate(processed) ? processed : 'undated']);
+    const due = math.validDate(processed) ? processed : null;
+    const key = JSON.stringify([transaction.vendor, transaction.account_number || '', due || 'undated']);
     // A credit in another card or billing cycle cannot fund an unpaid bill.
-    cycles.set(key, (cycles.get(key) || 0) - Math.round(price * 100));
+    const cycle = cycles.get(key) || { due, cents: 0 };
+    cycle.cents -= Math.round(price * 100);
+    cycles.set(key, cycle);
   }
-  return { amount: [...cycles.values()].reduce((sum, amount) => sum + Math.max(0, amount), 0) / 100,
+  const bills = [...cycles.values()].filter((cycle) => cycle.cents > 0)
+    .map((cycle) => ({ due_date: cycle.due, amount: cycle.cents / 100 }))
+    .sort((left, right) => String(left.due_date || '').localeCompare(String(right.due_date || '')));
+  return { amount: bills.reduce((sum, bill) => sum + Math.round(bill.amount * 100), 0) / 100, bills,
     source: estimated ? 'estimated' : 'imported' };
 }
 
-module.exports = { detectNextIncome, detectCardCommitments };
+/**
+ * Split card bills at the next income date. Undated and overdue (still pending)
+ * charges count as due before it. Null without per-bill data (manual override).
+ */
+function splitCardCommitments(bills, spendingUntil) {
+  if (!Array.isArray(bills) || !spendingUntil) return null;
+  let before = 0;
+  let after = 0;
+  for (const bill of bills) {
+    const cents = Math.round(Number(bill.amount) * 100);
+    if (bill.due_date && bill.due_date > spendingUntil) after += cents;
+    else before += cents;
+  }
+  return { before_income: before / 100, after_income: after / 100 };
+}
+
+module.exports = { detectNextIncome, detectCardCommitments, splitCardCommitments };
