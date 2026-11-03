@@ -45,6 +45,7 @@
     "electron-log": "^5.4.4",
     "electron-updater": "^6.8.9",
     "express": "^5.2.1",
+    "express-rate-limit": "^8.7.3",
     "israeli-bank-scrapers-core": "^6.12.1",
     "keytar": "^7.9.0",
     "openai": "^7.23.0",

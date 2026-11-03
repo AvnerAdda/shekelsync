@@ -1,6 +1,7 @@
 const express = require('express');
 const { resolveLocaleFromRequest } = require('../../lib/server/locale-utils.js');
 const { createAnalyticsProfilingRouter } = require('./analytics-profiling.js');
+const { sanitizeStructuredError } = require('../../lib/server/error-sanitizer.js');
 
 const breakdownService = require('../services/analytics/breakdown.js');
 const dashboardService = require('../services/analytics/dashboard.js');
@@ -27,16 +28,16 @@ function createAnalyticsRouter() {
       res.json(result);
     } catch (error) {
       console.error('Unified category analytics error:', error);
-      if (error?.error) {
-        const status = error.error.code === 'DATABASE_ERROR' ? 500 : 400;
-        res.status(status).json(error);
-      } else {
-        res.status(500).json({
-          success: false,
-          error: 'Failed to fetch analytics data',
-          message: error.message,
-        });
-      }
+      const sanitized = sanitizeStructuredError(error, {
+        defaultCode: 'DATABASE_ERROR',
+        defaultMessage: 'Failed to fetch analytics data',
+        clientErrors: {
+          INVALID_CATEGORY: 'Invalid category parameters',
+          INVALID_TYPE: 'Invalid transaction type',
+          INVALID_GROUP_BY: 'Invalid grouping option',
+        },
+      });
+      res.status(sanitized.statusCode).json(sanitized.response);
     }
   });
 

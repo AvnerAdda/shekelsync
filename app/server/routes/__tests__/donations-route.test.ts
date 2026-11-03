@@ -180,6 +180,32 @@ describe('Electron /api/donations routes', () => {
     });
   });
 
+  it('limits unsigned webhook traffic without relying on a token or forwarded IP', async () => {
+    process.env.STRIPE_WEBHOOK_SECRET = 'whsec_test';
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    for (let attempt = 0; attempt < 120; attempt += 1) {
+      await request(app)
+        .post('/api/donations/stripe/webhook')
+        .set('X-Forwarded-For', `192.0.2.${attempt + 1}`)
+        .send({})
+        .expect(400);
+    }
+
+    const blocked = await request(app)
+      .post('/api/donations/stripe/webhook')
+      .set('X-Forwarded-For', '198.51.100.1')
+      .send({})
+      .expect(429);
+
+    expect(blocked.body.code).toBe('STRIPE_WEBHOOK_RATE_LIMITED');
+    expect(Number(blocked.headers['retry-after'])).toBeGreaterThan(0);
+    expect(donationsService.syncSupporterEntitlement).not.toHaveBeenCalled();
+    // The webhook's bucket must not consume the authenticated API's allowance.
+    donationsService.getDonationStatus.mockResolvedValue({ tier: 'none' });
+    await request(app).get('/api/donations/status').expect(200);
+  });
+
   it('rejects Stripe webhook when signature is invalid', async () => {
     process.env.STRIPE_WEBHOOK_SECRET = 'whsec_test';
     const spy = donationsService.syncSupporterEntitlement;
