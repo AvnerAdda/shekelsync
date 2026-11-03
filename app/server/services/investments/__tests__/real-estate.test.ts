@@ -57,7 +57,8 @@ describe('real estate investment service', () => {
       })
       .mockResolvedValueOnce({ rows: [] })
       .mockResolvedValueOnce({ rows: [{ id: 1 }] })
-      .mockResolvedValueOnce({ rows: [{ id: 2 }] });
+      .mockResolvedValueOnce({ rows: [{ id: 2 }] })
+      .mockResolvedValueOnce({ rows: [] });
 
     const result = await syncRealEstateHolding({
       dbAdapter: { query },
@@ -69,8 +70,11 @@ describe('real estate investment service', () => {
       synced: true,
       latest: { as_of_date: '2026-05-26', current_value: 502500, cost_basis: 502500 },
     });
-    expect(query).toHaveBeenCalledTimes(5);
+    expect(query).toHaveBeenCalledTimes(6);
     expect(String(query.mock.calls[3][0])).toContain("NOT LIKE 'Real estate simulator valuation%'");
+    // Stale auto-synced rows (other dates) are pruned; protected valuations are not matched.
+    expect(String(query.mock.calls[5][0])).toContain('DELETE FROM investment_holdings');
+    expect(query.mock.calls[5][1]).toEqual([9, 'Auto-synced from linked real estate transactions', '2026-05-20', '2026-05-26']);
     expect(query.mock.calls[3][1]).toEqual([
       9,
       2500,
@@ -85,6 +89,25 @@ describe('real estate investment service', () => {
       '2026-05-26',
       'Auto-synced from linked real estate transactions',
     ]);
+  });
+
+  it('does not count linked mortgage debits as property value', async () => {
+    const query = vi.fn()
+      .mockResolvedValueOnce({ rows: [{ id: 9, account_type: 'real_estate' }] })
+      .mockResolvedValueOnce({
+        rows: [
+          { identifier: 'b', vendor: 'discount', date: '2026-05-25T21:00:00.000Z', name: 'תשלום שוברי גביה', price: '-500000' },
+          { identifier: 'm', vendor: 'discount', date: '2026-10-09T21:00:00.000Z', name: 'דסק-משכנתא חיוב', price: '-2500.75' },
+        ],
+      })
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({ rows: [{ id: 1 }] });
+
+    const result = await syncRealEstateHolding({ dbAdapter: { query }, accountId: 9 });
+    expect(result.latest).toMatchObject({ current_value: 500000, cost_basis: 500000 });
+    expect(query).toHaveBeenCalledTimes(5);
+    // The old row on the mortgage debit date (2026-10-10) is removed.
+    expect(query.mock.calls[4][1]).toEqual([9, 'Auto-synced from linked real estate transactions', '2026-05-26']);
   });
 
   it('rolls new payments forward from simulator and merged valuations', () => {

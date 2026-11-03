@@ -19,10 +19,14 @@ import PaymentsIcon from '@mui/icons-material/Payments';
 import PercentIcon from '@mui/icons-material/Percent';
 import QueryStatsIcon from '@mui/icons-material/QueryStats';
 import EditIcon from '@mui/icons-material/Edit';
+import TimelineIcon from '@mui/icons-material/Timeline';
 import { apiClient } from '@/lib/api-client';
 import { useFinancePrivacy } from '@app/contexts/FinancePrivacyContext';
 import type { RealEstateOverviewProperty, RealEstateOverviewResponse } from '@renderer/types/investments';
 import { useTranslation } from 'react-i18next';
+import MarketDataStatus from './real-estate/MarketDataStatus';
+import RealEstatePropertyDetail from './real-estate/RealEstatePropertyDetail';
+import { useMarketSnapshot } from '../hooks/useRealEstateMortgage';
 
 interface RealEstateOverviewSectionProps {
   refreshSignal?: number;
@@ -53,6 +57,13 @@ const RealEstateOverviewSection: React.FC<RealEstateOverviewSectionProps> = ({
   const [data, setData] = React.useState<RealEstateOverviewResponse | null>(null);
   const [loading, setLoading] = React.useState(true);
   const [error, setError] = React.useState<string | null>(null);
+  const [localRefresh, setLocalRefresh] = React.useState(0);
+  const [detailAccountId, setDetailAccountId] = React.useState<number | null>(null);
+  const market = useMarketSnapshot();
+  const reload = React.useCallback(() => setLocalRefresh((value) => value + 1), []);
+  const handleMarketSync = React.useCallback(async () => {
+    if (await market.sync()) reload();
+  }, [market, reload]);
 
   React.useEffect(() => {
     let active = true;
@@ -83,7 +94,7 @@ const RealEstateOverviewSection: React.FC<RealEstateOverviewSectionProps> = ({
     return () => {
       active = false;
     };
-  }, [refreshSignal, t]);
+  }, [refreshSignal, localRefresh, t]);
 
   const money = React.useCallback((value: number | null | undefined) => {
     if (value === null || value === undefined) return '-';
@@ -156,7 +167,7 @@ const RealEstateOverviewSection: React.FC<RealEstateOverviewSectionProps> = ({
     {
       label: t('kpis.mortgage', 'Mortgage balance'),
       value: money(summary.totalMortgageBalance),
-      hint: t('hints.mortgage', 'Total mortgage balance entered'),
+      hint: t('hints.mortgageLive', 'Computed for today from your tracks, or as entered'),
       icon: <AccountBalanceIcon fontSize="small" />,
       color: theme.palette.warning.main,
     },
@@ -224,6 +235,14 @@ const RealEstateOverviewSection: React.FC<RealEstateOverviewSectionProps> = ({
             />
             <Button
               size="small"
+              variant="outlined"
+              startIcon={<TimelineIcon />}
+              onClick={() => setDetailAccountId(property.accountId)}
+            >
+              {t('actions.mortgage', 'Mortgage')}
+            </Button>
+            <Button
+              size="small"
               startIcon={<EditIcon />}
               onClick={() => onEditProperty?.(property.accountId)}
             >
@@ -267,6 +286,21 @@ const RealEstateOverviewSection: React.FC<RealEstateOverviewSectionProps> = ({
             }}>
               {money(property.totalMortgageBalance)}
             </Typography>
+            {property.mortgage?.source === 'tracks' ? (
+              <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block' }}>
+                {t('property.mortgageLive', 'live · {{rate}}%', { rate: property.mortgage.weightedRate?.toFixed(2) ?? '-' })}
+                {property.undrawnMortgageAmount ? (
+                  <>
+                    <br />
+                    {t('property.mortgageUndrawn', 'incl. {{amount}} still to draw', { amount: money(property.undrawnMortgageAmount) })}
+                  </>
+                ) : null}
+              </Typography>
+            ) : property.mortgage?.source === 'legacy' ? (
+              <Typography variant="caption" sx={{ color: 'text.secondary' }}>
+                {t('property.mortgageProjected', 'projected today: {{amount}}', { amount: money(property.mortgage.balance) })}
+              </Typography>
+            ) : null}
           </Grid>
           <Grid size={{ xs: 6, md: 3 }}>
             <Typography variant="caption" sx={{
@@ -279,6 +313,11 @@ const RealEstateOverviewSection: React.FC<RealEstateOverviewSectionProps> = ({
             }}>
               {money(property.monthlyMortgagePayment)}
             </Typography>
+            {property.mortgage?.nextPaymentDate ? (
+              <Typography variant="caption" sx={{ color: 'text.secondary' }}>
+                {formatDate(property.mortgage.nextPaymentDate)}
+              </Typography>
+            ) : null}
           </Grid>
           <Grid size={{ xs: 6, md: 3 }}>
             <Typography variant="caption" sx={{
@@ -338,9 +377,13 @@ const RealEstateOverviewSection: React.FC<RealEstateOverviewSectionProps> = ({
 
   return (
     <Box role="tabpanel" sx={{ display: 'flex', flexDirection: 'column', gap: 2.5 }}>
-      <Alert severity="info" sx={{ borderRadius: 2 }}>
-        {t('marketDataNotice', 'Valuation is currently based on your saved simulator assumptions. Comparable sale data by address/type is not connected yet.')}
-      </Alert>
+      <MarketDataStatus
+        snapshot={market.data}
+        loading={market.loading}
+        syncing={market.syncing}
+        error={market.error}
+        onSync={handleMarketSync}
+      />
       <Grid container spacing={2}>
         {kpis.map((kpi) => (
           <Grid key={kpi.label} size={{ xs: 12, sm: 6, lg: 4 }}>
@@ -394,7 +437,16 @@ const RealEstateOverviewSection: React.FC<RealEstateOverviewSectionProps> = ({
         <Stack spacing={1.5}>
           {properties.map(renderProperty)}
         </Stack>
+        <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block', mt: 1.5 }}>
+          {t('marketDataNotice', 'Valuation is currently based on your saved simulator assumptions. Comparable sale data by address/type is not connected yet.')}
+        </Typography>
       </Paper>
+      <RealEstatePropertyDetail
+        open={detailAccountId !== null}
+        property={properties.find((item) => item.accountId === detailAccountId) || null}
+        onClose={() => setDetailAccountId(null)}
+        onChanged={reload}
+      />
     </Box>
   );
 };

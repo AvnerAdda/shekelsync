@@ -23,6 +23,37 @@ Release binaries are published at
   version, language and OS. No financial data, identifiers, messages or free
   text are ever sent. See `PRIVACY.md`.
 
+## [0.2.4] - 2026-11-03
+
+### Security
+- Update build-tool dependencies `follow-redirects` and `joi` to resolve
+  high-severity advisories.
+
+### Added
+- Multi-track mortgage planning in Wealth, including repayment schedules,
+  drawdowns, prepayments, payment reconciliation, and Bank of Israel / CBS
+  market-data status.
+- Property sale and break-even analysis, mortgage health and stress scenarios,
+  and refinancing comparisons with editable property assumptions and costs.
+- A Home projection view with selectable forecast horizons and before/after
+  investing cash-flow outlooks, plus saved-plan overlays in future projections.
+- Forecast confidence tiers that distinguish sure, likely, and uncertain flows.
+
+### Fixed
+- Keep mortgage forecasts and property balances current after mortgage changes.
+- Separate imported-card repayments from other card commitments to prevent
+  double counting in spending estimates and cash-flow projections.
+- Improve recurring-income timing, infrequent-expense forecasts, investment
+  schedules, and negligible-prediction cleanup.
+
+### Changed
+- Update English, French, and Hebrew translations for projections and mortgages.
+- Upgrade local databases automatically to schema version 12 with additive
+  mortgage, market-data, and property-cost tables. Existing mortgage fields are
+  preserved. A pre-migration backup is taken; failures roll back and block
+  startup. No manual migration is required. To roll back to an earlier app
+  version, restore the pre-migration database backup.
+
 ## [0.2.3] - 2026-10-28
 
 ### Security

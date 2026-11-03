@@ -83,6 +83,7 @@ export default function RealEstateSimulatorDialog({
   const { t } = useTranslation('translation', { keyPrefix: 'investmentsPage.realEstate' });
   const { showNotification } = useNotification();
   const accountId = account?.id ?? null;
+  const [mortgageManagedByTracks, setMortgageManagedByTracks] = React.useState(false);
   const accountDefaultsRef = React.useRef<RealEstateSimulatorDialogProps['account']>(account);
   const [profile, setProfile] = React.useState<RealEstateProfileInput>(() => createEmptyRealEstateProfile());
   const [loading, setLoading] = React.useState(false);
@@ -129,6 +130,17 @@ export default function RealEstateSimulatorDialog({
         if (active) {
           setLoading(false);
         }
+      });
+
+    // Independent of the profile load: a failure here must not reset the form.
+    setMortgageManagedByTracks(false);
+    apiClient.get(`/api/investments/real-estate/properties/${accountId}/mortgage`, { cacheMode: 'no-store' })
+      .then((response) => {
+        if (!active) return;
+        setMortgageManagedByTracks(Boolean(response?.ok && (response.data as { source?: string })?.source === 'tracks'));
+      })
+      .catch(() => {
+        // Without mortgage info, the single-mortgage fields simply stay editable.
       });
 
     return () => {
@@ -251,6 +263,7 @@ export default function RealEstateSimulatorDialog({
           </Box>
         ) : (
           <RealEstateSimulatorFields
+            mortgageManagedByTracks={mortgageManagedByTracks}
             value={profile}
             currency={account?.currency || 'ILS'}
             onChange={handleProfileChange}

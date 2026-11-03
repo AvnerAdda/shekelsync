@@ -71,6 +71,10 @@ export interface PlanningProjection {
   reserved_cash: number;
   planned_contributions: number;
   card_commitments: number | null;
+  /** Bills due by the end of the spending period (incl. undated / pending). */
+  card_commitments_before_income?: number | null;
+  /** Bills due after it; still deducted from Available to spend. */
+  card_commitments_after_income?: number | null;
   card_confirmation_required: boolean;
   latest_balance_date: string | null;
   forecast_expenses_until_income: number | null;

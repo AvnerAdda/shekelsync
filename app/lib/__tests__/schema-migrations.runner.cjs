@@ -634,6 +634,57 @@ const scenarios = {
       assert.deepEqual(db.prepare('SELECT model_id, expected_cash_flow FROM forecast_prediction_snapshots').all(), [{ model_id: 'pattern-v1', expected_cash_flow: 20 }]);
     }),
 
+  'mortgage-v11-schema-parity': () =>
+    withDatabase((db, dbPath, tempDir) => {
+      const { MORTGAGE_TABLES, MORTGAGE_TABLE_STATEMENTS, MORTGAGE_INDEX_STATEMENTS } =
+        require('../../server/services/investments/mortgage/schema.js');
+      const { initializeSqliteDatabase } = require('../../../scripts/init_sqlite_db.js');
+      const describeTables = (handle) => Object.fromEntries(MORTGAGE_TABLES.map((table) => [
+        table,
+        handle.prepare(`PRAGMA table_info('${table}')`).all()
+          .map(({ name, type, notnull, dflt_value, pk }) => ({ name, type, notnull, dflt_value, pk })),
+      ]));
+      const describeIndexes = (handle) => handle.prepare(
+        "SELECT name FROM sqlite_master WHERE type = 'index' AND (name LIKE 'idx_mortgage_%' OR name LIKE 'idx_real_estate_property_costs%') ORDER BY name",
+      ).all().map((row) => row.name);
+
+      // 1) Upgrade path: a v10 database gains the tables through v11 and v12.
+      db.pragma('user_version = 10');
+      runSchemaMigrations(db, { dbPath, logger: { log: () => {} } });
+      assert.equal(getSchemaVersion(db), CURRENT_SCHEMA_VERSION);
+      const migrated = describeTables(db);
+      MIGRATIONS.find((migration) => migration.version === 11).up(db); // idempotent
+      MIGRATIONS.find((migration) => migration.version === 12).up(db);
+      assert.deepEqual(describeTables(db), migrated);
+
+      // 2) Service ensureSchema statements.
+      const serviceDb = new Database(path.join(tempDir, 'service.sqlite'));
+      try {
+        for (const statement of [...MORTGAGE_TABLE_STATEMENTS, ...MORTGAGE_INDEX_STATEMENTS]) serviceDb.exec(statement);
+        assert.deepEqual(describeTables(serviceDb), migrated);
+        assert.deepEqual(describeIndexes(serviceDb), describeIndexes(db));
+      } finally {
+        serviceDb.close();
+      }
+
+      // 3) Fresh install.
+      const freshPath = path.join(tempDir, 'fresh.sqlite');
+      const originalLog = console.log;
+      console.log = () => {};
+      try {
+        initializeSqliteDatabase({ output: freshPath, force: true, databaseCtor: Database });
+      } finally {
+        console.log = originalLog;
+      }
+      const fresh = new Database(freshPath);
+      try {
+        assert.deepEqual(describeTables(fresh), migrated);
+        assert.deepEqual(describeIndexes(fresh), describeIndexes(db));
+      } finally {
+        fresh.close();
+      }
+    }),
+
   'review-forecast-v9-model-id': () =>
     withDatabase((db, dbPath) => {
       db.exec(`

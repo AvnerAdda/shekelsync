@@ -367,6 +367,9 @@ export interface RealEstateOverviewProperty {
   netEquity: number | null;
   totalMortgageBalance: number;
   ownedMortgageBalance: number;
+  /** Detailed tracks only: drawn balance and drawdowns still to come (both included in totalMortgageBalance). */
+  drawnMortgageBalance?: number;
+  undrawnMortgageAmount?: number;
   monthlyMortgagePayment: number | null;
   mortgageInterestRate: number | null;
   mortgageTermYears: number | null;
@@ -382,12 +385,15 @@ export interface RealEstateOverviewProperty {
   annualDebtService: number | null;
   debtServiceCoverage: number | null;
   valuationMethod: string | null;
+  annualGrowthRate?: number | null;
   confidence: string | null;
   lastValuationDate: string | null;
   scenarioConservative: number | null;
   scenarioBase: number | null;
   scenarioOptimistic: number | null;
   hasProfile: boolean;
+  /** Live mortgage summary from the multi-track engine (or legacy projection). */
+  mortgage?: MortgageSummary | null;
 }
 
 export interface RealEstateOverviewResponse {
@@ -409,6 +415,244 @@ export interface RealEstateOverviewResponse {
     equityRatio: number | null;
   };
   properties: RealEstateOverviewProperty[];
+  market?: MortgageMarketMeta | null;
+}
+
+// ---------------------------------------------------------------------------
+// Multi-track mortgages (מסלולים) and market data
+// ---------------------------------------------------------------------------
+
+export type MortgageTrackType =
+  | 'prime'
+  | 'fixed_unlinked'
+  | 'fixed_cpi'
+  | 'variable_unlinked'
+  | 'variable_cpi'
+  | 'fx_linked'
+  | 'legacy';
+export type MortgageRateConvention = 'nominal' | 'effective';
+export type MortgageAmortization = 'spitzer' | 'equal_principal' | 'balloon' | 'bullet';
+export type MortgageGraceType = 'none' | 'partial' | 'full';
+export type MortgageEventType = 'prepay_partial' | 'prepay_full' | 'refinance' | 'rate_override';
+
+export interface MortgageTranche {
+  id?: number;
+  drawDate: string;
+  amount: number | null;
+  status: 'drawn' | 'planned';
+  rate?: number | null;
+  termMode?: 'same_maturity' | 'full_term';
+  termMonths?: number | null;
+  notes?: string | null;
+}
+
+export interface MortgageTrackAnchor {
+  date: string;
+  balance: number | null;
+  remainingMonths?: number | null;
+  payment?: number | null;
+}
+
+export interface MortgageTrack {
+  id?: number;
+  type: MortgageTrackType;
+  label?: string | null;
+  rate?: number | null;
+  margin?: number | null;
+  rateConvention: MortgageRateConvention;
+  resetPeriodMonths?: number | null;
+  anchorSeriesKey?: string | null;
+  amortization: MortgageAmortization;
+  termMonths: number | null;
+  paymentDay?: number | null;
+  firstPaymentDate?: string | null;
+  grace: { type: MortgageGraceType; endDate?: string | null };
+  cpiFloorAtBase?: boolean;
+  anchor?: MortgageTrackAnchor | null;
+  status?: 'active' | 'closed' | 'refinanced';
+  tranches: MortgageTranche[];
+}
+
+export interface MortgageEvent {
+  id?: number;
+  type: MortgageEventType;
+  date: string;
+  trackIndex: number | null;
+  amount?: number | null;
+  mode?: 'reduce_payment' | 'reduce_term' | null;
+  fee?: number | null;
+  rate?: number | null;
+  closeTrackIndexes?: number[] | null;
+  notes?: string | null;
+}
+
+export interface MortgageDraft {
+  id?: number;
+  lender?: string | null;
+  label?: string | null;
+  approvedAmount?: number | null;
+  options?: { brokenPeriodInterest?: 'monthly' | 'actual_days' | 'separate'; primeChangeLagMonths?: 0 | 1 };
+  paymentMatch?: { vendor?: string | null; accountNumber?: string | null; pattern?: string | null } | null;
+  notes?: string | null;
+  tracks: MortgageTrack[];
+  events: MortgageEvent[];
+}
+
+export interface MortgageTrackSnapshot {
+  trackId: string;
+  label: string | null;
+  type: MortgageTrackType;
+  balance: number;
+  nextPayment: number;
+  nextPaymentDate: string | null;
+  currentRate: number | null;
+  maturityDate: string | null;
+  closedDate: string | null;
+  drawn: number;
+  planned: number;
+}
+
+export interface MortgageWarning {
+  trackId?: string;
+  code: string;
+  message: string;
+}
+
+export interface MortgageSummary {
+  source: 'tracks' | 'legacy' | 'static' | 'draft' | 'error';
+  balance: number;
+  nextPayment: number | null;
+  nextPaymentDate: string | null;
+  weightedRate: number | null;
+  maturityDate: string | null;
+  drawn: number;
+  undrawn: number;
+  interestPaid: number | null;
+  interestRemaining: number | null;
+  indexationToDate: number | null;
+  totalCost: number | null;
+  tracks: MortgageTrackSnapshot[];
+  warnings: MortgageWarning[];
+}
+
+export interface MortgageScheduleRow {
+  date: string;
+  phase: string;
+  openingBalance: number;
+  indexation: number;
+  interest: number;
+  principal: number;
+  payment: number;
+  prepayment: number;
+  fees: number;
+  closingBalance: number;
+  annualRate: number | null;
+  indexRatio: number | null;
+  planned: boolean;
+}
+
+export interface MortgageMonthlyPoint {
+  month: string;
+  payment: number;
+  interest: number;
+  principal: number;
+  indexation: number;
+  prepayment: number;
+  fees: number;
+  drawn: number;
+  balance: number;
+  byTrack: Record<string, number>;
+  projected: boolean;
+}
+
+export interface MortgageTotals {
+  payment: number;
+  interest: number;
+  principal: number;
+  indexation: number;
+  prepayment: number;
+  fees: number;
+}
+
+export interface MortgageSchedule {
+  asOf: string;
+  tracks: Array<{
+    trackId: string;
+    label: string | null;
+    type: MortgageTrackType;
+    rows: MortgageScheduleRow[];
+    tranches?: Array<{ id: string | number | null; drawDate: string; amount: number; status: MortgageTranche['status']; assumedRate: number | null }>;
+    maturityDate: string | null;
+    closedDate: string | null;
+    totals: MortgageTotals;
+  }>;
+  monthly: MortgageMonthlyPoint[];
+  current: {
+    date: string;
+    balance: number;
+    nextPayment: number;
+    nextPaymentDate: string | null;
+    weightedRate: number | null;
+    byTrack: MortgageTrackSnapshot[];
+  };
+  totals: {
+    drawn: number;
+    paidToDate: MortgageTotals;
+    remaining: MortgageTotals;
+    lifetime: MortgageTotals;
+    totalCost: number;
+    maturityDate: string | null;
+  };
+  warnings: MortgageWarning[];
+}
+
+export interface MortgageMarketMeta {
+  asOf: string;
+  currentPolicyRate: number | null;
+  currentPrime: number | null;
+  cpiLastPeriod: string | null;
+  cpiHasHistory: boolean;
+  projectedInflation1y: number;
+}
+
+export interface MortgageScenario {
+  primeShiftPct?: number;
+  primeOverridePct?: number;
+  cpiAnnualOverridePct?: number;
+  cpiShiftPct?: number;
+  anchorShiftPct?: number;
+}
+
+export interface MortgageView {
+  accountId: number;
+  asOf: string;
+  source: 'tracks' | 'legacy' | 'static' | 'none';
+  mortgage: MortgageDraft | null;
+  legacy: { track?: MortgageTrack; termSource?: string; balance?: number; payment?: number | null } | null;
+  summary: MortgageSummary | null;
+  schedule: MortgageSchedule | null;
+  market?: MortgageMarketMeta;
+  scenario: MortgageScenario;
+}
+
+export interface MortgagePreviewResponse {
+  asOf: string;
+  summary: MortgageSummary;
+  schedule: MortgageSchedule;
+  market: MortgageMarketMeta;
+}
+
+export interface MarketSnapshot {
+  asOf: string;
+  hasData: boolean;
+  policyRate: { value: number; since: string } | null;
+  prime: { value: number } | null;
+  nextDecisionDate: string | null;
+  cpi: { lastPeriod: string; yearOverYear: number | null; knownPeriod: string | null } | null;
+  inflationExpectation1y: { value: number; period: string } | null;
+  housePrices: { lastPeriod: string; yearOverYear: number | null; newDwellingsYearOverYear: number | null } | null;
+  averageMortgageRates: Record<string, { period: string; value: number; anchor?: number; margin?: number } | null>;
+  series: Record<string, { lastSyncedAt: string | null; lastPeriod: string | null; lastError: string | null; stale: boolean; optional: boolean }>;
 }
 
 export interface InvestmentPerformanceTimelinePoint {
@@ -945,4 +1189,299 @@ export interface PikadonAutoSetupResponse {
     active_deposits: PikadonDepositEvent[];
     total_active_principal: number;
   };
+}
+
+// ---------------------------------------------------------------------------
+// Sale / break-even analysis and mortgage health
+// ---------------------------------------------------------------------------
+
+export type PropertyUsageType = 'owner_occupied' | 'rented' | 'vacant';
+export type PropertyCostType = 'down_payment' | 'purchase_tax' | 'lawyer' | 'broker' | 'appraisal' | 'renovation' | 'mortgage_fees' | 'other';
+export type HealthVerdict = 'good' | 'watch' | 'risk' | 'unknown';
+
+export interface PropertySettings {
+  usageType: PropertyUsageType;
+  isOffPlan?: boolean;
+  deliveryDate?: string | null;
+  marketRent?: number | null;
+  rentGrowthPct?: number | null;
+  vacancyPct?: number | null;
+  rentalTaxPct?: number | null;
+  alternativeReturnPct?: number | null;
+  alternativeTaxPct?: number | null;
+  brokerPct?: number | null;
+  lawyerPct?: number | null;
+  vatPct?: number | null;
+  otherSaleCosts?: number | null;
+  singleApartmentExemption?: boolean;
+  capitalGainsTaxPct?: number | null;
+  monthlyIncomeOverride?: number | null;
+  valueIndexSeries?: string | null;
+  stored?: boolean;
+}
+
+export interface PropertyCost {
+  id?: number;
+  type: PropertyCostType;
+  label?: string | null;
+  amount: number | null;
+  date?: string | null;
+  status: 'paid' | 'planned';
+  deductible?: boolean;
+  notes?: string | null;
+  derived?: boolean;
+}
+
+export interface PrepaymentFeeTrack {
+  trackId: string;
+  type: MortgageTrackType;
+  balance: number;
+  capitalization: number;
+  cpiAverage: number;
+  basis: 'market_average' | 'no_benchmark' | 'not_applicable' | null;
+  benchmarkRate?: number;
+  yourRate?: number;
+}
+
+export interface SaleAnalysis {
+  asOf: string;
+  settings: Required<Omit<PropertySettings, 'stored' | 'isOffPlan'>>;
+  assumptions: string[];
+  property: { value: number | null; ownershipPct: number; purchasePrice: number | null; purchaseDate: string | null };
+  debt: {
+    balance: number;
+    accruedInterest: number;
+    undrawn: number;
+    prepaymentFees: { tracks: PrepaymentFeeTrack[]; operational: number; total: number };
+    payoffToday: number;
+  };
+  cashInvested: { upfront: number; payments: number; total: number; plannedUpfront: number };
+  costs: PropertyCost[];
+  breakEven: {
+    clearDebtPrice: number | null;
+    recoverCashPrice: number | null;
+    clearDebtVsValuePct: number | null;
+    recoverCashVsValuePct: number | null;
+  };
+  today: {
+    price: number;
+    saleCosts: number;
+    capitalGainsTax: number;
+    mortgagePayoff: number;
+    undrawnCommitment: number;
+    prepaymentFees: number;
+    netProceeds: number;
+    profit: number;
+  } | null;
+  sensitivity: Array<{ changePct: number; price: number; netProceeds: number; profit: number }>;
+  alternative: {
+    points: Array<{ year: number; date: string; propertyValue: number; ownerWealth: number; alternativeWealth: number; advantage: number }>;
+    advantageToday: number | null;
+    crossoverYear: number | null;
+    alwaysBehind: boolean;
+    rentConfigured: boolean;
+  } | null;
+  breakEvenAppreciationPct10y: number | null;
+  indexedValue?: PriceIndexValuation | null;
+}
+
+export interface DetectedIncome {
+  monthly: number | null;
+  average?: number | null;
+  method?: string;
+  monthsWithIncome?: number;
+  months: Array<{ month: string; total: number }>;
+  source: 'transactions' | 'manual' | 'error';
+}
+
+export interface MortgageHealth {
+  overall: HealthVerdict;
+  rates: {
+    verdict: HealthVerdict;
+    tracks: Array<{
+      trackId: string;
+      type: MortgageTrackType;
+      comparison: 'rate' | 'margin';
+      yours: number | null;
+      benchmark: number | null;
+      delta: number | null;
+      verdict: HealthVerdict;
+      benchmarkPeriod: string | null;
+    }>;
+  };
+  exposure: {
+    verdict: HealthVerdict;
+    mix: { fixedPct: number | null; primePct: number | null; variablePct: number | null; cpiLinkedPct: number | null };
+    meetsFixedThird: boolean | null;
+    steadyMonth: string;
+    steadyPayment: number | null;
+    perPrimePoint: number | null;
+    basePeakPayment: number | null;
+    worstCasePayment: number | null;
+    worstIncreasePct: number | null;
+  };
+  affordability: {
+    verdict: HealthVerdict;
+    income: DetectedIncome | null;
+    paymentToIncomePct: number | null;
+    stressedPaymentToIncomePct: number | null;
+    regulatoryCapPct?: number;
+    comfortablePct?: number;
+  };
+  equity: {
+    verdict: HealthVerdict;
+    loanToValuePct?: number;
+    priceDropToZeroEquityPct?: number;
+    principalShareOfPaymentPct?: number | null;
+    ltvBelow60?: string | null;
+    ltvBelow50?: string | null;
+    principalExceedsInterestFrom?: string | null;
+  };
+  prepayment: {
+    trackId: string;
+    type: MortgageTrackType;
+    rate: number;
+    amount: number;
+    interestSaved: number;
+    feeEstimate: number;
+    monthsShortened: number | null;
+  } | null;
+}
+
+export interface PropertyAnalysisResponse {
+  accountId: number;
+  asOf: string;
+  source: 'tracks' | 'legacy' | 'static' | 'none';
+  settings: PropertySettings;
+  costs: PropertyCost[];
+  sale: SaleAnalysis;
+  health: MortgageHealth | null;
+}
+
+// ---------------------------------------------------------------------------
+// Bank debit reconciliation and price-index valuation
+// ---------------------------------------------------------------------------
+
+export interface MortgageDebitMatcher {
+  vendor: string | null;
+  accountNumber: string | null;
+  pattern: string;
+  source: 'saved' | 'linked_transactions' | 'detected';
+}
+
+export interface MortgageReconciliationMonth {
+  month: string;
+  expected: number;
+  actual: number;
+  difference: number;
+  differencePct: number | null;
+  tolerance: number;
+  status: 'ok' | 'drift' | 'missing' | 'unexpected' | 'pending' | 'no_data';
+}
+
+export interface MortgageReconciliation {
+  accountId: number;
+  status: string;
+  matchedCount: number;
+  historyStart?: string | null;
+  monthsWithoutHistory?: number;
+  months: MortgageReconciliationMonth[];
+  matcher: MortgageDebitMatcher | null;
+  candidates: Array<{ vendor: string | null; accountNumber: string | null; pattern: string; name: string; count: number; lastDate: string | null; lastAmount: number | null }>;
+  summary: {
+    latestMonth: string;
+    latestStatus: MortgageReconciliationMonth['status'];
+    latestDifference: number;
+    averageDifference: number | null;
+    suggestion: 'large_gap' | 'consistent_drift' | 'latest_drift' | 'missing_payment' | 'first_payment' | null;
+    composition?: {
+      paying: Array<{ trackId: string; type: MortgageTrackType; label: string | null; payment: number; date: string }>;
+      notYetPaying: Array<{ trackId: string; type: MortgageTrackType; label: string | null; firstPaymentDate: string }>;
+    };
+  } | null;
+}
+
+export interface PriceIndexValuation {
+  series: string;
+  ratio: number;
+  fromPeriod: string;
+  toPeriod: string;
+  value: number;
+  purchasePrice: number;
+  purchaseMonth: string;
+  noDataSincePurchase: boolean;
+}
+
+// ---------------------------------------------------------------------------
+// Stress test and refinance
+// ---------------------------------------------------------------------------
+
+export interface MortgageStressScenarioResult {
+  key: string;
+  label: string | null;
+  scenario: MortgageScenario;
+  paymentIn1y: number | null;
+  paymentIn3y: number | null;
+  paymentIn5y: number | null;
+  peakPayment: number | null;
+  peakMonth: string | null;
+  totalCost: number;
+  totalCostDelta: number | null;
+  peakDeltaPct: number | null;
+  peakPaymentToIncomePct: number | null;
+  payments: Array<{ month: string; payment: number }>;
+}
+
+export interface MortgageStressResponse {
+  asOf: string;
+  monthlyIncome: number | null;
+  scenarios: MortgageStressScenarioResult[];
+}
+
+export interface RefinanceCheckTrack {
+  trackId: string;
+  type: MortgageTrackType;
+  label: string | null;
+  balance: number;
+  currentRate: number | null;
+  status: 'checked' | 'no_benchmark' | 'closed' | 'error';
+  marketRate?: number;
+  marketPeriod?: string | null;
+  verdict?: 'worth_it' | 'marginal' | 'not_worth_it';
+  monthlyPaymentChange?: number;
+  saving?: number;
+  fees?: number;
+  breakEvenMonths?: number | null;
+}
+
+export interface RefinanceCheckResponse {
+  asOf: string;
+  switchingCosts: number;
+  tracks: RefinanceCheckTrack[];
+}
+
+export interface RefinanceOfferTrack {
+  type: MortgageTrackType;
+  rate?: number | null;
+  margin?: number | null;
+  rateConvention?: MortgageRateConvention;
+  termMonths: number | null;
+  sharePct?: number | null;
+  resetPeriodMonths?: number | null;
+}
+
+export interface RefinancePreviewResponse {
+  date: string;
+  closedTrackIds: string[];
+  closedBalance: number;
+  offerAmount: number;
+  offerTracks: Array<RefinanceOfferTrack & { id: string; amount: number; firstPaymentDate: string }>;
+  costs: { prepaymentFees: number; switchingCosts: number; total: number; financed: boolean };
+  current: { monthlyPayment: number; remainingPayments: number; maturityDate: string | null };
+  offer: { monthlyPayment: number; remainingPayments: number; maturityDate: string | null };
+  savings: { monthlyPaymentChange: number; nominal: number; presentValue: number; discountRatePct: number };
+  breakEvenMonths: number | null;
+  verdict: 'worth_it' | 'marginal' | 'not_worth_it';
+  series: Array<{ month: string; current: number; offer: number }>;
+  warnings: MortgageWarning[];
 }

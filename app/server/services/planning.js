@@ -1,6 +1,6 @@
 const { createHash } = require('crypto');
 const math = require('./planning-math.js');
-const { detectNextIncome, detectCardCommitments } = require('./planning-automation.js');
+const { detectNextIncome, detectCardCommitments, splitCardCommitments } = require('./planning-automation.js');
 const { recentSpendingEstimate } = require('./planning-history.js');
 const { normalizePlanningCurrency } = require('./planning-currency.js');
 
@@ -256,8 +256,9 @@ function createPlanningService(dependencies = {}) {
     const cardCommitments = cash.hasCards && cardConfirmed ? Number(settings.card_commitments_amount) : cash.automaticCards.amount;
     const cardSource = cash.hasCards && cardConfirmed ? 'manual' : cash.automaticCards.source;
     if (cardCommitments === null) codes.push(cash.automaticCards.reason || 'CARD_DATA_MISSING');
+    const cardSplit = cardSource === 'manual' || !cash.hasCards ? null : splitCardCommitments(cash.automaticCards.bills, spendingUntil);
     return { today, horizon, goals: data.goals, settings: { ...publicSettings(settings), next_income_date: incomeDate }, cash, days,
-      codes: [...new Set(codes)], completeForecast, cardCommitments, cardSource, incomeSource, spendingUntil, spendingSource, historyDays };
+      codes: [...new Set(codes)], completeForecast, cardCommitments, cardSource, cardSplit, incomeSource, spendingUntil, spendingSource, historyDays };
   }
 
   function project(input, changes = []) {
@@ -272,6 +273,9 @@ function createPlanningService(dependencies = {}) {
       next_income_source: incomeSource, spending_period_end: spendingUntil,
       spending_source: input.spendingSource, spending_history_days: input.historyDays,
       card_commitments: cardCommitments, card_commitments_source: cardSource, card_confirmation_required: false, latest_balance_date: cash.latestBalanceDate,
+      // Informational only: every outstanding bill is still deducted now.
+      card_commitments_before_income: input.cardSplit && cardCommitments !== null ? input.cardSplit.before_income : null,
+      card_commitments_after_income: input.cardSplit && cardCommitments !== null ? input.cardSplit.after_income : null,
       ...calculated,
       available_spend: codes.length ? null : calculated.available_spend,
       shortfall: codes.length ? null : calculated.shortfall,
@@ -303,7 +307,39 @@ function createPlanningService(dependencies = {}) {
     return { baseline, scenario: projected, comparison: { end_balance_delta: delta('ending_balance'), lowest_balance_delta: delta('lowest_balance'), available_spend_delta: delta('available_spend') } };
   }
 
-  return { getPlanningData, saveGoal, saveScenario, updateSettings, getProjection, previewScenario,
+  /**
+   * Plans layered on the cash-flow outlook: daily scenario changes and goal
+   * contributions for the selected plans, the reserved-money floor, and
+   * Available to spend with and without the selected scenarios.
+   */
+  async function getForecastOverlay(options = {}) {
+    const horizon = math.validateHorizon(options.horizon_days);
+    const raw = options.scenario_ids;
+    const list = Array.isArray(raw) ? raw : raw == null || raw === '' ? [] : String(raw).split(',');
+    if (list.length > 50) throw math.invalid('Select up to 50 scenarios');
+    const scenarioIds = new Set(list.map((value) => recordId(String(value).trim())));
+    const includeGoals = !['0', 'false', false].includes(options.goals ?? options.include_goals);
+    const [input, data] = await Promise.all([projectionInputs({ horizon_days: horizon }), getPlanningData()]);
+    const selected = data.scenarios.filter((scenario) => scenarioIds.has(scenario.id));
+    const changes = selected.flatMap((scenario) => scenario.changes);
+    const baseline = project(input);
+    const withScenarios = changes.length ? project(input, changes) : baseline;
+    const flows = math.planCashFlows({ today: input.today, horizon, goals: includeGoals ? input.goals : [], changes,
+      cashBuffer: input.settings.cash_buffer });
+    return {
+      currency: 'ILS', as_of_date: input.today, horizon_days: horizon, status: baseline.status, reasons: baseline.reasons,
+      spending_period_end: baseline.spending_period_end,
+      available_spend: withScenarios.available_spend, available_spend_baseline: baseline.available_spend,
+      shortfall: withScenarios.shortfall,
+      cash_buffer: input.settings.cash_buffer, reserved_cash: baseline.reserved_cash,
+      include_goals: includeGoals, starting_floor: flows.starting_floor, daily: flows.daily,
+      scenarios: data.scenarios.map((scenario) => ({ id: scenario.id, name: scenario.name, selected: scenarioIds.has(scenario.id) })),
+      goals: data.goals.map((goal) => ({ id: goal.id, name: goal.name, reserve_location: goal.reserve_location,
+        monthly_contribution: goal.monthly_contribution, remaining_amount: goal.remaining_amount })),
+    };
+  }
+
+  return { getPlanningData, saveGoal, saveScenario, updateSettings, getProjection, previewScenario, getForecastOverlay,
     deleteGoal: (id) => deleteRecord('savings_goals', id), deleteScenario: (id) => deleteRecord('cash_scenarios', id) };
 }
 
