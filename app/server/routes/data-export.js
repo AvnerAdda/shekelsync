@@ -1,4 +1,5 @@
 const express = require('express');
+const { sanitizeStructuredError } = require('../../lib/server/error-sanitizer.js');
 
 function createDataExportRouter({ services = {} } = {}) {
   const dataExportService = services.dataExportService || require('../services/data/export.js');
@@ -19,16 +20,16 @@ function createDataExportRouter({ services = {} } = {}) {
       }
     } catch (error) {
       console.error('Data export error:', error);
-      if (error?.error) {
-        res
-          .status(error.error.code === 'EXPORT_ERROR' ? 500 : 400)
-          .json(error);
-      } else {
-        res.status(500).json({
-          error: 'Failed to export data',
-          message: error?.message || 'Internal server error',
-        });
-      }
+      const sanitized = sanitizeStructuredError(error, {
+        defaultCode: 'EXPORT_ERROR',
+        defaultMessage: 'Failed to export data',
+        clientErrors: {
+          INVALID_FORMAT: 'Invalid export format',
+          INVALID_DATA_TYPE: 'Invalid export data type',
+          VALIDATION_ERROR: 'Invalid export parameters',
+        },
+      });
+      res.status(sanitized.statusCode).json(sanitized.response);
     }
   });
 

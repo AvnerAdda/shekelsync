@@ -1,0 +1,64 @@
+diff --git a/node_modules/@electron/universal/node_modules/minimatch/dist/commonjs/index.js b/node_modules/@electron/universal/node_modules/minimatch/dist/commonjs/index.js
+index c12dc5e..8491d6e 100644
+--- a/node_modules/@electron/universal/node_modules/minimatch/dist/commonjs/index.js
++++ b/node_modules/@electron/universal/node_modules/minimatch/dist/commonjs/index.js
+@@ -446,6 +446,8 @@ class Minimatch {
+     // **/*/<rest> -> */**/<rest> <== not valid because ** doesn't follow
+     // this WOULD be allowed if ** did follow symlinks, or * didn't
+     firstPhasePreProcess(globParts) {
++        // Backport GHSA-g3hv-75wg-m249: cap generated patterns.
++        const { braceExpandMax = 100_000 } = this.options;
+         let didSomething = false;
+         do {
+             didSomething = false;
+@@ -473,7 +475,8 @@ class Minimatch {
+                         p === '..' ||
+                         !p2 ||
+                         p2 === '.' ||
+-                        p2 === '..') {
++                        p2 === '..' ||
++                        globParts.length >= braceExpandMax) {
+                         continue;
+                     }
+                     didSomething = true;
+@@ -530,6 +533,8 @@ class Minimatch {
+     // {<pre>/**/<rest>,<pre>/**/<p>/<rest>} -> <pre>/**/<rest>
+     // ^-- not valid because ** doens't follow symlinks
+     secondPhasePreProcess(globParts) {
++        // Pairwise deduplication is optional; skip quadratic work for large sets.
++        if (globParts.length > 1000) return globParts;
+         for (let i = 0; i < globParts.length - 1; i++) {
+             for (let j = i + 1; j < globParts.length; j++) {
+                 const matched = this.partsMatch(globParts[i], globParts[j], !this.preserveMultipleSlashes);
+diff --git a/node_modules/@electron/universal/node_modules/minimatch/dist/esm/index.js b/node_modules/@electron/universal/node_modules/minimatch/dist/esm/index.js
+index 737c809..f56118d 100644
+--- a/node_modules/@electron/universal/node_modules/minimatch/dist/esm/index.js
++++ b/node_modules/@electron/universal/node_modules/minimatch/dist/esm/index.js
+@@ -434,6 +434,8 @@ export class Minimatch {
+     // **/*/<rest> -> */**/<rest> <== not valid because ** doesn't follow
+     // this WOULD be allowed if ** did follow symlinks, or * didn't
+     firstPhasePreProcess(globParts) {
++        // Backport GHSA-g3hv-75wg-m249: cap generated patterns.
++        const { braceExpandMax = 100_000 } = this.options;
+         let didSomething = false;
+         do {
+             didSomething = false;
+@@ -461,7 +463,8 @@ export class Minimatch {
+                         p === '..' ||
+                         !p2 ||
+                         p2 === '.' ||
+-                        p2 === '..') {
++                        p2 === '..' ||
++                        globParts.length >= braceExpandMax) {
+                         continue;
+                     }
+                     didSomething = true;
+@@ -518,6 +521,8 @@ export class Minimatch {
+     // {<pre>/**/<rest>,<pre>/**/<p>/<rest>} -> <pre>/**/<rest>
+     // ^-- not valid because ** doens't follow symlinks
+     secondPhasePreProcess(globParts) {
++        // Pairwise deduplication is optional; skip quadratic work for large sets.
++        if (globParts.length > 1000) return globParts;
+         for (let i = 0; i < globParts.length - 1; i++) {
+             for (let j = i + 1; j < globParts.length; j++) {
+                 const matched = this.partsMatch(globParts[i], globParts[j], !this.preserveMultipleSlashes);

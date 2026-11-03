@@ -7,6 +7,9 @@ on:
     branches: [main]
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 jobs:
   security-tests:
     name: Security Tests
@@ -73,6 +76,9 @@ jobs:
 
       - name: Install renderer dependencies
         run: npm --prefix renderer ci
+
+      - name: Verify minimatch security backports
+        run: npm run test:dependency-security
 
       # Policy: production dependencies must have no moderate+ advisories.
       # Build/lint tooling only blocks on high/critical; its moderate findings

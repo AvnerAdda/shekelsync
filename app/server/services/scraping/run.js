@@ -110,9 +110,16 @@ function buildBrowserLaunchArgs() {
 }
 
 function sanitizeDebugFilenamePart(value, fallback = 'unknown') {
-  const text = String(value || '').trim();
+  // Bound diagnostic path components before scanning. Trimming a trailing run
+  // of '-' with an unanchored regex causes quadratic backtracking.
+  const text = String(value || '').slice(0, 100).trim();
   if (!text) return fallback;
-  return text.replace(/[^a-z0-9_-]+/gi, '-').replace(/^-+|-+$/g, '') || fallback;
+  const normalized = text.replace(/[^a-z0-9_-]+/gi, '-');
+  let start = 0;
+  let end = normalized.length;
+  while (start < end && normalized[start] === '-') start += 1;
+  while (end > start && normalized[end - 1] === '-') end -= 1;
+  return normalized.slice(start, end) || fallback;
 }
 
 function redactDiagnosticUrl(value) {
@@ -1927,7 +1934,10 @@ async function processScrapeResult(client, { options, credentials, result, isBan
     try {
       await updateVendorBalance(client, options, credentials, account, logger);
     } catch (balanceError) {
-      logger?.error?.(`[Scrape:${options.companyId}] Failed to update balance for ${account.accountNumber}:`, balanceError.message);
+      logger?.error?.('[Scrape] Failed to update balance:', {
+        vendor: options.companyId,
+        accountNumber: account.accountNumber,
+      }, balanceError.message);
       // Don't fail the entire scrape for balance update errors
     }
 
@@ -2411,6 +2421,7 @@ module.exports = {
   runScrape,
   wasScrapedRecently,
   _internal: {
+    sanitizeDebugFilenamePart,
     createHttpError,
     hasNonEmptyString,
     pickRandom,

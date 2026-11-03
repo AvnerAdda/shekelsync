@@ -65,7 +65,10 @@ describe('Electron /api/data/export route', () => {
     dataExportService.exportData.mockRejectedValue(errorPayload);
 
     const res = await request(app).get('/api/data/export').expect(500);
-    expect(res.body).toEqual(errorPayload);
+    expect(res.body).toEqual({
+      success: false,
+      error: { code: 'EXPORT_ERROR', message: 'Failed to export data' },
+    });
   });
 
   it('returns 400 on invalid export parameters', async () => {
@@ -75,6 +78,7 @@ describe('Electron /api/data/export route', () => {
 
     const res = await request(app).get('/api/data/export').expect(400);
     expect(res.body.error?.code).toBe('VALIDATION_ERROR');
+    expect(res.body.error?.message).toBe('Invalid export parameters');
   });
 
   it('sends non-json export payloads', async () => {
@@ -98,8 +102,25 @@ describe('Electron /api/data/export route', () => {
     const res = await request(app).get('/api/data/export').expect(500);
 
     expect(res.body).toEqual({
-      error: 'Failed to export data',
-      message: 'plain failure',
+      success: false,
+      error: { code: 'EXPORT_ERROR', message: 'Failed to export data' },
     });
   });
+
+  it.each(['INVALID_FORMAT', 'INVALID_DATA_TYPE', 'DATABASE_ERROR', '__proto__'])(
+    'never serializes internal details for structured %s errors', async (code) => {
+      const secret = 'PRIVATE_DATABASE_BACKUP_PATH';
+      dataExportService.exportData.mockRejectedValue({
+        error: { code, message: secret, details: { stack: secret } },
+        stack: secret,
+        cause: { password: secret },
+      });
+
+      const status = code === 'INVALID_FORMAT' || code === 'INVALID_DATA_TYPE' ? 400 : 500;
+      const res = await request(app).get('/api/data/export').expect(status);
+
+      expect(JSON.stringify(res.body)).not.toContain(secret);
+      expect(Object.keys(res.body.error).sort()).toEqual(['code', 'message']);
+    },
+  );
 });
