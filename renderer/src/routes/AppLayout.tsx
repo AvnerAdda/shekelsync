@@ -18,6 +18,7 @@ import GlobalTransactionSearch, {
   type TransactionSearchFilters,
 } from '@renderer/features/search/components/GlobalTransactionSearch';
 import { DonationReminderDialog, useDonationStatus } from '@renderer/features/support';
+import { UsageAnalyticsConsentDialog, trackScreenView } from '@renderer/features/usage-analytics';
 import { useAuth } from '@app/contexts/AuthContext';
 import TransactionDetailModal, {
   type TransactionForModal,
@@ -236,6 +237,10 @@ const AppLayoutContent: React.FC<AppLayoutContentProps> = ({ authLoading, sessio
   useEffect(() => {
     setCurrentPage(pathToPage(location.pathname));
   }, [location.pathname]);
+
+  useEffect(() => {
+    trackScreenView(currentPage);
+  }, [currentPage]);
 
   useEffect(() => {
     if (donationStatusLoading || !donationStatus) {
@@ -531,6 +536,8 @@ const AppLayoutContent: React.FC<AppLayoutContentProps> = ({ authLoading, sessio
         busy={donationReminderBusy}
         onDismissForMonth={handleDismissDonationReminder}
       />
+
+      <UsageAnalyticsConsentDialog suppressed={donationReminderOpen} />
     </Box>
   );
 };

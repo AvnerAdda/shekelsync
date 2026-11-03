@@ -39,6 +39,7 @@ import DiagnosticsPanel from '../components/DiagnosticsPanel';
 import EnhancedProfileSection from '../components/EnhancedProfileSection';
 import SecuritySettingsPanel from '../components/SecuritySettingsPanel';
 import TelegramPanel from '../components/TelegramPanel';
+import { UsageAnalyticsPanel } from '@renderer/features/usage-analytics';
 import {
   DEFAULT_SETTINGS_TAB_ID,
   getCanonicalSettingsHash,
@@ -789,6 +790,10 @@ const SettingsPage: React.FC = () => {
               : tSettings('privacy.maskOff')}
           </Alert>
         </Paper>
+
+        <Box id="usage-analytics" sx={{ scrollMarginTop: SECTION_SCROLL_MARGIN }}>
+          <UsageAnalyticsPanel />
+        </Box>
 
         <Divider sx={{ my: 4 }} />
 

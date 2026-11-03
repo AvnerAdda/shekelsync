@@ -169,6 +169,7 @@ function createSyncScheduler({
         logger: createScrapeLogger('bulk', logger),
         showBrowser: !headless,
         repairStateProvider,
+        usageTrigger: 'scheduled',
         onAccountStart: ({ account, index, total }) => {
           emit({
             vendor: account.vendor,

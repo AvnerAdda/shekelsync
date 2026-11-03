@@ -12,6 +12,17 @@ Release binaries are published at
 
 ## [Unreleased]
 
+### Added
+- Optional, anonymous usage statistics via Aptabase, **off by default**. The app
+  asks once; you can change it in Settings → Privacy & Security. When on, it
+  sends only: app starts and which main screen is opened; institution added and
+  first successful sync (institution code only); per-institution sync results
+  (success, error type, manual or scheduled, scraper version, rough duration);
+  a daily summary of which features are set up, with institution count and app
+  age as ranges; and startup, update and app error reason codes. Plus app
+  version, language and OS. No financial data, identifiers, messages or free
+  text are ever sent. See `PRIVACY.md`.
+
 ## [0.2.4] - 2026-11-03
 
 ### Security

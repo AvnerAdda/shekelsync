@@ -568,6 +568,33 @@
       "clickForDetails": "Cliquez pour voir les détails"
     }
   },
+  "usageAnalytics": {
+    "consent": {
+      "title": "Aider à améliorer ShekelSync ?",
+      "message": "Vous pouvez partager des statistiques d'utilisation anonymes pour nous aider à savoir quelles fonctionnalités sont utilisées et à repérer plus vite les connexions bancaires en panne. Vos données financières restent sur cet ordinateur.",
+      "changeLater": "Vous pouvez modifier ce choix à tout moment dans Paramètres → Confidentialité et sécurité.",
+      "accept": "Partager des statistiques anonymes",
+      "decline": "Non merci"
+    },
+    "panel": {
+      "title": "Statistiques d'utilisation anonymes",
+      "description": "Désactivé sauf si vous l'activez. Une fois activé, ShekelSync envoie de petits événements anonymes à Aptabase (un service d'analyse respectueux de la vie privée) : au démarrage, à l'ouverture d'un écran, à l'ajout d'un établissement ou à la fin d'une synchronisation, un résumé quotidien des fonctionnalités et les types d'erreurs. Aucun identifiant d'appareil ou de compte n'est joint.",
+      "toggle": "Partager des statistiques d'utilisation anonymes",
+      "unavailable": "Les statistiques d'utilisation ne sont pas disponibles dans cette version.",
+      "saveFailed": "Impossible d'enregistrer votre choix. Veuillez réessayer."
+    },
+    "sharedTitle": "Ce qui est partagé",
+    "shared": {
+      "version": "Version de l'application, langue et s'il s'agit d'une version de test",
+      "system": "Système d'exploitation et sa version",
+      "screens": "Les écrans principaux ouverts (Accueil, Activité, Plan…)",
+      "syncs": "Pour chaque synchronisation bancaire : le code de l'établissement, succès ou échec, le type d'erreur, manuelle ou planifiée, la version du module de synchronisation et une durée approximative",
+      "setup": "L'ajout d'un établissement (son code uniquement) et la réussite de votre première synchronisation",
+      "features": "Une fois par jour : les fonctionnalités activées (synchronisation automatique, Telegram, assistant IA, bien immobilier, budgets, objectifs), le nombre d'établissements connectés sous forme de tranche (ex. 2–3) et depuis combien de temps vous utilisez l'application sous forme de tranche (ex. 1–3 mois)",
+      "errors": "Uniquement les types d'erreurs et d'échecs (ex. TypeError, réseau, trousseau), jamais leurs messages"
+    },
+    "neverShared": "Jamais partagé : montants, transactions, commerçants, catégories, soldes, numéros de compte, identifiants, noms, e-mails ou tout ce que vous saisissez."
+  },
   "settings": {
     "title": "Paramètres",
     "tabs": {

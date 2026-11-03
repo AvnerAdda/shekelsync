@@ -1,4 +1,5 @@
 const { CompanyTypes, createScraper } = require('israeli-bank-scrapers-core');
+const { emitUsageEvent, hasUsageListeners } = require('../usage-events.js');
 const crypto = require('crypto');
 const fs = require('fs');
 const path = require('path');
@@ -2335,7 +2336,75 @@ async function runScrape(params) {
     );
   }
 
-  return scrapeMutex.runExclusive(() => _runScrapeInternal(params));
+  return scrapeMutex.runExclusive(async () => {
+    const startedAt = Date.now();
+    try {
+      const result = await _runScrapeInternal(params);
+      if (!result?.simulated) {
+        const success = result?.success !== false;
+        await notifyScrapeOutcome({
+          vendor: params?.options?.companyId,
+          trigger: params?.usageTrigger,
+          success,
+          errorType: null,
+          durationMs: Date.now() - startedAt,
+          isFirstSuccess: success ? await isFirstSuccessfulScrape() : false,
+        });
+      }
+      return result;
+    } catch (error) {
+      await notifyScrapeOutcome({
+        vendor: params?.options?.companyId,
+        trigger: params?.usageTrigger,
+        success: false,
+        errorType: error?.errorType || error?.name || 'unknown',
+        durationMs: Date.now() - startedAt,
+        isFirstSuccess: false,
+      });
+      throw error;
+    }
+  });
+}
+
+let scraperLibraryVersion;
+function getScraperLibraryVersion() {
+  if (scraperLibraryVersion === undefined) {
+    try {
+      scraperLibraryVersion = require('israeli-bank-scrapers-core/package.json').version || null;
+    } catch {
+      scraperLibraryVersion = null;
+    }
+  }
+  return scraperLibraryVersion;
+}
+
+async function isFirstSuccessfulScrape() {
+  if (!hasUsageListeners()) {
+    return false;
+  }
+  try {
+    const result = await databaseRef.query(
+      "SELECT COUNT(*) AS count FROM scrape_events WHERE status = 'success'",
+    );
+    return Number(result?.rows?.[0]?.count) === 1;
+  } catch {
+    return false;
+  }
+}
+
+async function notifyScrapeOutcome({ vendor, trigger, success, errorType, durationMs, isFirstSuccess }) {
+  if (!vendor || !CompanyTypes[vendor] || !hasUsageListeners()) {
+    return;
+  }
+  emitUsageEvent('scrape_outcome', {
+    vendor: String(vendor),
+    trigger: trigger === 'scheduled' ? 'scheduled' : 'manual',
+    success: Boolean(success),
+    errorType: errorType ? String(errorType) : null,
+    durationMs,
+    scraperVersion: getScraperLibraryVersion(),
+    isFirstSuccess: Boolean(isFirstSuccess),
+  });
 }
 
 module.exports = {
