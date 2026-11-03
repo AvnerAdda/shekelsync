@@ -1,6 +1,7 @@
 import { expect, test } from '@playwright/test';
 import { goHome, setupRendererTest } from './helpers/renderer-app';
 
+// Fictional transactions; the six weighted contributions sum to 1,149.10.
 const predictions = [
   { transactionName: 'Example transit service', amount: 100, probability: 1, probabilityWeightedAmount: 100 },
   { transactionName: 'Example telecom service', amount: 200, probability: 0.9, probabilityWeightedAmount: 180 },

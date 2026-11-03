@@ -273,7 +273,8 @@ npm run replay:forecast -- --from 2026-03-01 --through 2026-09-30 --actual-throu
 Set `SQLITE_DB_PATH` or pass `--db PATH` to choose the ledger. Choose `--actual-through` as the
 last complete day of imported transactions. The command freezes historical time and rebuilds
 automatic patterns in fresh in-memory databases, without modifying the source ledger. Its JSON
-contains aggregate errors, not transaction details. It compares point estimates; it does not
+contains aggregate financial errors. Reports from personal ledgers must remain private, even
+without transaction details. Use a synthetic ledger for shareable examples. It compares point estimates; it does not
 evaluate prediction interval coverage or prospective performance.
 Pass `--category-limit 10` to include the largest category errors, their signed bias, and the
 types of predictions that contributed. Category MAE uses all scored windows as its denominator,

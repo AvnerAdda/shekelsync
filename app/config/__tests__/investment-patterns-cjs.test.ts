@@ -14,6 +14,9 @@ describe('investment-patterns-cjs', () => {
       expect.arrayContaining(['ברוקר', 'interactive brokers', 'trading account']),
     );
     expect(patterns.every((p: string) => typeof p === 'string')).toBe(true);
+    expect(getPatternsForType('real_estate')).toEqual(
+      expect.arrayContaining(['נדל"ן', 'שוברי גביה', 'real estate']),
+    );
   });
 
   it('returns keywords and empty arrays for unknown types', () => {

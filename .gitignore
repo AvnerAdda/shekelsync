@@ -20,6 +20,9 @@ yarn-error.log*
 .env.test.local
 .env.production.local
 .env*.bak
+.env.*
+!.env.example
+!.env.*.example
 
 # Package files (commented out - usually want to track these)
 # app/package-lock.json
@@ -59,6 +62,12 @@ run.sh
 *.db
 *.sqlite
 *.sqlite3
+*.db-*
+*.sqlite-*
+*.sqlite3-*
+*.db.bak*
+*.sqlite.bak*
+*.sqlite3.bak*
 
 # TypeScript build info
 *.tsbuildinfo
