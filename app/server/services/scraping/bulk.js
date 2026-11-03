@@ -57,6 +57,7 @@ async function bulkScrape(options = {}) {
     onAccountStart,
     onAccountComplete,
     createLogger,
+    usageTrigger,
   } = options;
 
   const log = toLogger(logger);
@@ -188,6 +189,7 @@ async function bulkScrape(options = {}) {
           credentials: decryptedCredentials,
           logger: accountLogger,
           repairStateProvider,
+          usageTrigger,
         });
 
         const transactionCount = Array.isArray(scrapeResult.accounts)

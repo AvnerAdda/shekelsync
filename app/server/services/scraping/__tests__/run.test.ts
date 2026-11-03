@@ -325,6 +325,55 @@ describe('scraping run service', () => {
       expect(insertedTxnCall).toBeTruthy();
     });
 
+    it('reports a minimal outcome for failed scrapes and skips unknown vendors', async () => {
+      // run.js loads usage-events through CommonJS require; subscribe to that instance.
+      const { onUsageEvent } = Module.createRequire(import.meta.url)('../../usage-events.js');
+      const outcomes: any[] = [];
+      const unsubscribe = onUsageEvent((type: string, payload: any) => {
+        if (type === 'scrape_outcome') outcomes.push(payload);
+      });
+
+      try {
+        mockClient.query.mockImplementation(async () => ({ rows: [], rowCount: 0 }));
+        await expect(
+          runService.runScrape({
+            options: { companyId: 'hapoalim' },
+            credentials: { dbId: 7, username: 'bank-user', password: 'bank-pass' },
+            execute: async () => ({
+              success: false,
+              errorType: 'INVALID_PASSWORD',
+              errorMessage: 'Wrong password for bank-user',
+              accounts: [],
+            }),
+            logger: buildLogger(),
+            usageTrigger: 'scheduled',
+          } as any),
+        ).rejects.toThrow();
+
+        await expect(
+          runService.runScrape({
+            options: { companyId: 'does-not-exist' },
+            credentials: { username: 'demo', password: 'secret' },
+            logger: buildLogger(),
+          } as any),
+        ).rejects.toThrow();
+
+        expect(outcomes).toHaveLength(1);
+        expect(outcomes[0]).toEqual({
+          vendor: 'hapoalim',
+          trigger: 'scheduled',
+          success: false,
+          errorType: 'INVALID_PASSWORD',
+          durationMs: expect.any(Number),
+          scraperVersion: expect.anything(),
+          isFirstSuccess: false,
+        });
+        expect(JSON.stringify(outcomes)).not.toContain('bank-user');
+      } finally {
+        unsubscribe();
+      }
+    });
+
     it('treats no-transactions scraper errors with accounts as successful balance updates', async () => {
       const logger = buildLogger();
       const markCredentialRepairComplete = vi.fn().mockResolvedValue(true);

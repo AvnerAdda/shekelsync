@@ -58,6 +58,18 @@ const settingsBridge = Object.freeze({
   },
 });
 
+const analyticsBridge = Object.freeze({
+  getStatus: () => ipcRenderer.invoke('analytics:getStatus'),
+  // Fire-and-forget; the main process drops events unless the user opted in.
+  track: (eventName, props) => {
+    try {
+      ipcRenderer.send('analytics:track', eventName, props);
+    } catch {
+      // Analytics must never break the UI.
+    }
+  },
+});
+
 const telegramBridge = Object.freeze({
   getStatus: () => ipcRenderer.invoke('telegram:getStatus'),
   saveBotToken: (token) => ipcRenderer.invoke('telegram:saveBotToken', token),
@@ -180,6 +192,7 @@ const electronAPI = {
   log: logBridge,
   diagnostics: diagnosticsBridge,
   settings: settingsBridge,
+  analytics: analyticsBridge,
   telegram: telegramBridge,
 
   // App information

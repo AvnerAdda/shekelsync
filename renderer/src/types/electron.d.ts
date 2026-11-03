@@ -128,9 +128,24 @@ interface BackgroundSyncSettings {
   };
 }
 
+interface UsageAnalyticsSettings {
+  enabled?: boolean;
+  decidedAt?: string | null;
+}
+
 interface ElectronAppSettings {
   backgroundSync?: BackgroundSyncSettings;
+  usageAnalytics?: UsageAnalyticsSettings;
   [key: string]: unknown;
+}
+
+interface AnalyticsApi {
+  getStatus: () => Promise<{
+    success: boolean;
+    status?: { available: boolean; enabled: boolean };
+    error?: string;
+  }>;
+  track: (eventName: 'screen_viewed' | 'app_error', props?: Record<string, string>) => void;
 }
 
 interface SettingsApi {
@@ -172,6 +187,7 @@ interface ElectronAPI {
   log: LogApi;
   diagnostics: DiagnosticsApi;
   settings: SettingsApi;
+  analytics?: AnalyticsApi;
   app: AppApi;
   database: DatabaseMaintenanceApi;
   events: ElectronEventsApi;

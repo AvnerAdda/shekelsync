@@ -3,6 +3,7 @@ const encryptionUtils = require('../../lib/server/encryption.js');
 const institutionsModule = require('./institutions.js');
 const timeUtils = require('../../lib/server/time-utils.js');
 const { credentialIdMatchSql } = require('./investments/credential-link.js');
+const { emitUsageEvent } = require('./usage-events.js');
 
 let database = actualDatabase;
 let encryptRef = encryptionUtils.encrypt;
@@ -445,6 +446,7 @@ async function createCredential(payload = {}) {
     [result.rows[0].id]
   );
 
+  emitUsageEvent('institution_added', { vendor: String(vendor) });
   return mapCredentialRow(credWithInstitution.rows[0]);
 }
 

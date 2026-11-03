@@ -573,6 +573,33 @@
       "clickForDetails": "Click to see details"
     }
   },
+  "usageAnalytics": {
+    "consent": {
+      "title": "Help improve ShekelSync?",
+      "message": "You can share anonymous usage statistics so we can see which features people use and spot broken bank connections faster. Your financial data stays on this computer.",
+      "changeLater": "You can change this anytime in Settings → Privacy & Security.",
+      "accept": "Share anonymous stats",
+      "decline": "No thanks"
+    },
+    "panel": {
+      "title": "Anonymous usage statistics",
+      "description": "Off unless you turn it on. When on, ShekelSync sends small, anonymous events to Aptabase (a privacy-focused analytics service): when the app starts, when you open a screen, when you add an institution or a sync finishes, a once-a-day feature summary, and error types. No device ID or account is attached.",
+      "toggle": "Share anonymous usage statistics",
+      "unavailable": "Usage statistics are not available in this build.",
+      "saveFailed": "Could not save your choice. Please try again."
+    },
+    "sharedTitle": "What is shared",
+    "shared": {
+      "version": "App version, language and whether this is a test build",
+      "system": "Operating system and version",
+      "screens": "Which main screens you open (Home, Activity, Plan…)",
+      "syncs": "For each bank sync: the institution code, success or failure, the error type, manual or scheduled, the scraper version and a rough duration",
+      "setup": "When you add an institution (its code only) and when your first sync succeeds",
+      "features": "Once a day: which features are on (auto-sync, Telegram, AI assistant, property, budgets, goals), how many institutions are connected as a range (e.g. 2–3) and how long ago you started using the app as a range (e.g. 1–3 months)",
+      "errors": "Error and failure types only (e.g. TypeError, network, keychain), never their messages"
+    },
+    "neverShared": "Never shared: amounts, transactions, merchants, categories, balances, account numbers, credentials, names, e-mails, or anything you type."
+  },
   "settings": {
     "title": "Settings",
     "tabs": {
