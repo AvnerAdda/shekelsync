@@ -31,10 +31,10 @@ import { useFinancePrivacy } from '@app/contexts/FinancePrivacyContext';
 import { onStartupReady, scheduleStartupIdleWork } from '@renderer/app/startup/startup-readiness';
 import { useMoneyReview } from '../hooks/useMoneyReview';
 import type { MoneyReviewGroup, MoneyReviewItem } from '../types';
-import MoneyReviewItemDetailDialog from './MoneyReviewItemDetailDialog';
 import { buildMoneyReviewTimeScopeLabel } from '../time-scope';
 
 const MoneyReviewPage = lazy(() => import('../pages/MoneyReviewPage'));
+const MoneyReviewItemDetailDialog = lazy(() => import('./MoneyReviewItemDetailDialog'));
 
 const GROUP_ICONS: Record<MoneyReviewGroup, React.ReactNode> = {
   data: <DataObjectIcon fontSize="small" />,
@@ -349,15 +349,19 @@ const MoneyReviewDashboardSection: React.FC = () => {
         </Box>
       )}
 
-      <MoneyReviewItemDetailDialog
-        open={itemDialogOpen}
-        item={selectedItem}
-        loading={reviewLoading}
-        busy={selectedItem?.id === updatingId}
-        onClose={closeReview}
-        onPrimaryAction={performPrimaryAction}
-        onUpdateStatus={updateStatus}
-      />
+      {itemDialogOpen && (
+        <Suspense fallback={null}>
+          <MoneyReviewItemDetailDialog
+            open
+            item={selectedItem}
+            loading={reviewLoading}
+            busy={selectedItem?.id === updatingId}
+            onClose={closeReview}
+            onPrimaryAction={performPrimaryAction}
+            onUpdateStatus={updateStatus}
+          />
+        </Suspense>
+      )}
 
       <Dialog
         open={reviewAllOpen}

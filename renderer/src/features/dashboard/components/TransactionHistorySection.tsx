@@ -1,5 +1,5 @@
 import TransactionActions from '@renderer/shared/components/TransactionActions';
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { lazy, Suspense, useState, useCallback, useEffect } from 'react';
 import {
   Paper,
   Box,
@@ -43,7 +43,6 @@ import TransactionDetailModal, { TransactionForModal } from '@renderer/shared/mo
 import type { DashboardForecastData } from '@renderer/features/dashboard/hooks/useDashboardInsights';
 import { getIncomeExpenseYAxisConfig } from './transaction-history-axis';
 import { grossNumber, hasPairedCardData, preferOperatingNumber } from '../utils/cashflow';
-import FinancialCorrectionDialog from '@renderer/features/financial-truth/FinancialCorrectionDialog';
 import type { CorrectionTarget } from '@renderer/features/financial-truth/types';
 import { buildSplitBarData, type BarSplitBy, type BarFlow, type SplitBarSeries, type SplitBarDetail } from './transaction-history-splits';
 import { getTransactionPeriod, type TransactionPeriod } from '../utils/transaction-period';
@@ -56,6 +55,8 @@ import {
   type InvestmentBasis,
   type ProjectionHorizon,
 } from './net-position-projection-helpers';
+
+const FinancialCorrectionDialog = lazy(() => import('@renderer/features/financial-truth/FinancialCorrectionDialog'));
 
 interface TransactionHistorySectionProps {
   data: any;
@@ -2322,21 +2323,25 @@ const TransactionHistorySection: React.FC<TransactionHistorySectionProps> = ({
           }
         }}
       />
-      <FinancialCorrectionDialog
-        open={Boolean(correctionTarget)}
-        target={correctionTarget}
-        sourceFeature="dashboard_forecast"
-        sourceKey={correctionTarget?.occurrenceId || (correctionTarget?.patternId ? `financial_pattern:${correctionTarget.patternId}` : undefined)}
-        onClose={() => setCorrectionTarget(null)}
-        onApplied={(patternId, action) => {
-          if (action === 'skip_occurrence' && correctionTarget?.occurrenceId) {
-            setHiddenPredictionIds((current) => new Set(current).add(correctionTarget.occurrenceId!));
-          } else if (patternId) {
-            setHiddenPatternIds((current) => new Set(current).add(patternId));
-          }
-          refreshForecast();
-        }}
-      />
+      {correctionTarget && (
+        <Suspense fallback={null}>
+          <FinancialCorrectionDialog
+            open
+            target={correctionTarget}
+            sourceFeature="dashboard_forecast"
+            sourceKey={correctionTarget.occurrenceId || (correctionTarget.patternId ? `financial_pattern:${correctionTarget.patternId}` : undefined)}
+            onClose={() => setCorrectionTarget(null)}
+            onApplied={(patternId, action) => {
+              if (action === 'skip_occurrence' && correctionTarget.occurrenceId) {
+                setHiddenPredictionIds((current) => new Set(current).add(correctionTarget.occurrenceId!));
+              } else if (patternId) {
+                setHiddenPatternIds((current) => new Set(current).add(patternId));
+              }
+              refreshForecast();
+            }}
+          />
+        </Suspense>
+      )}
     </Paper>
   );
 };
