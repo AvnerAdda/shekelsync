@@ -65,6 +65,28 @@ describe('planning ledger arithmetic', () => {
     expect(math.describeGoal({ ...goal, saved_amount: 1100 }, today)).toMatchObject({ remaining_amount: 0, required_monthly_contribution: 0, on_track: true });
   });
 
+  it('splits plan flows into balance changes and a reserved floor for the outlook', () => {
+    const goals = [
+      { target_amount: 1000, saved_amount: 400, monthly_contribution: 250, target_date: null, reserve_location: 'included_cash' },
+      { target_amount: 5000, saved_amount: 0, monthly_contribution: 300, target_date: '2026-10-15', reserve_location: 'external' },
+    ];
+    const changes = [{ id: 'a', label: 'Trip', amount: -800, date: '2026-09-20', frequency: 'one_time' },
+      { id: 'b', label: 'Side job', amount: 500, date: '2026-09-15', frequency: 'monthly', end_date: null }];
+    const { starting_floor: start, daily } = math.planCashFlows({ today, horizon: 70, goals, changes, cashBuffer: 500 });
+    const on = (date) => daily.find((day) => day.date === date);
+    expect(start).toBe(900);
+    expect(on('2026-09-20').scenario_change).toBe(-800);
+    expect(on('2026-10-15').scenario_change).toBe(500);
+    expect(on('2026-10-01')).toMatchObject({ external_contributions: 300, included_contributions: 250, reserved_floor: 1150 });
+    // The external goal ends at its target date; the included one is capped at its remaining 600.
+    expect(on('2026-11-01')).toMatchObject({ external_contributions: 0, included_contributions: 250, reserved_floor: 1400 });
+    const longer = math.planCashFlows({ today, horizon: 100, goals, changes: [], cashBuffer: 500 });
+    expect(longer.daily.find((day) => day.date === '2026-12-01').included_contributions).toBe(100);
+    expect(longer.daily.at(-1).reserved_floor).toBe(1500);
+    // The ledger keeps reserving the same contributions.
+    expect(projection({ goals, horizon: 70 }).total_planned_contributions).toBe(300 + 250 + 250);
+  });
+
   it('rejects impossible dates, non-finite values, empty numbers, duplicate changes and invalid horizons', () => {
     expect(math.validDate('2026-02-30')).toBe(false);
     for (const value of [null, '', ' ', NaN, Infinity, -1, 1e10]) expect(() => math.money(value, 'Amount')).toThrow();

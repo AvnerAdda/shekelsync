@@ -4,6 +4,7 @@ import {
   Dialog, DialogTitle, DialogContent, IconButton, Box, Typography,
   CircularProgress, Grid, Paper, useTheme, Alert, Button, alpha,
   Table, TableBody, TableCell, TableHead, TableRow, ToggleButton, ToggleButtonGroup,
+  Menu, MenuItem, Checkbox, ListItemText, ListSubheader, Chip,
 } from '@mui/material';
 import CloseIcon from '@mui/icons-material/Close';
 import RefreshIcon from '@mui/icons-material/Refresh';
@@ -12,6 +13,11 @@ import { useTranslation } from 'react-i18next';
 import { format, subMonths } from 'date-fns';
 import { apiClient } from '@renderer/lib/api-client';
 import { useFinancePrivacy } from '@app/contexts/FinancePrivacyContext';
+import { PLANNING_CHANGED_EVENT } from '@renderer/features/planning/types';
+import {
+  applyPlanOverlay, hasActivePlans, isPlanOverlay, overlayHorizon,
+  type PlanOverlay, type PlanSelection,
+} from '../utils/plan-overlay';
 
 interface PersonalizedFutureModalProps {
   open: boolean;
@@ -22,6 +28,18 @@ const CACHE_DURATION_MS = 60 * 1000;
 const HISTORY_RANGES = ['3', '6', 'all'] as const;
 type HistoryRange = typeof HISTORY_RANGES[number];
 const finite = (value: unknown): value is number => typeof value === 'number' && Number.isFinite(value);
+const PLAN_SELECTION_KEY = 'shekelsync.cashFlowOutlook.plans';
+const DEFAULT_PLAN_SELECTION: PlanSelection = { goals: true, scenarioIds: [] };
+
+function readPlanSelection(): PlanSelection {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(PLAN_SELECTION_KEY) || 'null');
+    if (parsed && typeof parsed.goals === 'boolean' && Array.isArray(parsed.scenarioIds)) {
+      return { goals: parsed.goals, scenarioIds: parsed.scenarioIds.filter((id: unknown) => Number.isInteger(id)) };
+    }
+  } catch { /* storage unavailable */ }
+  return DEFAULT_PLAN_SELECTION;
+}
 
 const PersonalizedFutureModal: React.FC<PersonalizedFutureModalProps> = ({ open, onClose }) => {
   const theme = useTheme();
@@ -34,6 +52,12 @@ const PersonalizedFutureModal: React.FC<PersonalizedFutureModalProps> = ({ open,
   const [investmentBasis, setInvestmentBasis] = useState<'before' | 'after'>('after');
   const [historyRange, setHistoryRange] = useState<HistoryRange>('3');
   const requestSequence = useRef(0);
+  const [planSelection, setPlanSelection] = useState<PlanSelection>(readPlanSelection);
+  const [overlay, setOverlay] = useState<PlanOverlay | null>(null);
+  const [overlayFailed, setOverlayFailed] = useState(false);
+  const [planRevision, setPlanRevision] = useState(0);
+  const [plansMenuAnchor, setPlansMenuAnchor] = useState<HTMLElement | null>(null);
+  const overlaySequence = useRef(0);
 
   const fetchData = useCallback(async (force = false) => {
     const sequence = ++requestSequence.current;
@@ -68,8 +92,47 @@ const PersonalizedFutureModal: React.FC<PersonalizedFutureModalProps> = ({ open,
       }
     };
     window.addEventListener('financialTruthChanged', changed);
-    return () => window.removeEventListener('financialTruthChanged', changed);
+    // Mortgage and account edits change the forecast without a truth revision.
+    window.addEventListener('dataRefresh', changed);
+    return () => {
+      window.removeEventListener('financialTruthChanged', changed);
+      window.removeEventListener('dataRefresh', changed);
+    };
   }, [fetchData, open]);
+
+  useEffect(() => {
+    const changed = () => setPlanRevision(revision => revision + 1);
+    window.addEventListener(PLANNING_CHANGED_EVENT, changed);
+    return () => window.removeEventListener(PLANNING_CHANGED_EVENT, changed);
+  }, []);
+
+  useEffect(() => {
+    try { localStorage.setItem(PLAN_SELECTION_KEY, JSON.stringify(planSelection)); } catch { /* storage unavailable */ }
+  }, [planSelection]);
+
+  // Plans are layered on the forecast: refetch with each forecast, selection or plan edit.
+  const forecastPeriod = data?.forecastPeriod;
+  useEffect(() => {
+    if (!open || !data) return;
+    const sequence = ++overlaySequence.current;
+    const params: Record<string, string> = {
+      horizon_days: String(overlayHorizon(forecastPeriod)),
+      goals: planSelection.goals ? '1' : '0',
+      ...(planSelection.scenarioIds.length ? { scenario_ids: planSelection.scenarioIds.join(',') } : {}),
+    };
+    apiClient.get('/api/planning/forecast-overlay', { params, cacheMode: 'no-store' as const })
+      .then((response) => {
+        if (sequence !== overlaySequence.current) return;
+        const valid = response.ok && isPlanOverlay(response.data);
+        setOverlay(valid ? response.data as PlanOverlay : null);
+        setOverlayFailed(!valid);
+      })
+      .catch(() => {
+        if (sequence !== overlaySequence.current) return;
+        setOverlay(null);
+        setOverlayFailed(true);
+      });
+  }, [data, forecastPeriod, open, planRevision, planSelection]);
 
   const currency = (value: unknown) => finite(value)
     ? formatCurrency(value, { absolute: false, maximumFractionDigits: 0 }) : t('unavailable');
@@ -98,6 +161,20 @@ const PersonalizedFutureModal: React.FC<PersonalizedFutureModalProps> = ({ open,
     : finite(summary?.netCashFlow) && finite(startingBalance) ? startingBalance + summary.netCashFlow : null;
   const balanceWarning = data?.balanceStatus === 'missing_exchange_rate' ? 'missingExchangeRate'
     : data?.balanceStatus === 'incomplete' ? 'incompleteBalance' : 'missingBalance';
+  const plansActive = data?.hasCurrentBalance !== false && hasActivePlans(overlay, planSelection);
+  const planned = applyPlanOverlay(chartData, plansActive ? overlay : null, startingBalance);
+  const plotData = plansActive ? planned.rows : chartData;
+  const showFloor = plansActive && planned.rows.some((day: any) => finite(day.reservedFloor) && day.reservedFloor > 0);
+  const knownScenarioIds = new Set((overlay?.scenarios || []).map(scenario => scenario.id));
+  const selectedScenarios = planSelection.scenarioIds.filter(id => knownScenarioIds.has(id));
+  const selectedPlanCount = (planSelection.goals && overlay?.goals.length ? 1 : 0) + selectedScenarios.length;
+  const hasPlans = Boolean(overlay && (overlay.goals.length || overlay.scenarios.length));
+  const toggleScenario = (id: number) => setPlanSelection(current => ({
+    ...current,
+    scenarioIds: current.scenarioIds.includes(id) ? current.scenarioIds.filter(item => item !== id) : [...current.scenarioIds, id],
+  }));
+  const availableDelta = overlay && selectedScenarios.length && finite(overlay.available_spend) && finite(overlay.available_spend_baseline)
+    ? overlay.available_spend - overlay.available_spend_baseline : 0;
   const summaries = [
     { key: 'pessimistic', title: t('scenarios.bad'), description: t('scenarios.lowerDescription'), color: theme.palette.text.secondary },
     { key: 'base', title: t('scenarios.normal'), description: t('scenarios.expectedDescription'), color: theme.palette.primary.main },
@@ -165,10 +242,40 @@ const PersonalizedFutureModal: React.FC<PersonalizedFutureModalProps> = ({ open,
                     <ToggleButton value="before">{t('investmentBasis.before')}</ToggleButton>
                     <ToggleButton value="after">{t('investmentBasis.after')}</ToggleButton>
                   </ToggleButtonGroup>}
+                  {hasPlans && data.hasCurrentBalance !== false && <>
+                    <Button
+                      size="small"
+                      variant={selectedPlanCount ? 'contained' : 'outlined'}
+                      aria-haspopup="menu"
+                      aria-expanded={Boolean(plansMenuAnchor)}
+                      onClick={(event) => setPlansMenuAnchor(event.currentTarget)}
+                    >
+                      {selectedPlanCount ? t('plans.buttonCount', { count: String(selectedPlanCount) }) : t('plans.button')}
+                    </Button>
+                    <Menu
+                      anchorEl={plansMenuAnchor}
+                      open={Boolean(plansMenuAnchor)}
+                      onClose={() => setPlansMenuAnchor(null)}
+                      slotProps={{ list: { 'aria-label': t('plans.menuLabel'), dense: true } }}
+                    >
+                      <MenuItem
+                        disabled={!overlay?.goals.length}
+                        onClick={() => setPlanSelection(current => ({ ...current, goals: !current.goals }))}
+                      >
+                        <Checkbox size="small" edge="start" checked={planSelection.goals && Boolean(overlay?.goals.length)} tabIndex={-1} disableRipple />
+                        <ListItemText primary={t('plans.goals')} secondary={t('plans.goalsHint', { count: String(overlay?.goals.length || 0) })} />
+                      </MenuItem>
+                      <ListSubheader>{t('plans.scenariosTitle')}</ListSubheader>
+                      {overlay?.scenarios.length ? overlay.scenarios.map(scenario => <MenuItem key={scenario.id} onClick={() => toggleScenario(scenario.id)}>
+                        <Checkbox size="small" edge="start" checked={selectedScenarios.includes(scenario.id)} tabIndex={-1} disableRipple />
+                        <ListItemText primary={scenario.name} />
+                      </MenuItem>) : <MenuItem disabled>{t('plans.noScenarios')}</MenuItem>}
+                    </Menu>
+                  </>}
                 </Box>
               </Box>
               <ResponsiveContainer width="100%" height={300} minHeight={300}>
-                <ComposedChart data={chartData} margin={{ top: 15, right: 12, bottom: 5, left: 10 }}>
+                <ComposedChart data={plotData} margin={{ top: 15, right: 12, bottom: 5, left: 10 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke={alpha(theme.palette.divider, 0.5)} vertical={false} />
                   <XAxis dataKey="date" tickFormatter={date => dateLabel(date)} minTickGap={45} tickLine={false} axisLine={false} style={{ fontSize: '0.75rem' }} />
                   <YAxis tickFormatter={currency} domain={['auto', 'auto']} width={90} tickLine={false} axisLine={false} style={{ fontSize: '0.75rem' }} />
@@ -178,11 +285,52 @@ const PersonalizedFutureModal: React.FC<PersonalizedFutureModalProps> = ({ open,
                   {hasRange && <Area type="linear" dataKey="forecastRange" stroke="none" fill={theme.palette.primary.main} fillOpacity={0.13} name={t('netPosition.range')} isAnimationActive={false} />}
                   <Line type="linear" dataKey="historicalCumulative" stroke={theme.palette.text.secondary} strokeWidth={2} name={t('netPosition.historical')} dot={false} isAnimationActive={false} />
                   <Line type="linear" dataKey={hasExpected ? 'expectedCumulative' : 'p50Cumulative'} stroke={theme.palette.primary.main} strokeWidth={2.5} strokeDasharray="5 4" name={t('scenarios.normal')} dot={false} isAnimationActive={false} />
+                  {plansActive && <Line type="linear" dataKey="plannedCumulative" stroke={theme.palette.secondary.main} strokeWidth={2.5} strokeDasharray="2 3" name={t('plans.line')} dot={false} connectNulls isAnimationActive={false} />}
+                  {showFloor && <Line type="stepAfter" dataKey="reservedFloor" stroke={theme.palette.text.disabled} strokeWidth={1.5} strokeDasharray="1 4" name={t('plans.floor')} dot={false} connectNulls isAnimationActive={false} />}
                 </ComposedChart>
               </ResponsiveContainer>
               <Typography variant="caption" color="text.secondary">{t('rangeNote')}</Typography>
             </Paper>
           </Grid>
+          {data.hasCurrentBalance !== false && (overlay || overlayFailed) && <Grid size={{ xs: 12 }}>
+            <Paper variant="outlined" data-testid="outlook-plans" sx={{ p: 2, borderRadius: 2 }}>
+              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 1 }}>
+                <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>{t('plans.title')}</Typography>
+                <Button size="small" component={RouterLink} to="/plan?tab=planning" onClick={onClose}>{t('plans.manage')}</Button>
+              </Box>
+              {overlayFailed ? <Typography variant="body2" color="text.secondary">{t('plans.loadFailed')}</Typography> : overlay && <>
+                {!hasPlans && <Typography variant="body2" color="text.secondary">{t('plans.empty')}</Typography>}
+                <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 3, mt: 1 }}>
+                  {plansActive && finite(planned.plannedEnding) && <Box>
+                    <Typography variant="caption" color="text.secondary">{t('plans.closing')}</Typography>
+                    <Typography variant="h6" data-testid="plans-closing" sx={{ fontWeight: 700 }}>{currency(planned.plannedEnding)}</Typography>
+                    {finite(planned.expectedEnding) && <Typography variant="body2" color="text.secondary">
+                      {t('plans.difference', { amount: currency(planned.plannedEnding - planned.expectedEnding) })}
+                    </Typography>}
+                  </Box>}
+                  {plansActive && planned.plannedLowest && <Box>
+                    <Typography variant="caption" color="text.secondary">{t('plans.lowest')}</Typography>
+                    <Typography variant="h6" sx={{ fontWeight: 700 }}>{currency(planned.plannedLowest.value)}</Typography>
+                    <Typography variant="body2" color="text.secondary">{dateLabel(planned.plannedLowest.date, true)}</Typography>
+                  </Box>}
+                  <Box>
+                    <Typography variant="caption" color="text.secondary">{t('plans.available')}</Typography>
+                    {finite(overlay.available_spend) ? <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
+                      <Chip color="primary" variant="outlined" data-testid="plans-available"
+                        label={overlay.spending_period_end
+                          ? t('plans.availableUntil', { amount: currency(overlay.available_spend), date: dateLabel(overlay.spending_period_end) })
+                          : currency(overlay.available_spend)} />
+                      {availableDelta !== 0 && <Typography variant="body2" color="text.secondary">
+                        {t('plans.availableDelta', { amount: currency(availableDelta) })}
+                      </Typography>}
+                    </Box> : <Typography variant="body2" color="text.secondary">{t('plans.availableUnavailable')}</Typography>}
+                  </Box>
+                </Box>
+                {plansActive && planned.dipDate && <Alert severity="warning" sx={{ mt: 1.5 }}>{t('plans.dip', { date: dateLabel(planned.dipDate, true) })}</Alert>}
+                {showFloor && <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 1 }}>{t('plans.floorNote')}</Typography>}
+              </>}
+            </Paper>
+          </Grid>}
           {summaries.map(({ key, title, description, color }) => {
             const summary = view.summaries?.[key];
             return <Grid key={key} size={{ xs: 12, md: 4 }}>

@@ -12,6 +12,11 @@ import type {
 } from '@renderer/types/investments';
 import { isDraftComputable, toMortgagePayload } from '../components/real-estate/mortgage-utils';
 
+// Mortgage edits change the forecast's scheduled payments.
+function announceForecastInputsChanged() {
+  globalThis.dispatchEvent?.(new CustomEvent('dataRefresh'));
+}
+
 function errorMessage(data: unknown, fallback: string): string {
   const payload = data as { error?: string } | undefined;
   return payload?.error || fallback;
@@ -66,6 +71,7 @@ export function useRealEstateMortgage(accountId: number | null, scenario?: Mortg
     );
     if (!response.ok) throw new Error(errorMessage(response.data, response.statusText || 'Failed to save mortgage'));
     setData(response.data as MortgageView);
+    announceForecastInputsChanged();
     return response.data as MortgageView;
   }, [accountId]);
 
@@ -73,6 +79,7 @@ export function useRealEstateMortgage(accountId: number | null, scenario?: Mortg
     if (!accountId) return;
     const response = await apiClient.delete(`/api/investments/real-estate/properties/${accountId}/mortgage`);
     if (!response.ok) throw new Error(errorMessage(response.data, response.statusText || 'Failed to delete mortgage'));
+    announceForecastInputsChanged();
     await refresh();
   }, [accountId, refresh]);
 

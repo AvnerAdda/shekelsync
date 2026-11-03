@@ -29,7 +29,7 @@ function transactionDate(value) {
 }
 
 function isMortgagePayment(name) {
-  return /(?:mortgage|משכנת[אה])/iu.test(name)
+  return /(?:mortgage|home loan|housing loan|משכנת[אה]|הלווא(?:ה|ת) ל?דיור)/iu.test(name)
     && !/(?:\b(?:fee|fees|insurance|setup|opening|payoff|closing)\b|early repayment|עמל[הת]|עמלות|ביטוח|פירעון|פרעון)/iu.test(name);
 }
 

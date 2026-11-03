@@ -303,7 +303,39 @@ function createPlanningService(dependencies = {}) {
     return { baseline, scenario: projected, comparison: { end_balance_delta: delta('ending_balance'), lowest_balance_delta: delta('lowest_balance'), available_spend_delta: delta('available_spend') } };
   }
 
-  return { getPlanningData, saveGoal, saveScenario, updateSettings, getProjection, previewScenario,
+  /**
+   * Plans layered on the cash-flow outlook: daily scenario changes and goal
+   * contributions for the selected plans, the reserved-money floor, and
+   * Available to spend with and without the selected scenarios.
+   */
+  async function getForecastOverlay(options = {}) {
+    const horizon = math.validateHorizon(options.horizon_days);
+    const raw = options.scenario_ids;
+    const list = Array.isArray(raw) ? raw : raw == null || raw === '' ? [] : String(raw).split(',');
+    if (list.length > 50) throw math.invalid('Select up to 50 scenarios');
+    const scenarioIds = new Set(list.map((value) => recordId(String(value).trim())));
+    const includeGoals = !['0', 'false', false].includes(options.goals ?? options.include_goals);
+    const [input, data] = await Promise.all([projectionInputs({ horizon_days: horizon }), getPlanningData()]);
+    const selected = data.scenarios.filter((scenario) => scenarioIds.has(scenario.id));
+    const changes = selected.flatMap((scenario) => scenario.changes);
+    const baseline = project(input);
+    const withScenarios = changes.length ? project(input, changes) : baseline;
+    const flows = math.planCashFlows({ today: input.today, horizon, goals: includeGoals ? input.goals : [], changes,
+      cashBuffer: input.settings.cash_buffer });
+    return {
+      currency: 'ILS', as_of_date: input.today, horizon_days: horizon, status: baseline.status, reasons: baseline.reasons,
+      spending_period_end: baseline.spending_period_end,
+      available_spend: withScenarios.available_spend, available_spend_baseline: baseline.available_spend,
+      shortfall: withScenarios.shortfall,
+      cash_buffer: input.settings.cash_buffer, reserved_cash: baseline.reserved_cash,
+      include_goals: includeGoals, starting_floor: flows.starting_floor, daily: flows.daily,
+      scenarios: data.scenarios.map((scenario) => ({ id: scenario.id, name: scenario.name, selected: scenarioIds.has(scenario.id) })),
+      goals: data.goals.map((goal) => ({ id: goal.id, name: goal.name, reserve_location: goal.reserve_location,
+        monthly_contribution: goal.monthly_contribution, remaining_amount: goal.remaining_amount })),
+    };
+  }
+
+  return { getPlanningData, saveGoal, saveScenario, updateSettings, getProjection, previewScenario, getForecastOverlay,
     deleteGoal: (id) => deleteRecord('savings_goals', id), deleteScenario: (id) => deleteRecord('cash_scenarios', id) };
 }
 

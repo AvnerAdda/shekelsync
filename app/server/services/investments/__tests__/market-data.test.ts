@@ -158,9 +158,14 @@ describe('syncMarketSeries', () => {
     const { fetchImpl, calls } = fakeFetch({
       'id=120010': () => response(CBS_TWO_REBASES),
     });
-    await marketData.syncMarketSeries({ keys: ['cbs.cpi'] }, { fetchImpl, now: '2026-11-01T10:00:00Z' });
-    const second = await marketData.syncMarketSeries({ keys: ['cbs.cpi'] }, { fetchImpl, now: '2026-11-02T10:00:00Z' });
+    let cleared = 0;
+    const invalidateCaches = () => { cleared += 1; };
+    await marketData.syncMarketSeries({ keys: ['cbs.cpi'] }, { fetchImpl, now: '2026-11-01T10:00:00Z', invalidateCaches });
+    // New points change mortgage payments in cached forecasts.
+    expect(cleared).toBe(1);
+    const second = await marketData.syncMarketSeries({ keys: ['cbs.cpi'] }, { fetchImpl, now: '2026-11-02T10:00:00Z', invalidateCaches });
     expect(second.skipped).toEqual(['cbs.cpi']);
+    expect(cleared).toBe(1);
     expect(calls).toHaveLength(1);
     const series = await marketData.loadRatePathSeries();
     expect(series.cpi.at(-1)).toEqual({ period: '2025-02', value: 102 });
