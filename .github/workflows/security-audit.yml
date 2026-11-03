@@ -74,35 +74,40 @@ jobs:
       - name: Install renderer dependencies
         run: npm --prefix renderer ci
 
-      - name: Run npm audit
+      # Policy: production dependencies must have no moderate+ advisories.
+      # Build/lint tooling only blocks on high/critical; its moderate findings
+      # (often unfixable until upstream tools update) are reported as warnings.
+      - name: Audit production dependencies (blocking, moderate+)
         run: |
-          npm audit --audit-level=moderate
-          npm --prefix app audit --audit-level=moderate
-          npm --prefix renderer audit --audit-level=moderate
+          npm audit --omit=dev --audit-level=moderate
+          npm --prefix app audit --omit=dev --audit-level=moderate
+          npm --prefix renderer audit --omit=dev --audit-level=moderate
 
-      - name: Run npm audit (production only)
+      - name: Audit all dependencies (blocking, high+)
         run: |
-          npm audit --omit=dev --audit-level=high
-          npm --prefix app audit --omit=dev --audit-level=high
-          npm --prefix renderer audit --omit=dev --audit-level=high
+          npm audit --audit-level=high
+          npm --prefix app audit --audit-level=high
+          npm --prefix renderer audit --audit-level=high
 
-      - name: Check for known vulnerabilities
+      - name: Report moderate and low dependency advisories
+        if: always()
+        shell: bash
         run: |
-          echo "Checking for high/critical vulnerabilities..."
-          AUDIT_RESULT=$(npm audit --json)
-          CRITICAL=$(echo $AUDIT_RESULT | jq '.metadata.vulnerabilities.critical // 0')
-          HIGH=$(echo $AUDIT_RESULT | jq '.metadata.vulnerabilities.high // 0')
-
-          echo "Critical vulnerabilities: $CRITICAL"
-          echo "High vulnerabilities: $HIGH"
-
-          if [ $CRITICAL -gt 0 ] || [ $HIGH -gt 0 ]; then
-            echo "❌ Found critical or high vulnerabilities!"
-            npm audit
-            exit 1
-          else
-            echo "✅ No critical or high vulnerabilities found"
-          fi
+          {
+            echo "## Moderate and low dependency advisories"
+            echo ""
+            echo "| Scope | Moderate | Low |"
+            echo "|---|---|---|"
+          } >> "$GITHUB_STEP_SUMMARY"
+          for scope in . app renderer; do
+            counts=$(npm --prefix "$scope" audit --json --audit-level=high | jq -er 'select(.error == null) | .metadata.vulnerabilities | select(type == "object") | "\(.moderate // 0) \(.low // 0)"')
+            read -r moderate low <<< "$counts"
+            name=$([ "$scope" = "." ] && echo root || echo "$scope")
+            echo "| $name | $moderate | $low |" >> "$GITHUB_STEP_SUMMARY"
+            if [ "${moderate:-0}" -gt 0 ]; then
+              echo "::warning title=Dependency advisories ($name)::$moderate moderate advisories remain. Production moderate+ and all high+ advisories are checked by the blocking steps above. Run 'npm --prefix $scope audit' for details."
+            fi
+          done
 
   security-linting:
     name: Security Linting
@@ -426,7 +431,8 @@ jobs:
           echo "" >> security-report.md
           echo "## Checks Completed:" >> security-report.md
           echo "- ✅ Security test suite passed" >> security-report.md
-          echo "- ✅ Dependency audit clean" >> security-report.md
+          echo "- ✅ Dependency audit policy passed (production: moderate+ blocked; all dependencies: high+ blocked)" >> security-report.md
+          echo "- Moderate/low findings remain visible in the Dependency Security Audit job summary." >> security-report.md
           echo "- ✅ Security linting passed" >> security-report.md
           echo "- ✅ Security headers verified" >> security-report.md
           echo "- ✅ Authentication implementation verified" >> security-report.md

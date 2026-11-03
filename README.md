@@ -206,6 +206,9 @@ You are responsible for lawful and compliant use in your jurisdiction.
 
 - Report vulnerabilities privately; see `SECURITY.md`.
 - Security audit workflow runs on push/PR/manual dispatch (`.github/workflows/security-audit.yml`).
+- CI, releases, and `npm run audit:security` block moderate+ production advisories
+  and high/critical advisories across all dependencies. Moderate/low findings
+  remain visible in audit output and the CI job summary.
 - Secret scanning runs with gitleaks on push/PR/manual dispatch (`.github/workflows/secret-scan.yml`).
 - CI gates tests and quality checks on push/PR (`.github/workflows/ci.yml`).
 - Never commit credentials, private keys, or production `.env` files.
