@@ -4,8 +4,10 @@ import App from './App';
 import { AppProviders } from './app/providers/AppProviders';
 import { STARTUP_READY_EVENT } from './app/startup/startup-readiness';
 import { installElectronLoggerBridge } from '@app/lib/install-electron-logger';
+import { installRendererErrorReporting } from '@renderer/features/usage-analytics/hooks/useUsageAnalyticsSettings';
 
 installElectronLoggerBridge();
+installRendererErrorReporting();
 
 if (typeof document !== 'undefined') {
   const platform = window.electronAPI?.platform;

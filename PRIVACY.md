@@ -1,6 +1,6 @@
 # ShekelSync Privacy Policy
 
-_Last updated: 2026-08-11_
+_Last updated: 2026-11-03_
 
 ShekelSync is a **local-first desktop application**. Your financial data lives on
 your own computer, under your own operating-system user account. This document
@@ -20,8 +20,9 @@ the behavior of your build.
 - Bank/credit-card credentials are **encrypted at rest** (AES-256-GCM) with a
   key held in your operating system keychain.
 - Data leaves your device **only** for features you explicitly enable and
-  configure: the optional AI assistant, optional Telegram notifications, and
-  optional donations. Each is described below.
+  configure: the optional AI assistant, optional Telegram notifications,
+  optional donations, and optional anonymous usage statistics. Each is
+  described below.
 
 ## What data ShekelSync stores, and where
 
@@ -39,9 +40,9 @@ on Windows, `~/.config/ShekelSync` on Linux):
   troubleshooting. Account, card and ID numbers, balances, e-mail addresses and
   secrets are masked before log lines are written.
 
-ShekelSync does not operate a backend that collects this data, and the app does
-not include analytics, tracking, or telemetry that reports your usage back to
-the developer.
+ShekelSync does not operate a backend that collects this data. The only usage
+reporting is the **opt-in**, anonymous usage statistics described below; it is
+off unless you turn it on and never includes your financial data.
 
 ## When data leaves your device
 
@@ -86,6 +87,55 @@ can be delivered to you. This is off unless you configure it.
 If you choose to donate to support the project, the payment is handled by a
 third-party payment processor, subject to that processor's privacy policy.
 ShekelSync does not receive or store your payment-card details.
+
+### 5. Optional anonymous usage statistics (off by default)
+
+The app asks once whether you want to share anonymous usage statistics, and
+you can change your answer at any time in **Settings → Privacy & Security**.
+Nothing is sent unless you opt in. When you do, the app sends small events to
+[Aptabase](https://aptabase.com), a privacy-focused analytics service, so the
+developer can see which features are used and notice when a bank connection
+stops working.
+
+Each event contains only:
+
+- the event type: app started, a main screen opened (Home, Review, Activity,
+  Plan, Wealth or Settings), an institution added, the first successful sync,
+  a bank sync finished, a once-a-day feature summary, a startup or update
+  failure, an app error, or statistics turned on;
+- for an added institution or first sync: the institution code (for example
+  `hapoalim`);
+- for a finished sync: the institution code, whether it succeeded, the
+  scraper's error type (for example `INVALID_PASSWORD` or `TIMEOUT`), whether
+  it was started manually or by the scheduler, the version of the
+  `israeli-bank-scrapers-core` library, and a rough duration bucket (for
+  example "under 30 seconds");
+- for the daily summary: whether auto-sync, Telegram notifications, the AI
+  assistant (an API key is configured), a property, budgets and savings goals
+  are set up; how many institutions are connected, as a range (0, 1, 2–3, 4+);
+  and how long ago you started using the app, as a range (under a week, under a
+  month, 1–3 months, more). The date itself is computed on your device and is
+  not sent;
+- for failures and errors: a fixed reason code (for example `network`,
+  `keychain`, `database`) or the error's type name (for example `TypeError`),
+  and which part of the app it came from (for example `main` or `plan`). Error
+  messages and stack traces are not sent;
+- app version, app language, operating system name and version, and whether
+  the build is a development build;
+- a random session identifier created when the app starts and kept in memory
+  only. No persistent device, installation or user identifier is created.
+
+The list of connected institutions is never sent as a whole, only the count
+range, so combinations of banks can't single you out. Declining the prompt is
+not reported.
+
+Events **never** include amounts, transactions, merchants, categories,
+balances, account, card or ID numbers, credentials, names, e-mail addresses,
+error messages, or anything you type. The app enforces this with a fixed list
+of allowed events and fields; any other value is dropped before sending.
+Aptabase receives your IP address as part of the network request; according to
+its documentation it does not store it and uses it only to derive an
+approximate country. See Aptabase's privacy policy for details.
 
 ## Data security
 

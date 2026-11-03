@@ -533,6 +533,7 @@ async function checkForManualUpdatesAndNotify() {
     logger.warn('Manual GitHub update check failed', {
       error: error instanceof Error ? error.message : String(error),
     });
+    trackUsageFailure('update_failed', error, { mode: 'manual' });
     emitUpdaterEvent('updater:error', {
       message: error instanceof Error ? error.message : String(error),
       updateMode: UPDATE_MODE_MANUAL,
@@ -634,6 +635,14 @@ const chatbotSecretStore = require('./chatbot-secret-store');
 const { createScrapeAnchorRepairStateProvider } = require('./scrape-anchor-repair-state');
 const secureKeyManager = require('./secure-key-manager');
 const { createSyncScheduler, normalizeBackgroundSettings } = require('./sync-scheduler');
+const {
+  createUsageAnalytics,
+  normalizeUsageAnalyticsSettings,
+  bucketDuration,
+  bucketCount,
+  bucketAgeDays,
+  classifyError,
+} = require('./usage-analytics');
 
 function getEnvKeyRemovalInstructions() {
   if (process.platform === 'win32') {
@@ -779,13 +788,179 @@ function applySettingsDefaults(settings = {}) {
     ...settings,
     backgroundSync: normalizedBackground,
     telegram: normalizedTelegram,
+    usageAnalytics: normalizeUsageAnalyticsSettings(settings?.usageAnalytics),
   };
+}
+
+let usageAnalytics = null;
+let usageAnalyticsStartTracked = false;
+let unsubscribeServerUsageEvents = null;
+
+function getUsageAnalytics() {
+  if (!usageAnalytics) {
+    usageAnalytics = createUsageAnalytics({
+      appVersion: app.getVersion(),
+      isPackaged: app.isPackaged,
+      getLocale: () => appSettingsCache?.appLocale || 'en',
+      logger,
+    });
+  }
+  return usageAnalytics;
+}
+
+// Subscribe to server-side signals only while analytics can actually send.
+// With no subscriber the server skips all analytics work (e.g. the first-sync
+// count query), so development builds and opted-out users see no change.
+function setServerUsageEventSubscription(active) {
+  if (active && !unsubscribeServerUsageEvents) {
+    try {
+      unsubscribeServerUsageEvents = require(resolveAppPath('server', 'services', 'usage-events.js'))
+        .onUsageEvent(handleServerUsageEvent);
+    } catch (error) {
+      logger.warn('Usage analytics: server event hook unavailable', { error: error.message });
+    }
+  } else if (!active && unsubscribeServerUsageEvents) {
+    unsubscribeServerUsageEvents();
+    unsubscribeServerUsageEvents = null;
+  }
+}
+
+function handleServerUsageEvent(type, payload) {
+  const analytics = usageAnalytics;
+  if (!analytics) return;
+  if (type === 'scrape_outcome') {
+    void analytics.track('sync_completed', {
+      vendor: payload.vendor,
+      success: payload.success,
+      errorType: payload.errorType || undefined,
+      duration: bucketDuration(payload.durationMs),
+      trigger: payload.trigger,
+      scraperVersion: payload.scraperVersion || undefined,
+    });
+    if (payload.isFirstSuccess) {
+      void analytics.track('first_sync_succeeded', { vendor: payload.vendor });
+    }
+  } else if (type === 'institution_added') {
+    void analytics.track('institution_added', { vendor: payload.vendor });
+  }
+}
+
+function trackUsageFailure(eventName, error, extraProps = {}) {
+  try {
+    void getUsageAnalytics().track(eventName, { reason: classifyError(error), ...extraProps });
+  } catch {
+    // Analytics must never interfere with error handling.
+  }
+}
+
+const USAGE_SNAPSHOT_INITIAL_DELAY_MS = 2 * 60 * 1000;
+const USAGE_SNAPSHOT_CHECK_INTERVAL_MS = 6 * 60 * 60 * 1000;
+let usageSnapshotTimer = null;
+let usageSnapshotInterval = null;
+let usageSnapshotInFlight = false;
+
+async function maybeSendDailyUsageSnapshot() {
+  const analytics = usageAnalytics;
+  if (usageSnapshotInFlight || isQuitting || !analytics) return;
+  const status = analytics.getStatus();
+  if (!status.available || !status.enabled || !backendPrerequisitesReady) return;
+
+  const today = new Date().toISOString().slice(0, 10);
+  if (appSettingsCache?.usageAnalytics?.lastSnapshotDay === today) return;
+
+  usageSnapshotInFlight = true;
+  try {
+    const { collectUsageSnapshotFacts } = require(resolveAppPath('server', 'services', 'usage-snapshot.js'));
+    const facts = await collectUsageSnapshotFacts();
+    let aiAssistant = false;
+    try {
+      const secrets = await chatbotSecretStore.load();
+      aiAssistant = typeof secrets?.openAiApiKey === 'string' && secrets.openAiApiKey.trim().length > 0;
+    } catch {
+      aiAssistant = false;
+    }
+    const sent = await analytics.track('daily_snapshot', {
+      institutions: bucketCount(facts.institutionCount),
+      installAge: bucketAgeDays(facts.firstActivityAt),
+      autoSync: appSettingsCache?.backgroundSync?.enabled === true,
+      telegram: appSettingsCache?.telegram?.enabled === true,
+      aiAssistant,
+      property: facts.hasProperty,
+      budgets: facts.hasBudgets,
+      goals: facts.hasGoals,
+    });
+    if (sent) {
+      await persistUsageSnapshotDay(today);
+    }
+  } catch (error) {
+    logger.debug?.('Usage analytics: daily snapshot skipped', { error: error.message });
+  } finally {
+    usageSnapshotInFlight = false;
+  }
+}
+
+// Write the snapshot date straight to the store: going through
+// updateAppSettings would also reschedule background sync and refresh Telegram.
+async function persistUsageSnapshotDay(day) {
+  const current = await sessionStore.getSettings();
+  const updated = await sessionStore.updateSettings({
+    ...current,
+    usageAnalytics: {
+      ...(current?.usageAnalytics || {}),
+      lastSnapshotDay: day,
+    },
+  });
+  appSettingsCache = applySettingsDefaults(updated);
+}
+
+function scheduleDailyUsageSnapshot() {
+  if (usageSnapshotTimer || usageSnapshotInterval) return;
+  usageSnapshotTimer = setTimeout(() => {
+    usageSnapshotTimer = null;
+    void maybeSendDailyUsageSnapshot();
+    usageSnapshotInterval = setInterval(() => {
+      void maybeSendDailyUsageSnapshot();
+    }, USAGE_SNAPSHOT_CHECK_INTERVAL_MS);
+    usageSnapshotInterval.unref?.();
+  }, USAGE_SNAPSHOT_INITIAL_DELAY_MS);
+  usageSnapshotTimer.unref?.();
+}
+
+function stopDailyUsageSnapshot() {
+  if (usageSnapshotTimer) {
+    clearTimeout(usageSnapshotTimer);
+    usageSnapshotTimer = null;
+  }
+  if (usageSnapshotInterval) {
+    clearInterval(usageSnapshotInterval);
+    usageSnapshotInterval = null;
+  }
+}
+
+function applyUsageAnalyticsSettings(settings, { previous } = {}) {
+  const analytics = getUsageAnalytics();
+  const enabled = settings?.usageAnalytics?.enabled === true;
+  analytics.setEnabled(enabled);
+  setServerUsageEventSubscription(enabled && analytics.getStatus().available);
+  if (enabled && previous && previous.enabled !== true) {
+    void analytics.track('analytics_opted_in');
+  }
+  if (enabled && !usageAnalyticsStartTracked) {
+    usageAnalyticsStartTracked = true;
+    void analytics.track('app_started');
+  }
+  if (enabled && analytics.getStatus().available) {
+    scheduleDailyUsageSnapshot();
+  } else {
+    stopDailyUsageSnapshot();
+  }
 }
 
 async function loadInitialSettings() {
   try {
     const initialSettings = applySettingsDefaults(await sessionStore.getSettings());
     appSettingsCache = initialSettings;
+    applyUsageAnalyticsSettings(initialSettings);
   } catch (error) {
     logger.warn('Failed to load user settings', { error: error.message });
   }
@@ -810,10 +985,17 @@ async function updateAppSettings(patch = {}) {
       ...(current?.telegram || {}),
       ...(patch?.telegram || {}),
     },
+    usageAnalytics: {
+      ...(current?.usageAnalytics || {}),
+      ...(patch?.usageAnalytics || {}),
+    },
   };
   const updated = await sessionStore.updateSettings(merged);
   const normalized = applySettingsDefaults(updated);
   appSettingsCache = normalized;
+  applyUsageAnalyticsSettings(normalized, {
+    previous: normalizeUsageAnalyticsSettings(current?.usageAnalytics),
+  });
   BrowserWindow.getAllWindows().forEach((win) => {
     win.webContents.send('settings:changed', normalized);
   });
@@ -923,6 +1105,9 @@ async function initializeBackendServices({ skipEmbeddedApi = false, skipDbInit }
     logger.info('Configuration initialised', {
       databaseMode: config?.database?.mode,
     });
+    if (configManager.loadFailed) {
+      void getUsageAnalytics().track('startup_failed', { reason: 'config_unreadable' });
+    }
 
     if (!config.database) {
       config.database = {};
@@ -965,6 +1150,7 @@ async function initializeBackendServices({ skipEmbeddedApi = false, skipDbInit }
     backendPrerequisitesReady = true;
 
     if (!dbResult.success) {
+      void getUsageAnalytics().track('startup_failed', { reason: 'database_init' });
       console.error('Database initialization failed:', dbResult.message);
       logger.error('Database initialization failed', {
         error: dbResult.message,
@@ -1008,6 +1194,7 @@ async function initializeBackendServices({ skipEmbeddedApi = false, skipDbInit }
   } catch (error) {
     console.error('Initialization error:', error);
     logger.error('Fatal initialization error', { error: error.message });
+    trackUsageFailure('startup_failed', error);
     dialog.showErrorBox(
       'Initialization Error',
       `Failed to initialize application: ${error.message}`
@@ -1163,6 +1350,7 @@ function closeApiServer(server) {
 }
 
 async function shutdownBackendServices() {
+  stopDailyUsageSnapshot();
   if (deferredServiceStartHandle) {
     clearImmediate(deferredServiceStartHandle);
     deferredServiceStartHandle = null;
@@ -1818,6 +2006,7 @@ primaryInstanceReady?.then(async () => {
     autoUpdater.on('error', (error) => {
       console.error('Auto-updater error:', error);
       logger.error('Auto-updater error', { error: error.message });
+      trackUsageFailure('update_failed', error, { mode: 'automatic' });
       emitUpdaterEvent('updater:error', {
         message: error.message,
         updateMode: UPDATE_MODE_AUTOMATIC,
@@ -2176,6 +2365,20 @@ ipcMain.handle('settings:update', async (event, patch = {}) => {
     logger.error('Failed to update application settings', { error: error.message });
     return { success: false, error: error.message };
   }
+});
+
+ipcMain.handle('analytics:getStatus', async (event) => {
+  if (!requireTrustedIpcSender(event, 'analytics:getStatus')) {
+    return { success: false, error: 'Untrusted IPC sender' };
+  }
+  return { success: true, status: getUsageAnalytics().getStatus() };
+});
+
+ipcMain.on('analytics:track', (event, eventName, props) => {
+  if (!isTrustedIpcSender(event) || typeof eventName !== 'string') {
+    return;
+  }
+  void getUsageAnalytics().trackFromRenderer(eventName, props);
 });
 
 ipcMain.handle('telegram:getStatus', async (event) => {
@@ -2548,10 +2751,20 @@ if (isDev) {
   });
 }
 
+function trackAppError(area, error) {
+  try {
+    const errorType = error instanceof Error && /^[A-Za-z]{1,40}$/.test(error.name) ? error.name : 'NonError';
+    void getUsageAnalytics().track('app_error', { area, errorType });
+  } catch {
+    // Never throw from error handlers.
+  }
+}
+
 // Error handling
 process.on('uncaughtException', (error) => {
   console.error('Uncaught Exception:', error);
   logger.error('Uncaught exception', { error: error.message, stack: error.stack });
+  trackAppError('main', error);
 
   dialog.showErrorBox('Unexpected Error', `An unexpected error occurred: ${error.message}`);
 });
@@ -2561,6 +2774,7 @@ process.on('unhandledRejection', (reason, promise) => {
   logger.error('Unhandled rejection', {
     reason: reason instanceof Error ? reason.message : String(reason),
   });
+  trackAppError('main', reason);
   if (reason instanceof Error) {
   }
   dialog.showErrorBox('Unexpected Error', `An unexpected error occurred: ${reason}`);

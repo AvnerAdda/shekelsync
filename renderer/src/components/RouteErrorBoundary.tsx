@@ -6,6 +6,7 @@ import RefreshIcon from '@mui/icons-material/Refresh';
 import { isRouteErrorResponse, useNavigate, useRouteError } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { signalStartupReady } from '@renderer/app/startup/startup-readiness';
+import { trackRendererError } from '@renderer/features/usage-analytics/hooks/useUsageAnalyticsSettings';
 
 interface ErrorContent {
   title: string;
@@ -67,6 +68,12 @@ const RouteErrorBoundary: React.FC = () => {
   React.useEffect(() => {
     signalStartupReady();
   }, []);
+
+  React.useEffect(() => {
+    if (!isRouteErrorResponse(error)) {
+      trackRendererError(error);
+    }
+  }, [error]);
 
   return (
     <Container maxWidth="md">
@@ -169,8 +176,9 @@ export class RouteErrorBoundaryShell extends React.Component<Record<string, neve
     return { crashed: true };
   }
 
-  componentDidCatch() {
+  componentDidCatch(error: unknown) {
     signalStartupReady();
+    trackRendererError(error);
   }
 
   render() {
