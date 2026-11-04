@@ -1,4 +1,18 @@
 {
+  "appLock": {
+    "title": "ShekelSync est verrouillé",
+    "description": {
+      "touchid": "Utilisez Touch ID pour déverrouiller vos données financières. Vous pouvez aussi utiliser le mot de passe de votre Mac.",
+      "password": "Saisissez le mot de passe de votre Mac pour déverrouiller vos données financières.",
+      "windows-hello": "Utilisez Windows Hello pour déverrouiller vos données financières."
+    },
+    "unlock": "Déverrouiller",
+    "unlocking": "En attente de l’authentification…",
+    "cancelled": "Le déverrouillage a été annulé.",
+    "failed": "L’authentification a échoué. Réessayez.",
+    "minimize": "Réduire",
+    "close": "Fermer"
+  },
   "releaseNotes": {
     "title": "Les nouveautés",
     "subtitle": "Les dernières améliorations de ShekelSync.",
