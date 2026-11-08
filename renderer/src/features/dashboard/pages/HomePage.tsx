@@ -128,13 +128,28 @@ const DashboardHomeContent: React.FC = () => {
     restrictedPortfolio,
     refresh: refreshPortfolio,
   } = usePortfolioSummary();
+  const primaryHasHistory = (data?.history?.length ?? 0) > 0;
+  const fallbackHasHistory = (fallbackDashboardData?.history?.length ?? 0) > 0;
+  const hasTransactions = (onboardingStatus?.stats?.transactionCount ?? 0) > 0;
+  const canOfferFallback = fallbackEnabled && !primaryHasHistory && fallbackHasHistory && hasTransactions;
+  const shouldUseFallback = showFallbackData && canOfferFallback;
+
+  // Score Financial Health over the same window the summary shows: the
+  // selected period (MTD, 30 days, custom), or the previous month when the
+  // user switched to it because the selected period has no data.
+  const healthRange = useMemo(
+    () => (shouldUseFallback
+      ? { startDate: fallbackStartDate, endDate: fallbackEndDate }
+      : { startDate, endDate }),
+    [endDate, fallbackEndDate, fallbackStartDate, shouldUseFallback, startDate],
+  );
   const {
     forecastData,
     forecastLoading,
     forecastError,
     healthSnapshot,
     refresh: refreshInsights,
-  } = useDashboardInsights();
+  } = useDashboardInsights(healthRange);
   const waterfallEnabled = selectedBreakdownType === 'overall';
   const {
     data: waterfallData,
@@ -303,10 +318,6 @@ const DashboardHomeContent: React.FC = () => {
 
     return trends;
   }, [t]);
-
-  const primaryHasHistory = (data?.history?.length ?? 0) > 0;
-  const fallbackHasHistory = (fallbackDashboardData?.history?.length ?? 0) > 0;
-  const hasTransactions = (onboardingStatus?.stats?.transactionCount ?? 0) > 0;
 
   const formatRangeLabel = useCallback((rangeStart: Date, rangeEnd: Date) => {
     const formatter = new Intl.DateTimeFormat(i18n.language || undefined, {
@@ -523,8 +534,6 @@ const DashboardHomeContent: React.FC = () => {
     setCompareToLastMonth(!compareToLastMonth);
   };
 
-  const canOfferFallback = fallbackEnabled && !primaryHasHistory && fallbackHasHistory && hasTransactions;
-  const shouldUseFallback = showFallbackData && canOfferFallback;
   const summaryPeriodLabel = shouldUseFallback
     ? fallbackRangeLabel
     : periodPreset === 'mtd'
