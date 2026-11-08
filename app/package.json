@@ -247,5 +247,11 @@
       "repo": "shekelsync",
       "releaseType": "draft"
     }
+  },
+  "allowScripts": {
+    "keytar@7.9.0": true,
+    "electron-winstaller": false,
+    "better-sqlite3": false,
+    "fsevents": false
   }
 }
