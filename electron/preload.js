@@ -101,6 +101,11 @@ const biometricAuthBridge = Object.freeze({
   getStatus: () => ipcRenderer.invoke('biometric:getStatus'),
 });
 
+const appLockBridge = Object.freeze({
+  getState: () => ipcRenderer.invoke('appLock:getState'),
+  unlock: () => ipcRenderer.invoke('appLock:unlock'),
+});
+
 const eventsBridge = Object.freeze({
   onScrapeProgress: (callback) => {
     const wrappedCallback = (event, ...args) => callback(...args);
@@ -189,6 +194,7 @@ const electronAPI = {
   auth: authBridge,
   chatbotSecrets: chatbotSecretsBridge,
   biometricAuth: biometricAuthBridge,
+  appLock: appLockBridge,
   log: logBridge,
   diagnostics: diagnosticsBridge,
   settings: settingsBridge,

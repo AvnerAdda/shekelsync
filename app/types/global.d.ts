@@ -310,6 +310,24 @@ declare global {
     }>;
   }
 
+  type ElectronAppLockMethod = 'touchid' | 'password' | 'windows-hello';
+
+  interface ElectronAppLockApi {
+    getState?: () => Promise<{
+      success: boolean;
+      locked?: boolean;
+      method?: ElectronAppLockMethod | null;
+      error?: string;
+    }>;
+    unlock?: () => Promise<{
+      success: boolean;
+      locked?: boolean;
+      method?: ElectronAppLockMethod;
+      cancelled?: boolean;
+      error?: string;
+    }>;
+  }
+
   interface ElectronSettingsApi {
     get?: () => Promise<{ success: boolean; settings?: ElectronAppSettings; error?: string }>;
     update?: (
@@ -385,6 +403,7 @@ declare global {
     updater?: ElectronUpdaterApi;
     database?: ElectronDatabaseMaintenanceApi;
     biometricAuth?: ElectronBiometricAuthApi;
+    appLock?: ElectronAppLockApi;
   }
 
   interface Window {

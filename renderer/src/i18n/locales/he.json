@@ -1,4 +1,18 @@
 {
+  "appLock": {
+    "title": "ShekelSync נעול",
+    "description": {
+      "touchid": "השתמשו ב-Touch ID כדי לפתוח את הנתונים הפיננסיים שלכם. אפשר גם להשתמש בסיסמת ה-Mac.",
+      "password": "הזינו את סיסמת ה-Mac כדי לפתוח את הנתונים הפיננסיים שלכם.",
+      "windows-hello": "השתמשו ב-Windows Hello כדי לפתוח את הנתונים הפיננסיים שלכם."
+    },
+    "unlock": "פתיחה",
+    "unlocking": "ממתין לאימות…",
+    "cancelled": "הפתיחה בוטלה.",
+    "failed": "האימות נכשל. נסו שוב.",
+    "minimize": "מזעור",
+    "close": "סגירה"
+  },
   "releaseNotes": {
     "title": "מה חדש",
     "subtitle": "השיפורים האחרונים ב־ShekelSync.",

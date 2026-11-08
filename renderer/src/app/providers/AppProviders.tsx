@@ -5,6 +5,7 @@ import { ChatbotPermissionsProvider } from '@app/contexts/ChatbotPermissionsCont
 import { NotificationProvider } from '@renderer/features/notifications/NotificationContext';
 import { OnboardingProvider } from '@app/contexts/OnboardingContext';
 import { SecurityProvider } from '@renderer/features/security/contexts/SecurityContext';
+import AppLockGate from '@renderer/features/security/components/AppLockGate';
 import { DonationStatusProvider } from '@renderer/features/support/contexts/DonationStatusContext';
 import type { PropsWithChildren } from 'react';
 import { I18nProvider, useLocaleSettings } from '@renderer/i18n/I18nProvider';
@@ -14,19 +15,22 @@ const ConnectedProviders: React.FC<PropsWithChildren> = ({ children }) => {
 
   return (
     <ThemeContextProvider direction={direction}>
-      <AuthProvider>
-        <FinancePrivacyProvider locale={locale}>
-          <ChatbotPermissionsProvider>
-            <NotificationProvider>
-              <SecurityProvider>
-                <DonationStatusProvider>
-                  <OnboardingProvider>{children}</OnboardingProvider>
-                </DonationStatusProvider>
-              </SecurityProvider>
-            </NotificationProvider>
-          </ChatbotPermissionsProvider>
-        </FinancePrivacyProvider>
-      </AuthProvider>
+      {/* Nothing below may load data until the app lock is cleared. */}
+      <AppLockGate>
+        <AuthProvider>
+          <FinancePrivacyProvider locale={locale}>
+            <ChatbotPermissionsProvider>
+              <NotificationProvider>
+                <SecurityProvider>
+                  <DonationStatusProvider>
+                    <OnboardingProvider>{children}</OnboardingProvider>
+                  </DonationStatusProvider>
+                </SecurityProvider>
+              </NotificationProvider>
+            </ChatbotPermissionsProvider>
+          </FinancePrivacyProvider>
+        </AuthProvider>
+      </AppLockGate>
     </ThemeContextProvider>
   );
 };

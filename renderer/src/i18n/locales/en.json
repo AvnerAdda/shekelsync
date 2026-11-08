@@ -1,4 +1,18 @@
 {
+  "appLock": {
+    "title": "ShekelSync is locked",
+    "description": {
+      "touchid": "Use Touch ID to unlock your financial data. You can also use your Mac password.",
+      "password": "Enter your Mac password to unlock your financial data.",
+      "windows-hello": "Use Windows Hello to unlock your financial data."
+    },
+    "unlock": "Unlock",
+    "unlocking": "Waiting for authentication…",
+    "cancelled": "Unlock was cancelled.",
+    "failed": "Authentication failed. Try again.",
+    "minimize": "Minimize",
+    "close": "Close"
+  },
   "releaseNotes": {
     "title": "What’s new",
     "subtitle": "The latest improvements to ShekelSync.",

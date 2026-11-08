@@ -122,6 +122,7 @@ const SecurityDetailsModal: React.FC<SecurityDetailsModalProps> = ({ open, onClo
     if (!type || type === 'none') return 'Biometric';
     if (type === 'touchid') return 'Touch ID';
     if (type === 'windows-hello') return 'Windows Hello';
+    if (type === 'password') return 'Mac password';
     return type;
   };
 
