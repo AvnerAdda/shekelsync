@@ -46,6 +46,8 @@ const {
   recordRendererLog,
 } = require('./logger');
 const { proxyApiRequest } = require('./api-request-proxy');
+const { createAppLock, getProtectedAction } = require('./auth/app-lock');
+const { createMacDeviceOwnerAuth } = require('./auth/mac-device-owner-auth');
 const { getOrCreateValidToken, revokeToken } = require('./api-security');
 const {
   getDiagnosticsInfo,
@@ -64,6 +66,87 @@ const { createMainWindowStartup } = require('./main-window-startup');
 const isPackaged = app.isPackaged;
 const isDev = process.env.NODE_ENV === 'development' || !isPackaged;
 const isMac = process.platform === 'darwin';
+
+// App lock: Touch ID (or the Mac password when the sensor is unusable) or
+// Windows Hello at launch and before credential changes / user-started syncs.
+// Development runs may opt out with SHEKELSYNC_APP_LOCK=off, and may force the
+// password fallback with SHEKELSYNC_APP_LOCK_FORCE_PASSWORD=true; packaged
+// builds ignore both.
+const macDeviceOwnerAuth = createMacDeviceOwnerAuth();
+const forceAppLockPasswordFallback = !isPackaged && process.env.SHEKELSYNC_APP_LOCK_FORCE_PASSWORD === 'true';
+
+async function resolveAppLockMethod() {
+  const biometricAuthManager = require('./auth/biometric-auth');
+  if (isMac) {
+    if (!forceAppLockPasswordFallback && await biometricAuthManager.isAvailable()) {
+      return 'touchid';
+    }
+    return (await macDeviceOwnerAuth.isAvailable()) ? 'password' : null;
+  }
+  if (process.platform === 'win32') {
+    return (await biometricAuthManager.isAvailable()) ? 'windows-hello' : null;
+  }
+  return null;
+}
+
+async function promptAppLock(method, reason) {
+  if (method === 'password') {
+    const result = await macDeviceOwnerAuth.authenticate(reason);
+    require('./security/security-status').setAuthenticationStatus('password', result.success === true);
+    return result;
+  }
+  const biometricAuthManager = require('./auth/biometric-auth');
+  return biometricAuthManager.authenticate(reason);
+}
+
+const appLock = createAppLock({
+  enabled: isPackaged || process.env.SHEKELSYNC_APP_LOCK !== 'off',
+  resolveMethod: resolveAppLockMethod,
+  prompt: promptAppLock,
+  logger,
+});
+
+// While the app is locked, only the channels the lock screen itself needs are
+// served; every other handler (API proxy, database, secrets, files) refuses.
+const APP_LOCK_EXEMPT_IPC_CHANNELS = new Set([
+  'appLock:getState',
+  'appLock:unlock',
+  'app:getVersion',
+  'window:minimize',
+  'window:maximize',
+  'window:close',
+  'window:isMaximized',
+  'window:zoomIn',
+  'window:zoomOut',
+  'window:zoomReset',
+  'dev:reload',
+  'dev:toggleDevTools',
+]);
+
+function buildLockedApiResponse() {
+  return {
+    status: 423,
+    statusText: 'Locked',
+    ok: false,
+    data: { success: false, code: 'APP_LOCKED', error: 'ShekelSync is locked' },
+  };
+}
+
+function handleIpc(channel, handler) {
+  if (APP_LOCK_EXEMPT_IPC_CHANNELS.has(channel)) {
+    ipcMain.handle(channel, handler);
+    return;
+  }
+  ipcMain.handle(channel, async (event, ...args) => {
+    if (await appLock.isLocked()) {
+      logger.warn('Blocked IPC request while the app is locked', { channel });
+      return channel === 'api:request'
+        ? buildLockedApiResponse()
+        : { success: false, locked: true, error: 'ShekelSync is locked' };
+    }
+    return handler(event, ...args);
+  });
+}
 const isLinux = process.platform === 'linux';
 // Raw-SQL IPC is a development-only escape hatch. Hard-disable it in packaged
 // builds so a compromised renderer can never reach it, regardless of env vars.
@@ -1602,38 +1685,6 @@ function getTelegramBotService() {
   return telegramBotService;
 }
 
-async function authenticateMacBiometricsIfAvailable() {
-  if (!isMac) {
-    return;
-  }
-
-  try {
-    const biometricAuthManager = require('./auth/biometric-auth');
-    const isAvailable = await biometricAuthManager.isAvailable();
-
-    if (!isAvailable) {
-      logger.info('[Main] Touch ID not available on this system');
-      return;
-    }
-
-    logger.info('[Main] Touch ID is available, prompting for authentication...');
-    try {
-      const result = await biometricAuthManager.authenticate('Authenticate to open ShekelSync');
-      if (result.success) {
-        logger.info('[Main] Touch ID authentication successful');
-      } else {
-        logger.warn('[Main] Touch ID authentication failed, proceeding anyway');
-      }
-    } catch (error) {
-      logger.warn('[Main] Touch ID authentication error:', error.message);
-      console.warn('Touch ID authentication failed:', error.message);
-    }
-  } catch (error) {
-    logger.error('[Main] Error initializing Touch ID:', error.message);
-    console.error('Error initializing Touch ID:', error);
-  }
-}
-
 function emitSessionChanged(session) {
   if (mainWindow?.webContents) {
     mainWindow.webContents.send('auth:session-changed', sanitizeSession(session));
@@ -1954,14 +2005,12 @@ const hasSingleInstanceLock = enforceSingleInstance({
 
 const primaryInstanceReady = hasSingleInstanceLock ? app.whenReady() : null;
 primaryInstanceReady?.then(async () => {
+  // Resolve the lock method while the window loads, so the lock screen is
+  // ready by the time the renderer asks.
+  void appLock.initialize();
   const window = await createWindow();
   if (!window || isQuitting) return;
   setupTray();
-  if (isMac) {
-    setTimeout(() => {
-      void authenticateMacBiometricsIfAvailable();
-    }, 250);
-  }
 
   const updateAvailability = getAutoUpdateAvailability();
 
@@ -2121,18 +2170,18 @@ ipcMain.on('log:report', (event, payload) => {
   }
 });
 
-ipcMain.handle('diagnostics:getInfo', async () => {
+handleIpc('diagnostics:getInfo', async () => {
   return getDiagnosticsInfo({
     appVersion: app.getVersion(),
     telegram: await getTelegramBotService().getDiagnostics(),
   });
 });
 
-ipcMain.handle('diagnostics:openLogDirectory', async () => {
+handleIpc('diagnostics:openLogDirectory', async () => {
   return openDiagnosticsLogDirectory();
 });
 
-ipcMain.handle('diagnostics:export', async (event, outputPath) => {
+handleIpc('diagnostics:export', async (event, outputPath) => {
   if (!requireTrustedIpcSender(event, 'diagnostics:export')) {
     return { success: false, error: 'Untrusted IPC sender' };
   }
@@ -2148,7 +2197,7 @@ ipcMain.handle('diagnostics:export', async (event, outputPath) => {
   });
 });
 
-ipcMain.handle('diagnostics:copy', async (event) => {
+handleIpc('diagnostics:copy', async (event) => {
   if (!requireTrustedIpcSender(event, 'diagnostics:copy')) {
     return { success: false, error: 'Untrusted IPC sender' };
   }
@@ -2165,7 +2214,7 @@ ipcMain.handle('diagnostics:copy', async (event) => {
   }
 });
 
-ipcMain.handle('database:backup', async (event, targetPath) => {
+handleIpc('database:backup', async (event, targetPath) => {
   if (!requireTrustedIpcSender(event, 'database:backup')) {
     return { success: false, error: 'Untrusted IPC sender' };
   }
@@ -2183,7 +2232,7 @@ ipcMain.handle('database:backup', async (event, targetPath) => {
   );
 });
 
-ipcMain.handle('database:restore', async (event, sourcePath) => {
+handleIpc('database:restore', async (event, sourcePath) => {
   if (!requireTrustedIpcSender(event, 'database:restore')) {
     return { success: false, error: 'Untrusted IPC sender' };
   }
@@ -2194,7 +2243,7 @@ ipcMain.handle('database:restore', async (event, sourcePath) => {
 });
 
 // Biometric authentication
-ipcMain.handle('biometric:isAvailable', async () => {
+handleIpc('biometric:isAvailable', async () => {
   try {
     const biometricAuthManager = require('./auth/biometric-auth');
     const availability = await biometricAuthManager.getAvailabilityDetails();
@@ -2210,7 +2259,7 @@ ipcMain.handle('biometric:isAvailable', async () => {
   }
 });
 
-ipcMain.handle('biometric:authenticate', async (_event, reason) => {
+handleIpc('biometric:authenticate', async (_event, reason) => {
   try {
     const biometricAuthManager = require('./auth/biometric-auth');
     const result = await biometricAuthManager.authenticate(reason);
@@ -2221,7 +2270,7 @@ ipcMain.handle('biometric:authenticate', async (_event, reason) => {
   }
 });
 
-ipcMain.handle('biometric:getStatus', async () => {
+handleIpc('biometric:getStatus', async () => {
   try {
     const biometricAuthManager = require('./auth/biometric-auth');
     const status = await biometricAuthManager.getStatus();
@@ -2233,7 +2282,7 @@ ipcMain.handle('biometric:getStatus', async () => {
 });
 
 // Database operations
-ipcMain.handle('db:query', async (event, sql, params = []) => {
+handleIpc('db:query', async (event, sql, params = []) => {
   if (!requireTrustedIpcSender(event, 'db:query')) {
     return { success: false, error: 'Untrusted IPC sender' };
   }
@@ -2249,7 +2298,7 @@ ipcMain.handle('db:query', async (event, sql, params = []) => {
   }
 });
 
-ipcMain.handle('db:test', async (event) => {
+handleIpc('db:test', async (event) => {
   if (!requireTrustedIpcSender(event, 'db:test')) {
     return { success: false, error: 'Untrusted IPC sender' };
   }
@@ -2264,7 +2313,7 @@ ipcMain.handle('db:test', async (event) => {
   }
 });
 
-ipcMain.handle('db:stats', async (event) => {
+handleIpc('db:stats', async (event) => {
   if (!requireTrustedIpcSender(event, 'db:stats')) {
     return { success: false, error: 'Untrusted IPC sender' };
   }
@@ -2280,13 +2329,13 @@ ipcMain.handle('db:stats', async (event) => {
 });
 
 // Window controls
-ipcMain.handle('window:minimize', () => {
+handleIpc('window:minimize', () => {
   if (mainWindow) {
     mainWindow.minimize();
   }
 });
 
-ipcMain.handle('window:maximize', () => {
+handleIpc('window:maximize', () => {
   if (!mainWindow) return false;
 
   if (mainWindow.isMaximized()) {
@@ -2298,41 +2347,78 @@ ipcMain.handle('window:maximize', () => {
   return mainWindow.isMaximized();
 });
 
-ipcMain.handle('window:close', () => {
+handleIpc('window:close', () => {
   if (mainWindow) {
     mainWindow.close();
   }
 });
 
-ipcMain.handle('window:isMaximized', () => {
+handleIpc('window:isMaximized', () => {
   return mainWindow ? mainWindow.isMaximized() : false;
 });
 
 // Zoom controls
-ipcMain.handle('window:zoomIn', () => {
+handleIpc('window:zoomIn', () => {
   if (!mainWindow) return;
   const currentZoom = mainWindow.webContents.getZoomLevel();
   mainWindow.webContents.setZoomLevel(currentZoom + 0.5);
   return mainWindow.webContents.getZoomLevel();
 });
 
-ipcMain.handle('window:zoomOut', () => {
+handleIpc('window:zoomOut', () => {
   if (!mainWindow) return;
   const currentZoom = mainWindow.webContents.getZoomLevel();
   mainWindow.webContents.setZoomLevel(currentZoom - 0.5);
   return mainWindow.webContents.getZoomLevel();
 });
 
-ipcMain.handle('window:zoomReset', () => {
+handleIpc('window:zoomReset', () => {
   if (!mainWindow) return;
   mainWindow.webContents.setZoomLevel(0);
   return 0;
 });
 
 // API proxy handler
-ipcMain.handle('api:request', async (event, { method, endpoint, data, headers = {} }) => {
+handleIpc('appLock:getState', async (event) => {
+  if (!requireTrustedIpcSender(event, 'appLock:getState')) {
+    return { success: false, error: 'Untrusted IPC sender' };
+  }
+  const state = await appLock.getState();
+  return { success: true, ...state };
+});
+
+handleIpc('appLock:unlock', async (event) => {
+  if (!requireTrustedIpcSender(event, 'appLock:unlock')) {
+    return { success: false, error: 'Untrusted IPC sender' };
+  }
+  return appLock.unlock();
+});
+
+handleIpc('api:request', async (event, { method, endpoint, data, headers = {} }) => {
   if (!requireTrustedIpcSender(event, 'api:request')) {
     return { status: 403, statusText: 'Forbidden', ok: false, data: { error: 'Untrusted IPC sender' } };
+  }
+
+  const protectedAction = getProtectedAction(method, endpoint);
+  if (protectedAction) {
+    const authorization = await appLock.authorizeAction(protectedAction);
+    if (!authorization.success) {
+      const message = authorization.cancelled
+        ? 'Authentication was cancelled. Confirm with Touch ID or your password to continue.'
+        : 'Authentication is required to continue.';
+      return {
+        status: 401,
+        statusText: 'Unauthorized',
+        ok: false,
+        data: {
+          success: false,
+          code: 'REAUTH_REQUIRED',
+          cancelled: authorization.cancelled === true,
+          error: message,
+          message,
+        },
+      };
+    }
   }
 
   const trustedHeaders = await buildTrustedProxyHeaders(endpoint, headers);
@@ -2347,7 +2433,7 @@ ipcMain.handle('api:request', async (event, { method, endpoint, data, headers = 
   });
 });
 
-ipcMain.handle('settings:get', async () => {
+handleIpc('settings:get', async () => {
   try {
     const settings = await getAppSettings();
     return { success: true, settings };
@@ -2357,7 +2443,7 @@ ipcMain.handle('settings:get', async () => {
   }
 });
 
-ipcMain.handle('settings:update', async (event, patch = {}) => {
+handleIpc('settings:update', async (event, patch = {}) => {
   try {
     const updated = await updateAppSettings(patch);
     return { success: true, settings: updated };
@@ -2367,7 +2453,7 @@ ipcMain.handle('settings:update', async (event, patch = {}) => {
   }
 });
 
-ipcMain.handle('analytics:getStatus', async (event) => {
+handleIpc('analytics:getStatus', async (event) => {
   if (!requireTrustedIpcSender(event, 'analytics:getStatus')) {
     return { success: false, error: 'Untrusted IPC sender' };
   }
@@ -2381,7 +2467,7 @@ ipcMain.on('analytics:track', (event, eventName, props) => {
   void getUsageAnalytics().trackFromRenderer(eventName, props);
 });
 
-ipcMain.handle('telegram:getStatus', async (event) => {
+handleIpc('telegram:getStatus', async (event) => {
   if (!requireTrustedIpcSender(event, 'telegram:getStatus')) {
     return { success: false, error: 'Untrusted IPC sender' };
   }
@@ -2394,7 +2480,7 @@ ipcMain.handle('telegram:getStatus', async (event) => {
   }
 });
 
-ipcMain.handle('telegram:saveBotToken', async (event, token) => {
+handleIpc('telegram:saveBotToken', async (event, token) => {
   if (!requireTrustedIpcSender(event, 'telegram:saveBotToken')) {
     return { success: false, error: 'Untrusted IPC sender' };
   }
@@ -2407,7 +2493,7 @@ ipcMain.handle('telegram:saveBotToken', async (event, token) => {
   }
 });
 
-ipcMain.handle('telegram:beginPairing', async (event) => {
+handleIpc('telegram:beginPairing', async (event) => {
   if (!requireTrustedIpcSender(event, 'telegram:beginPairing')) {
     return { success: false, error: 'Untrusted IPC sender' };
   }
@@ -2419,7 +2505,7 @@ ipcMain.handle('telegram:beginPairing', async (event) => {
   }
 });
 
-ipcMain.handle('telegram:disconnect', async (event) => {
+handleIpc('telegram:disconnect', async (event) => {
   if (!requireTrustedIpcSender(event, 'telegram:disconnect')) {
     return { success: false, error: 'Untrusted IPC sender' };
   }
@@ -2432,7 +2518,7 @@ ipcMain.handle('telegram:disconnect', async (event) => {
   }
 });
 
-ipcMain.handle('telegram:sendTestMessage', async (event) => {
+handleIpc('telegram:sendTestMessage', async (event) => {
   if (!requireTrustedIpcSender(event, 'telegram:sendTestMessage')) {
     return { success: false, error: 'Untrusted IPC sender' };
   }
@@ -2445,7 +2531,7 @@ ipcMain.handle('telegram:sendTestMessage', async (event) => {
   }
 });
 
-ipcMain.handle('auth:getSession', async (event) => {
+handleIpc('auth:getSession', async (event) => {
   if (!requireTrustedIpcSender(event, 'auth:getSession')) {
     return { success: false, error: 'Untrusted IPC sender' };
   }
@@ -2459,7 +2545,7 @@ ipcMain.handle('auth:getSession', async (event) => {
   }
 });
 
-ipcMain.handle('auth:setSession', async (event, session) => {
+handleIpc('auth:setSession', async (event, session) => {
   if (!requireTrustedIpcSender(event, 'auth:setSession')) {
     return { success: false, error: 'Untrusted IPC sender' };
   }
@@ -2477,7 +2563,7 @@ ipcMain.handle('auth:setSession', async (event, session) => {
   }
 });
 
-ipcMain.handle('auth:clearSession', async (event) => {
+handleIpc('auth:clearSession', async (event) => {
   if (!requireTrustedIpcSender(event, 'auth:clearSession')) {
     return { success: false, error: 'Untrusted IPC sender' };
   }
@@ -2492,7 +2578,7 @@ ipcMain.handle('auth:clearSession', async (event) => {
   }
 });
 
-ipcMain.handle('chatbot:getStatus', async (event) => {
+handleIpc('chatbot:getStatus', async (event) => {
   if (!requireTrustedIpcSender(event, 'chatbot:getStatus')) {
     return { success: false, error: 'Untrusted IPC sender' };
   }
@@ -2510,7 +2596,7 @@ ipcMain.handle('chatbot:getStatus', async (event) => {
   }
 });
 
-ipcMain.handle('chatbot:setOpenAiApiKey', async (event, apiKey) => {
+handleIpc('chatbot:setOpenAiApiKey', async (event, apiKey) => {
   if (!requireTrustedIpcSender(event, 'chatbot:setOpenAiApiKey')) {
     return { success: false, error: 'Untrusted IPC sender' };
   }
@@ -2530,7 +2616,7 @@ ipcMain.handle('chatbot:setOpenAiApiKey', async (event, apiKey) => {
   }
 });
 
-ipcMain.handle('chatbot:clearOpenAiApiKey', async (event) => {
+handleIpc('chatbot:clearOpenAiApiKey', async (event) => {
   if (!requireTrustedIpcSender(event, 'chatbot:clearOpenAiApiKey')) {
     return { success: false, error: 'Untrusted IPC sender' };
   }
@@ -2545,7 +2631,7 @@ ipcMain.handle('chatbot:clearOpenAiApiKey', async (event) => {
 });
 
 // File system operations
-ipcMain.handle('file:showSaveDialog', async (event, options) => {
+handleIpc('file:showSaveDialog', async (event, options) => {
   try {
     if (!requireTrustedIpcSender(event, 'file:showSaveDialog')) {
       return { canceled: true };
@@ -2561,7 +2647,7 @@ ipcMain.handle('file:showSaveDialog', async (event, options) => {
   }
 });
 
-ipcMain.handle('file:showOpenDialog', async (event, options) => {
+handleIpc('file:showOpenDialog', async (event, options) => {
   try {
     if (!requireTrustedIpcSender(event, 'file:showOpenDialog')) {
       return { canceled: true };
@@ -2577,7 +2663,7 @@ ipcMain.handle('file:showOpenDialog', async (event, options) => {
   }
 });
 
-ipcMain.handle('file:write', async (event, filePath, data, options = {}) => {
+handleIpc('file:write', async (event, filePath, data, options = {}) => {
   try {
     if (!requireTrustedIpcSender(event, 'file:write')) {
       return { success: false, error: 'Untrusted IPC sender' };
@@ -2598,11 +2684,11 @@ ipcMain.handle('file:write', async (event, filePath, data, options = {}) => {
 });
 
 // App info
-ipcMain.handle('app:getVersion', () => {
+handleIpc('app:getVersion', () => {
   return app.getVersion();
 });
 
-ipcMain.handle('app:relaunch', (event) => {
+handleIpc('app:relaunch', (event) => {
   try {
     if (!requireTrustedIpcSender(event, 'app:relaunch')) {
       return { success: false, error: 'Untrusted IPC sender' };
@@ -2617,7 +2703,7 @@ ipcMain.handle('app:relaunch', (event) => {
 });
 
 // Update-related handlers
-ipcMain.handle('updater:checkForUpdates', async () => {
+handleIpc('updater:checkForUpdates', async () => {
   const availability = getAutoUpdateAvailability();
   if (!availability.canCheck) {
     return { success: false, error: availability.reason || 'Auto-updater not available' };
@@ -2660,7 +2746,7 @@ ipcMain.handle('updater:checkForUpdates', async () => {
   }
 });
 
-ipcMain.handle('updater:downloadUpdate', async () => {
+handleIpc('updater:downloadUpdate', async () => {
   const availability = getAutoUpdateAvailability();
   if (availability.updateMode === UPDATE_MODE_MANUAL) {
     return {
@@ -2684,7 +2770,7 @@ ipcMain.handle('updater:downloadUpdate', async () => {
   }
 });
 
-ipcMain.handle('updater:quitAndInstall', async () => {
+handleIpc('updater:quitAndInstall', async () => {
   const availability = getAutoUpdateAvailability();
   if (availability.updateMode === UPDATE_MODE_MANUAL) {
     return {
@@ -2708,7 +2794,7 @@ ipcMain.handle('updater:quitAndInstall', async () => {
   }
 });
 
-ipcMain.handle('updater:getUpdateInfo', async () => {
+handleIpc('updater:getUpdateInfo', async () => {
   const availability = getAutoUpdateAvailability();
   return {
     autoUpdateEnabled: availability.enabled,
@@ -2720,7 +2806,7 @@ ipcMain.handle('updater:getUpdateInfo', async () => {
   };
 });
 
-ipcMain.handle('updater:openManualUpdatePage', async (event) => {
+handleIpc('updater:openManualUpdatePage', async (event) => {
   if (!requireTrustedIpcSender(event, 'updater:openManualUpdatePage')) {
     return { success: false, error: 'Untrusted IPC sender' };
   }
@@ -2738,13 +2824,13 @@ ipcMain.handle('updater:openManualUpdatePage', async (event) => {
 
 // Development helpers
 if (isDev) {
-  ipcMain.handle('dev:reload', () => {
+  handleIpc('dev:reload', () => {
     if (mainWindow) {
       mainWindow.reload();
     }
   });
 
-  ipcMain.handle('dev:toggleDevTools', () => {
+  handleIpc('dev:toggleDevTools', () => {
     if (mainWindow) {
       mainWindow.webContents.toggleDevTools();
     }
