@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { format } from 'date-fns';
 import { apiClient, type ApiResponse } from '@/lib/api-client';
 import { MAX_PROJECTION_DAYS } from '../components/net-position-projection-helpers';
 
@@ -21,6 +22,12 @@ export interface DashboardHealthSnapshot {
     impulseScore?: number;
     runwayScore?: number;
   };
+}
+
+/** The window the health score is computed for (the period shown on Home). */
+export interface DashboardHealthRange {
+  startDate: Date;
+  endDate: Date;
 }
 
 interface UseDashboardInsightsResult {
@@ -46,58 +53,82 @@ function buildForecastErrorMessage(response: ApiResponse<unknown>): string {
   return `Failed to fetch forecast: HTTP ${response.status}`;
 }
 
-export function useDashboardInsights(): UseDashboardInsightsResult {
+// Same calendar-day format the Analysis "Scoring" tab sends, so both pages
+// score an identical window for the same period.
+function toApiDay(date: Date): string {
+  return format(date, 'yyyy-MM-dd');
+}
+
+export function useDashboardInsights(healthRange: DashboardHealthRange): UseDashboardInsightsResult {
   const [forecastData, setForecastData] = useState<DashboardForecastData | null>(null);
   const [forecastLoading, setForecastLoading] = useState(true);
   const [forecastError, setForecastError] = useState<string | null>(null);
   const [healthSnapshot, setHealthSnapshot] = useState<DashboardHealthSnapshot | null>(null);
   const [healthLoading, setHealthLoading] = useState(true);
-  const requestIdRef = useRef(0);
+  const forecastRequestIdRef = useRef(0);
+  const healthRequestIdRef = useRef(0);
+  const healthStartDay = toApiDay(healthRange.startDate);
+  const healthEndDay = toApiDay(healthRange.endDate);
 
-  const fetchInsights = useCallback(async (noCache = false) => {
-    const requestId = ++requestIdRef.current;
+  const fetchForecast = useCallback(async (noCache = false) => {
+    const requestId = ++forecastRequestIdRef.current;
     setForecastLoading(true);
-    setHealthLoading(true);
     setForecastError(null);
 
-    const [forecastResult, healthResult] = await Promise.allSettled([
-      apiClient.get<DashboardForecastData>(`/api/forecast/daily?days=${MAX_PROJECTION_DAYS}${noCache ? '&noCache=1' : ''}`),
-      apiClient.get<DashboardHealthSnapshot>('/api/analytics/personal-intelligence?days=60'),
-    ]);
-
-    if (requestId !== requestIdRef.current) return;
-
-    if (forecastResult.status === 'fulfilled' && forecastResult.value.ok) {
-      setForecastData(forecastResult.value.data);
-    } else {
-      const message = forecastResult.status === 'fulfilled'
-        ? buildForecastErrorMessage(forecastResult.value)
-        : forecastResult.reason instanceof Error
-          ? forecastResult.reason.message
-          : 'Failed to fetch forecast';
-      setForecastError(message);
+    try {
+      const response = await apiClient.get<DashboardForecastData>(
+        `/api/forecast/daily?days=${MAX_PROJECTION_DAYS}${noCache ? '&noCache=1' : ''}`,
+      );
+      if (requestId !== forecastRequestIdRef.current) return;
+      if (response.ok) {
+        setForecastData(response.data);
+      } else {
+        setForecastError(buildForecastErrorMessage(response));
+      }
+    } catch (error) {
+      if (requestId !== forecastRequestIdRef.current) return;
+      setForecastError(error instanceof Error ? error.message : 'Failed to fetch forecast');
     }
-
-    if (healthResult.status === 'fulfilled' && healthResult.value.ok) {
-      setHealthSnapshot(healthResult.value.data);
-    } else if (healthResult.status === 'rejected') {
-      console.error('Failed to fetch dashboard health snapshot:', healthResult.reason);
-    }
-
     setForecastLoading(false);
-    setHealthLoading(false);
   }, []);
 
+  const fetchHealth = useCallback(async () => {
+    const requestId = ++healthRequestIdRef.current;
+    setHealthLoading(true);
+
+    try {
+      const response = await apiClient.get<DashboardHealthSnapshot>(
+        `/api/analytics/personal-intelligence?startDate=${healthStartDay}&endDate=${healthEndDay}`,
+      );
+      if (requestId !== healthRequestIdRef.current) return;
+      // Never keep a previous period's score on screen for a new period.
+      setHealthSnapshot(response.ok ? response.data : null);
+    } catch (error) {
+      if (requestId !== healthRequestIdRef.current) return;
+      console.error('Failed to fetch dashboard health snapshot:', error);
+      setHealthSnapshot(null);
+    }
+    setHealthLoading(false);
+  }, [healthEndDay, healthStartDay]);
+
   useEffect(() => {
-    void fetchInsights();
+    void fetchForecast();
     return () => {
-      requestIdRef.current += 1;
+      forecastRequestIdRef.current += 1;
     };
-  }, [fetchInsights]);
+  }, [fetchForecast]);
+
+  useEffect(() => {
+    void fetchHealth();
+    return () => {
+      healthRequestIdRef.current += 1;
+    };
+  }, [fetchHealth]);
 
   const refresh = useCallback(() => {
-    void fetchInsights(true);
-  }, [fetchInsights]);
+    void fetchForecast(true);
+    void fetchHealth();
+  }, [fetchForecast, fetchHealth]);
 
   return {
     forecastData,
