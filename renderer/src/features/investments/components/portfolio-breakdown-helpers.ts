@@ -29,6 +29,14 @@ export const getPortfolioAccountColor = (
   return PORTFOLIO_CHART_COLORS[index % PORTFOLIO_CHART_COLORS.length];
 };
 
+/**
+ * Accounts whose card opens something on click: pikadon details, the
+ * property view, or the value-update (new statement) form. Bank balances
+ * come from bank sync, so there is nothing to open for them.
+ */
+export const canOpenPortfolioAccount = (account: { account_type?: string | null }): boolean =>
+  Boolean(account.account_type) && account.account_type !== 'bank_balance';
+
 export const calculatePortfolioRoi = (currentValue: number, costBasis: number): number =>
   costBasis > 0 ? ((currentValue - costBasis) / costBasis) * 100 : 0;
 

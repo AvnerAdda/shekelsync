@@ -21,6 +21,7 @@ import {
 } from '@renderer/types/investments';
 import { useTranslation } from 'react-i18next';
 import InvestmentPerformanceCard from './InvestmentPerformanceCard';
+import { canOpenPortfolioAccount } from './portfolio-breakdown-helpers';
 import {
   getPortfolioAccountsForScope,
   getPortfolioCategoryBucketsForScope,
@@ -203,7 +204,7 @@ const PerformanceCardsSection: React.FC<PerformanceCardsSectionProps> = ({
             account={account}
             history={accountHistories[account.id] || []}
             color={CHART_COLORS[index % CHART_COLORS.length]}
-            onClick={['savings', 'real_estate'].includes(account.account_type) ? onAccountClick : undefined}
+            onClick={canOpenPortfolioAccount(account) ? onAccountClick : undefined}
           />
         ))}
 

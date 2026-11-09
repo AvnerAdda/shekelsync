@@ -17,6 +17,7 @@ import { InvestmentAccountSummary, PortfolioSummary } from '@renderer/types/inve
 import { useTranslation } from 'react-i18next';
 import {
   calculatePortfolioRoi,
+  canOpenPortfolioAccount,
   getPortfolioAccountColor,
   resolvePortfolioInstitutionName,
 } from './portfolio-breakdown-helpers';
@@ -71,8 +72,7 @@ const PortfolioBreakdownSection: React.FC<PortfolioBreakdownSectionProps> = ({
             ? calculatePortfolioRoi(account.current_value, account.cost_basis)
             : null;
           const isPositive = roi === null || roi >= 0;
-          const isClickable = Boolean(onAccountClick)
-            && ['savings', 'real_estate'].includes(account.account_type);
+          const isClickable = Boolean(onAccountClick) && canOpenPortfolioAccount(account);
 
           return (
             <ListItem
