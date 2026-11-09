@@ -753,6 +753,62 @@
       "maskOn": "Tous les montants sont actuellement remplacés par des astérisques.",
       "maskOff": "Les montants s'afficheront en clair jusqu'à l'activation du masquage."
     },
+    "payroll": {
+      "title": "Emploi et épargne salariale",
+      "intro": "La pension, les indemnités de licenciement et la keren hishtalmut sont prélevées sur la fiche de paie et n'arrivent donc jamais sur votre compte bancaire. Saisissez le salaire brut de chaque personne et choisissez quel virement est son salaire : chaque mois où ce salaire arrive, les cotisations prévues sont ajoutées au compte lié jusqu'à la saisie de son prochain relevé réel.",
+      "estimateNote": "Ce sont des estimations. Un relevé réel fait toujours foi : dès que vous en saisissez un, il remplace les estimations jusqu'à sa date.",
+      "loadError": "Impossible de charger les paramètres de salaire.",
+      "members": {
+        "self": "Vous",
+        "spouse": "Conjoint(e)"
+      },
+      "kinds": {
+        "pension": "Pension",
+        "severance": "Indemnités (pitzuim)",
+        "keren_hishtalmut": "Keren hishtalmut"
+      },
+      "card": {
+        "notSetUp": "Pas encore configuré.",
+        "setUp": "Configurer",
+        "edit": "Modifier",
+        "remove": "Supprimer",
+        "gross": "{{amount}} brut / mois",
+        "monthlyTotal": "≈ {{total}}/mois d'épargne long terme ({{employer}} payés par l'employeur)",
+        "noSalaryLink": "Aucun virement de salaire lié : rien ne s'accumule.",
+        "noAccount": "aucun compte",
+        "paused": "En pause",
+        "removeBody": "Le lien au salaire et les réglages pension, indemnités et keren hishtalmut sont supprimés. Vos comptes d'investissement et relevés sont conservés."
+      },
+      "dialog": {
+        "title": "Salaire et épargne salariale : {{name}}",
+        "employer": "Employeur",
+        "gross": "Salaire mensuel brut",
+        "grossHelper": "Selon la fiche de paie. La banque ne voit que le virement net.",
+        "deposit": "Virement du salaire",
+        "depositHelper": "Chaque mois où ce virement arrive, les cotisations s'accumulent.",
+        "depositNone": "Aucun (rien ne s'accumule)",
+        "depositMonths": "{{count}} mois",
+        "depositClaimed": "déjà lié à {{member}}",
+        "depositCurrent": "Règle actuelle : « {{pattern}} »",
+        "candidatesEmpty": "Aucun virement récurrent trouvé sur les 6 derniers mois.",
+        "candidatesError": "Impossible de charger les virements récents.",
+        "plansTitle": "Cotisations",
+        "account": "Compte",
+        "accountNone": "Aucun compte",
+        "employeePct": "% salarié",
+        "employerPct": "% employeur",
+        "salaryCap": "Plafond de salaire (₪)",
+        "salaryCapHelper": "Plafond exonéré d'impôt : ₪15 712 en 2026",
+        "startDate": "Accumuler à partir du",
+        "planMonthly": "≈ {{total}}/mois",
+        "preview": "Chaque mois : ≈ {{total}} ({{employee}} du salaire, {{employer}} de l'employeur)",
+        "noAccountWarning": "Choisissez un compte pour chaque cotisation active afin qu'elle puisse s'accumuler.",
+        "cancel": "Annuler",
+        "save": "Enregistrer",
+        "saving": "Enregistrement…",
+        "saveError": "Échec de l'enregistrement : {{message}}"
+      }
+    },
     "dataExport": {
       "title": "Export de données",
       "description": "Exportez vos données financières pour sauvegarde, fiscalité ou analyse dans des outils externes. Les exports respectent vos réglages de confidentialité et excluent par défaut les informations sensibles.",
@@ -3443,6 +3499,8 @@
       }
     },
     "performanceCard": {
+      "estimatedContributions": "Inclut ≈ {{amount}} de cotisations salariales estimées depuis le {{date}}",
+      "estimatedContributionsHint": "Estimé à partir de votre salaire dans Paramètres → Profil. Remplacé à la saisie du prochain relevé.",
       "high": "Haut",
       "low": "Bas",
       "value": "Valeur",

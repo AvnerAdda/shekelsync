@@ -31,6 +31,11 @@ describe('schema migrations (PRAGMA user_version)', () => {
     expect(result.status, result.stderr || result.stdout).toBe(0);
     expect(result.stdout).toContain('schema-migrations:mortgage-v11-schema-parity:ok');
   });
+  it('creates payroll tables identically via migration v13, service schema and fresh install', () => {
+    const result = runScenario('payroll-v13-schema-parity');
+    expect(result.status, result.stderr || result.stdout).toBe(0);
+    expect(result.stdout).toContain('schema-migrations:payroll-v13-schema-parity:ok');
+  });
   it('applies pending migrations in order and stamps user_version', () => {
     const result = runScenario('applies-in-order');
     expect(result.status, result.stderr || result.stdout).toBe(0);

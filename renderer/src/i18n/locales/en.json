@@ -924,6 +924,62 @@
         "sessionExpired": "Session expired. Please sign in again."
       }
     },
+    "payroll": {
+      "title": "Employment & payroll savings",
+      "intro": "Pension, severance and keren hishtalmut are deducted from the payslip, so they never reach your bank. Enter each person's gross salary and pick which deposit is their salary: every month that salary arrives, the expected contributions are added to the linked account until you enter its next real statement.",
+      "estimateNote": "These are estimates. A real statement always wins: once you enter one, it replaces the estimates up to its date.",
+      "loadError": "Could not load payroll settings.",
+      "members": {
+        "self": "You",
+        "spouse": "Spouse"
+      },
+      "kinds": {
+        "pension": "Pension",
+        "severance": "Severance (pitzuim)",
+        "keren_hishtalmut": "Keren hishtalmut"
+      },
+      "card": {
+        "notSetUp": "Not set up yet.",
+        "setUp": "Set up",
+        "edit": "Edit",
+        "remove": "Remove",
+        "gross": "{{amount}} gross / month",
+        "monthlyTotal": "≈ {{total}}/month into long-term savings ({{employer}} paid by the employer)",
+        "noSalaryLink": "No salary deposit linked, so nothing will accrue.",
+        "noAccount": "no account",
+        "paused": "Paused",
+        "removeBody": "The salary link and the pension, severance and keren hishtalmut settings are deleted. Your investment accounts and statements are kept."
+      },
+      "dialog": {
+        "title": "Salary & payroll savings: {{name}}",
+        "employer": "Employer",
+        "gross": "Gross monthly salary",
+        "grossHelper": "From the payslip (bruto). The bank only sees the net deposit.",
+        "deposit": "Salary deposit",
+        "depositHelper": "Each month this deposit arrives, contributions accrue.",
+        "depositNone": "None (nothing accrues)",
+        "depositMonths": "{{count}} months",
+        "depositClaimed": "already linked to {{member}}",
+        "depositCurrent": "Current rule: “{{pattern}}”",
+        "candidatesEmpty": "No recurring deposits found in the last 6 months.",
+        "candidatesError": "Could not load recent deposits.",
+        "plansTitle": "Contributions",
+        "account": "Account",
+        "accountNone": "No account",
+        "employeePct": "Employee %",
+        "employerPct": "Employer %",
+        "salaryCap": "Salary cap (₪)",
+        "salaryCapHelper": "Tax-exempt ceiling: ₪15,712 in 2026",
+        "startDate": "Accrue from",
+        "planMonthly": "≈ {{total}}/month",
+        "preview": "Every month: ≈ {{total}} ({{employee}} from the salary, {{employer}} from the employer)",
+        "noAccountWarning": "Pick an account for each active contribution so it has somewhere to accrue.",
+        "cancel": "Cancel",
+        "save": "Save",
+        "saving": "Saving…",
+        "saveError": "Could not save: {{message}}"
+      }
+    },
     "dataExport": {
       "title": "Data Export",
       "description": "Export your financial data for backup, tax preparation, or analysis in external tools. All exports respect your privacy settings and exclude sensitive information by default.",
@@ -3448,6 +3504,8 @@
       }
     },
     "performanceCard": {
+      "estimatedContributions": "Includes ≈ {{amount}} estimated payroll contributions since {{date}}",
+      "estimatedContributionsHint": "Estimated from your salary in Settings → Profile. Replaced when you enter the next statement.",
       "high": "High",
       "low": "Low",
       "value": "Value",

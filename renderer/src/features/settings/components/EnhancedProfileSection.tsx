@@ -55,6 +55,7 @@ import {
   buildChildProfileUpdate,
   calculateProfileAge,
 } from './enhanced-profile-helpers';
+import PayrollSavingsSection from './payroll/PayrollSavingsSection';
 
 interface IncomeSuggestion {
   amount: number;
@@ -868,6 +869,12 @@ const EnhancedProfileSection: React.FC = () => {
           </Box>
         </AccordionDetails>
       </Accordion>
+      {/* Employment & payroll savings (pension, severance, keren hishtalmut) */}
+      <PayrollSavingsSection
+        isMarried={profileData.profile.marital_status === 'Married'}
+        selfName={profileData.profile.username}
+        spouseName={profileData.spouse?.name}
+      />
       {/* Household Summary */}
       {(profileData.spouse || profileData.children.length > 0) && (
         <Alert severity="info" sx={{ mt: 3, mb: 2 }}>

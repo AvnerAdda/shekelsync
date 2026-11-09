@@ -8,8 +8,8 @@ const {
 const { dialect } = require('../../../lib/sql-dialect.js');
 const {
   applyContributionRollforward,
-  fetchLinkedInvestmentTransactions,
 } = require('./linked-transaction-rollforward.js');
+const { fetchInvestmentContributionRows } = require('./contribution-sources.js');
 const {
   toNumber,
 } = require('./account-holdings-rollup.js');
@@ -114,8 +114,8 @@ async function normalizeAccountCurrencies(accounts, enabled) {
 
 const ACCOUNT_TYPE_LABELS = {
   pension: { name: 'Pension Fund', name_he: 'קרן פנסיה', category: 'restricted' },
-  provident: { name: 'Provident Fund', name_he: 'קרן השתלמות', category: 'restricted' },
-  study_fund: { name: 'Study Fund', name_he: 'קופת גמל לחינוך', category: 'restricted' },
+  provident: { name: 'Study Fund (Keren Hishtalmut)', name_he: 'קרן השתלמות', category: 'restricted' },
+  study_fund: { name: 'Provident Fund (Kupat Gemel)', name_he: 'קופת גמל', category: 'restricted' },
   brokerage: { name: 'Brokerage Account', name_he: 'חשבון ברוקר', category: 'liquid' },
   crypto: { name: 'Cryptocurrency', name_he: 'מטבעות דיגיטליים', category: 'liquid' },
   savings: { name: 'Savings & Term Deposits', name_he: 'חסכונות ופיקדונות', category: 'liquid' },
@@ -432,22 +432,22 @@ async function getInvestmentSummary(params = {}) {
       }),
     );
 
-    const linkedTransactions = accountsRows.length > 0 && !normalizeCurrencies
-      ? await fetchLinkedInvestmentTransactions(
-        client,
-        accountsRows.map((row) => row.id),
-      )
-      : [];
     // Linked bank transactions can be denominated differently from their
     // investment account. Do not add those amounts to a native snapshot before
     // FX conversion; the performance service converts each flow separately on
-    // its own date. The normalized summary remains based on recorded account
-    // valuations instead of inventing a cross-currency balance adjustment.
-    const rolledForwardAccounts = normalizeCurrencies
-      ? accountsRows
-      : applyContributionRollforward(accountsRows, linkedTransactions, {
-        excludePikadonTransactions: true,
-      });
+    // its own date. The normalized summary therefore only rolls forward
+    // estimated payroll contributions, which are ILS and only produced for
+    // ILS accounts.
+    const contributionRows = accountsRows.length > 0
+      ? await fetchInvestmentContributionRows(
+        client,
+        accountsRows.map((row) => row.id),
+        { includeLinked: !normalizeCurrencies },
+      )
+      : [];
+    const rolledForwardAccounts = applyContributionRollforward(accountsRows, contributionRows, {
+      excludePikadonTransactions: true,
+    });
     const pikadonRollupAccountIds = rolledForwardAccounts
       .filter((account) => account.account_type === 'savings' && account.uses_pikadon_rollup)
       .map((account) => account.id);

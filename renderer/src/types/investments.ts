@@ -111,6 +111,11 @@ export interface InvestmentAccountSummary {
   fx_rate_date?: string | null;
   as_of_date?: string | null;
   current_value_explicit?: number | null;
+  /** Estimated payroll contributions (ILS) added since the last statement. */
+  estimated_contribution_adjustment?: number | null;
+  estimated_contribution_count?: number | null;
+  estimated_contribution_since?: string | null;
+  estimated_contribution_through?: string | null;
   account_value_history?: PortfolioHistoryPoint[];
   assets?: InvestmentAccountAsset[];
 }

@@ -685,6 +685,57 @@ const scenarios = {
       }
     }),
 
+  'payroll-v13-schema-parity': () =>
+    withDatabase((db, dbPath, tempDir) => {
+      const { PAYROLL_TABLES, PAYROLL_TABLE_STATEMENTS, PAYROLL_INDEX_STATEMENTS } =
+        require('../../server/services/payroll/schema.js');
+      const { initializeSqliteDatabase } = require('../../../scripts/init_sqlite_db.js');
+      const describeTables = (handle) => Object.fromEntries(PAYROLL_TABLES.map((table) => [
+        table,
+        handle.prepare(`PRAGMA table_info('${table}')`).all()
+          .map(({ name, type, notnull, dflt_value, pk }) => ({ name, type, notnull, dflt_value, pk })),
+      ]));
+      const describeIndexes = (handle) => handle.prepare(
+        "SELECT name FROM sqlite_master WHERE type = 'index' AND name LIKE 'idx_payroll_%' ORDER BY name",
+      ).all().map((row) => row.name);
+
+      // 1) Upgrade path: a v12 database gains the tables through v13.
+      db.pragma('user_version = 12');
+      runSchemaMigrations(db, { dbPath, logger: { log: () => {} } });
+      assert.equal(getSchemaVersion(db), CURRENT_SCHEMA_VERSION);
+      const migrated = describeTables(db);
+      assert.ok(migrated.household_employment.length > 0);
+      MIGRATIONS.find((migration) => migration.version === 13).up(db); // idempotent
+      assert.deepEqual(describeTables(db), migrated);
+
+      // 2) Service ensureSchema statements.
+      const serviceDb = new Database(path.join(tempDir, 'service.sqlite'));
+      try {
+        for (const statement of [...PAYROLL_TABLE_STATEMENTS, ...PAYROLL_INDEX_STATEMENTS]) serviceDb.exec(statement);
+        assert.deepEqual(describeTables(serviceDb), migrated);
+        assert.deepEqual(describeIndexes(serviceDb), describeIndexes(db));
+      } finally {
+        serviceDb.close();
+      }
+
+      // 3) Fresh install.
+      const freshPath = path.join(tempDir, 'fresh.sqlite');
+      const originalLog = console.log;
+      console.log = () => {};
+      try {
+        initializeSqliteDatabase({ output: freshPath, force: true, databaseCtor: Database });
+      } finally {
+        console.log = originalLog;
+      }
+      const fresh = new Database(freshPath);
+      try {
+        assert.deepEqual(describeTables(fresh), migrated);
+        assert.deepEqual(describeIndexes(fresh), describeIndexes(db));
+      } finally {
+        fresh.close();
+      }
+    }),
+
   'review-forecast-v9-model-id': () =>
     withDatabase((db, dbPath) => {
       db.exec(`

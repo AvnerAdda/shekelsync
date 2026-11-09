@@ -10,8 +10,8 @@ const {
 } = require('../institutions.js');
 const {
   applyContributionRollforward,
-  fetchLinkedInvestmentTransactions,
 } = require('./linked-transaction-rollforward.js');
+const { fetchInvestmentContributionRows } = require('./contribution-sources.js');
 const {
   fetchAccountHoldingSnapshots,
 } = require('./account-snapshots.js');
@@ -157,7 +157,7 @@ async function listAccounts(params = {}) {
   );
 
   if (accounts.length > 0) {
-    const linkedTransactions = await fetchLinkedInvestmentTransactions(
+    const linkedTransactions = await fetchInvestmentContributionRows(
       database,
       accounts.map((account) => account.id),
     );

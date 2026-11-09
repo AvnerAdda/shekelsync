@@ -74,8 +74,8 @@ interface SmartInvestmentAccountFormProps {
 
 const ACCOUNT_TYPE_LABELS: Record<string, string> = {
   pension: 'Pension Fund',
-  provident: 'Provident Fund',
-  study_fund: 'Education Fund',
+  provident: 'Study Fund (Keren Hishtalmut)',
+  study_fund: 'Provident Fund (Kupat Gemel)',
   brokerage: 'Brokerage Account',
   crypto: 'Cryptocurrency',
   savings: 'Savings Account',

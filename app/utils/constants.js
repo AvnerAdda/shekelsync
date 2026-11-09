@@ -122,8 +122,8 @@ const ACCOUNT_CATEGORIES = {
 // Investment account types (from PortfolioSetupModal)
 const INVESTMENT_ACCOUNT_TYPES = [
   { value: 'pension', label: 'Pension Fund', label_he: 'קרן פנסיה', category: 'restricted' },
-  { value: 'provident', label: 'Provident Fund', label_he: 'קרן השתלמות', category: 'restricted' },
-  { value: 'study_fund', label: 'Study Fund', label_he: 'קופת גמל', category: 'restricted' },
+  { value: 'provident', label: 'Study Fund (Keren Hishtalmut)', label_he: 'קרן השתלמות', category: 'restricted' },
+  { value: 'study_fund', label: 'Provident Fund (Kupat Gemel)', label_he: 'קופת גמל', category: 'restricted' },
   { value: 'savings', label: 'Savings', label_he: 'פיקדון', category: 'liquid' },
   { value: 'brokerage', label: 'Brokerage', label_he: 'ברוקר', category: 'liquid' },
   { value: 'crypto', label: 'Crypto', label_he: 'קריפטו', category: 'liquid' },
