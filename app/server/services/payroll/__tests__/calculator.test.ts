@@ -72,4 +72,19 @@ describe('payroll calculator', () => {
       expect(calculator.matchesSalaryDeposit({ salary_match_pattern: '  ' }, { name: 'x', price: 1 })).toBe(false);
     });
   });
+
+  describe('kerenHishtalmutWithdrawableFrom', () => {
+    it('is six years after the fund opened, else after the plan start', () => {
+      expect(calculator.kerenHishtalmutWithdrawableFrom({ kind: 'keren_hishtalmut', start_date: '2022-02-01' })).toBe('2028-02-01');
+      expect(calculator.kerenHishtalmutWithdrawableFrom({
+        kind: 'keren_hishtalmut', start_date: '2022-02-01', opened_date: '2019-07-15',
+      })).toBe('2025-07-15');
+    });
+
+    it('rolls 29 February forward and ignores other kinds or missing dates', () => {
+      expect(calculator.kerenHishtalmutWithdrawableFrom({ kind: 'keren_hishtalmut', opened_date: '2024-02-29' })).toBe('2030-03-01');
+      expect(calculator.kerenHishtalmutWithdrawableFrom({ kind: 'pension', start_date: '2022-02-01' })).toBeNull();
+      expect(calculator.kerenHishtalmutWithdrawableFrom({ kind: 'keren_hishtalmut' })).toBeNull();
+    });
+  });
 });

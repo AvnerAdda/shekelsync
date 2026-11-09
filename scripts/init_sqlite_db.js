@@ -1495,7 +1495,7 @@ const TABLE_DEFINITIONS = [
       notes TEXT,
       created_at TEXT NOT NULL DEFAULT (datetime('now'))
     );`,
-  // Household employment and payroll contribution plans (migration v13).
+  // Household employment and payroll contribution plans (migrations v13, v14).
   `CREATE TABLE IF NOT EXISTS household_employment (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       member TEXT NOT NULL UNIQUE CHECK (member IN ('self', 'spouse')),
@@ -1520,6 +1520,7 @@ const TABLE_DEFINITIONS = [
       is_active INTEGER NOT NULL DEFAULT 1 CHECK (is_active IN (0, 1)),
       created_at TEXT NOT NULL DEFAULT (datetime('now')),
       updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+      opened_date TEXT,
       UNIQUE (employment_id, kind)
     );`,
 ];

@@ -777,6 +777,8 @@
         "noSalaryLink": "Aucun virement de salaire lié : rien ne s'accumule.",
         "noAccount": "aucun compte",
         "paused": "En pause",
+        "withdrawableFrom": "Keren hishtalmut disponible à partir du {{date}}",
+        "withdrawableSince": "Keren hishtalmut disponible depuis le {{date}}",
         "removeBody": "Le lien au salaire et les réglages pension, indemnités et keren hishtalmut sont supprimés. Vos comptes d'investissement et relevés sont conservés."
       },
       "dialog": {
@@ -800,6 +802,8 @@
         "salaryCap": "Plafond de salaire (₪)",
         "salaryCapHelper": "Plafond exonéré d'impôt : ₪15 712 en 2026",
         "startDate": "Accumuler à partir du",
+        "openedDate": "Ouverture du fonds",
+        "openedDateHelper": "Retrait sans impôt à partir du {{date}}, 6 ans après l'ouverture. Laissez vide pour utiliser la date de début d'accumulation.",
         "planMonthly": "≈ {{total}}/mois",
         "preview": "Chaque mois : ≈ {{total}} ({{employee}} du salaire, {{employer}} de l'employeur)",
         "noAccountWarning": "Choisissez un compte pour chaque cotisation active afin qu'elle puisse s'accumuler.",
@@ -1904,7 +1908,8 @@
       "metrics": {
         "savings": {
           "label": "Épargne",
-          "tooltip": "Mesure votre taux d'épargne en pourcentage du revenu. Un score élevé indique une meilleure discipline financière et une sécurité accrue."
+          "tooltip": "Mesure votre taux d'épargne en pourcentage du revenu. Un score élevé indique une meilleure discipline financière et une sécurité accrue.",
+          "payrollIncluded": "dont {{amount}} via le salaire"
         },
         "diversity": {
           "label": "Diversification",
@@ -3501,6 +3506,8 @@
     "performanceCard": {
       "estimatedContributions": "Inclut ≈ {{amount}} de cotisations salariales estimées depuis le {{date}}",
       "estimatedContributionsHint": "Estimé à partir de votre salaire dans Paramètres → Profil. Remplacé à la saisie du prochain relevé.",
+      "withdrawableFrom": "Retrait sans impôt à partir du {{date}}",
+      "withdrawableSince": "Retrait sans impôt possible depuis le {{date}}",
       "high": "Haut",
       "low": "Bas",
       "value": "Valeur",

@@ -179,3 +179,122 @@ describe('payroll accruals', () => {
     });
   });
 });
+
+describe('cost-basis carry between statements', () => {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const { computeCostBasisCarry, applyCostBasisCarryToHistory, fetchStatementCostHistory } = require('../accruals.js');
+  const estimate = (date: string, amount: number) => ({
+    account_id: 6, is_estimated: 1, date: `${date}T09:00:00.000Z`, price: -amount,
+  });
+
+  it('carries contributions into a statement that repeats the previous cost basis', () => {
+    const statements = new Map([[6, [
+      { date: '2026-10-29', costBasis: 112000 },
+      { date: '2026-11-08', costBasis: 112000 },
+    ]]]);
+    const carries = computeCostBasisCarry(statements, [
+      estimate('2026-10-05', 999), // before the first statement: ignored
+      estimate('2026-11-05', 1178.4),
+      estimate('2026-12-05', 1178.4), // after the latest statement: roll-forward's job
+    ]);
+    expect(carries.get(6)).toEqual({
+      carry: 1178.4,
+      statementDate: '2026-11-08',
+      schedule: [{ date: '2026-10-29', carry: 0 }, { date: '2026-11-08', carry: 1178.4 }],
+    });
+  });
+
+  it('trusts a hand-edited cost basis and restarts the carry from it', () => {
+    const statements = new Map([[6, [
+      { date: '2026-08-01', costBasis: 100000 },
+      { date: '2026-09-01', costBasis: 100000 },
+      { date: '2026-10-01', costBasis: 105000 },
+      { date: '2026-11-01', costBasis: 105000 },
+    ]]]);
+    const carries = computeCostBasisCarry(statements, [
+      estimate('2026-08-15', 1000),
+      estimate('2026-09-15', 1000),
+      estimate('2026-10-15', 1000),
+    ]);
+    expect(carries.get(6).schedule.map((entry: any) => entry.carry)).toEqual([0, 1000, 0, 1000]);
+    expect(carries.get(6).carry).toBe(1000);
+  });
+
+  it('ignores accounts without estimates or without a cost basis', () => {
+    const statements = new Map([[6, [{ date: '2026-10-01', costBasis: null }, { date: '2026-11-01', costBasis: null }]]]);
+    expect(computeCostBasisCarry(statements, [estimate('2026-10-15', 1000)]).size).toBe(0);
+    expect(computeCostBasisCarry(new Map(), [estimate('2026-10-15', 1000)]).size).toBe(0);
+    expect(computeCostBasisCarry(statements, []).size).toBe(0);
+  });
+
+  it('applies the carry to history points from their statement onwards', () => {
+    const points = [
+      { date: '2026-10-29', currentValue: 127307, costBasis: 112000 },
+      { date: '2026-11-08', currentValue: 125507, costBasis: 112000 },
+    ];
+    const carried = applyCostBasisCarryToHistory(points, [
+      { date: '2026-10-29', carry: 0 }, { date: '2026-11-08', carry: 1178.4 },
+    ]);
+    expect(carried[0]).toBe(points[0]);
+    expect(carried[1]).toMatchObject({ costBasis: 113178.4, estimatedCostBasisCarry: 1178.4 });
+    expect(carried[1].roi).toBeCloseTo(((125507 - 113178.4) / 113178.4) * 100, 6);
+  });
+
+  it('reads statement totals per date, excluding pikadon holdings', async () => {
+    const db = new DatabaseSync(':memory:');
+    try {
+      db.exec(`
+        CREATE TABLE investment_holdings (account_id INTEGER, as_of_date TEXT, cost_basis REAL, holding_type TEXT, status TEXT);
+        INSERT INTO investment_holdings VALUES
+          (6, '2026-10-29', 112000, 'standard', 'active'),
+          (6, '2026-11-08T10:00:00Z', 100000, 'standard', 'active'),
+          (6, '2026-11-08', 12000, NULL, NULL),
+          (6, '2026-11-08', 5000, 'pikadon', 'active'),
+          (7, '2026-10-29', NULL, 'standard', 'active');
+      `);
+      const history = await fetchStatementCostHistory(sqliteAdapter(db), [6, 7]);
+      expect(history.get(6)).toEqual([
+        { date: '2026-10-29', costBasis: 112000 },
+        { date: '2026-11-08', costBasis: 112000 },
+      ]);
+      expect(history.get(7)).toEqual([{ date: '2026-10-29', costBasis: null }]);
+    } finally {
+      db.close();
+    }
+  });
+
+describe('keren hishtalmut liquidity', () => {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const { fetchKerenHishtalmutLiquidity } = require('../accruals.js');
+
+  it('returns the earliest withdrawal date per linked account', async () => {
+    const db = new DatabaseSync(':memory:');
+    try {
+      db.exec(`CREATE TABLE investment_accounts (id INTEGER PRIMARY KEY, currency TEXT);
+        INSERT INTO investment_accounts VALUES (6, 'ILS'), (7, 'ILS'), (9, 'ILS');`);
+      for (const statement of PAYROLL_TABLE_STATEMENTS) db.exec(statement);
+      db.exec(`
+        INSERT INTO household_employment (id, member, is_active) VALUES (1, 'self', 1), (2, 'spouse', 1);
+        INSERT INTO payroll_contribution_plans (employment_id, kind, account_id, start_date, opened_date, is_active) VALUES
+          (1, 'keren_hishtalmut', 6, '2022-02-01', NULL, 1),
+          (2, 'keren_hishtalmut', 6, '2023-01-01', '2018-05-01', 1),
+          (1, 'pension', 7, '2022-02-01', NULL, 1),
+          (2, 'pension', 9, '2022-02-01', NULL, 0);
+      `);
+      const liquidity = await fetchKerenHishtalmutLiquidity(sqliteAdapter(db), [6, 7, 9]);
+      expect([...liquidity.entries()]).toEqual([[6, { withdrawableFrom: '2024-05-01', member: 'spouse' }]]);
+    } finally {
+      db.close();
+    }
+  });
+
+  it('returns nothing when the payroll tables do not exist', async () => {
+    const db = new DatabaseSync(':memory:');
+    try {
+      expect((await fetchKerenHishtalmutLiquidity(sqliteAdapter(db), [6])).size).toBe(0);
+    } finally {
+      db.close();
+    }
+  });
+});
+});

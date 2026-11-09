@@ -11,7 +11,11 @@ const {
 const {
   applyContributionRollforward,
 } = require('./linked-transaction-rollforward.js');
-const { fetchInvestmentContributionRows } = require('./contribution-sources.js');
+const {
+  applyCostBasisCarry,
+  fetchInvestmentContributionRows,
+  fetchPayrollCostBasisCarry,
+} = require('./contribution-sources.js');
 const {
   fetchAccountHoldingSnapshots,
 } = require('./account-snapshots.js');
@@ -165,6 +169,7 @@ async function listAccounts(params = {}) {
       dateField: 'last_update_date',
       excludePikadonTransactions: true,
     });
+    applyCostBasisCarry(accounts, await fetchPayrollCostBasisCarry(database, linkedTransactions));
 
     accounts.forEach((account) => {
       if (account.current_value !== null && account.current_value !== undefined) {

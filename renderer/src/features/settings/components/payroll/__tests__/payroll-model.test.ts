@@ -6,6 +6,7 @@ import {
   buildDraftPlans,
   candidateMatchesRule,
   computeContributionBreakdown,
+  kerenHishtalmutWithdrawableFrom,
   sortAccountsForPlan,
 } from '../payroll-model';
 
@@ -62,5 +63,12 @@ describe('payroll model', () => {
     expect(candidateMatchesRule(candidate, candidate.match)).toBe(true);
     expect(candidateMatchesRule(candidate, { ...candidate.match, salary_match_account_number: '2' })).toBe(false);
     expect(candidateMatchesRule(candidate, null)).toBe(false);
+  });
+
+  it('dates keren hishtalmut withdrawal six years after opening, else start, else today', () => {
+    expect(kerenHishtalmutWithdrawableFrom({ opened_date: '2019-07-15', start_date: '2022-02-01' }, '2026-11-09')).toBe('2025-07-15');
+    expect(kerenHishtalmutWithdrawableFrom({ opened_date: null, start_date: '2022-02-01' }, '2026-11-09')).toBe('2028-02-01');
+    expect(kerenHishtalmutWithdrawableFrom({ opened_date: null, start_date: null }, '2026-11-09')).toBe('2032-11-09');
+    expect(kerenHishtalmutWithdrawableFrom({ opened_date: '2024-02-29', start_date: null }, '2026-11-09')).toBe('2030-03-01');
   });
 });

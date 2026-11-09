@@ -10,7 +10,8 @@ const {
   appendContributionHistory,
   toIsoDateInTimeZone,
 } = require('./linked-transaction-rollforward.js');
-const { fetchInvestmentContributionRows } = require('./contribution-sources.js');
+const { fetchInvestmentContributionRows, fetchPayrollCostBasisCarry } = require('./contribution-sources.js');
+const { applyCostBasisCarryToHistory } = require('../payroll/accruals.js');
 const {
   toNumber,
 } = require('./account-holdings-rollup.js');
@@ -625,6 +626,7 @@ async function getInvestmentHistory(params = {}) {
       includeLinked: !normalizeCurrencies,
     },
   );
+  const costBasisCarry = await fetchPayrollCostBasisCarry(database, linkedTransactions);
   const linkedTransactionsByAccount = new Map();
   linkedTransactions.forEach((transaction) => {
     const accountKey = Number(transaction.account_id);
@@ -646,8 +648,9 @@ async function getInvestmentHistory(params = {}) {
     // cannot safely be added before FX normalization. Currency-normalized
     // history therefore only receives ILS payroll estimates (fetched above);
     // performance converts the linked flows independently on their dates.
+    const carriedPoints = applyCostBasisCarryToHistory(points, costBasisCarry.get(id)?.schedule);
     const augmentedPoints = appendContributionHistory(
-      points,
+      carriedPoints,
       linkedTransactionsByAccount.get(id) || [],
       {
         excludePikadonTransactions: true,

@@ -165,11 +165,12 @@ afterEach(() => {
 describe('health-score-history bulk calculation', () => {
   it.each([
     [7, 7], [60, 60], [120, 31], [7, 120], [120, 120],
-  ])('matches per-day SQL for %i history days and a %i-day window using four queries', async (days, windowDays) => {
+  ])('matches per-day SQL for %i history days and a %i-day window using five queries', async (days, windowDays) => {
     const endDate = new Date();
     seedHistory(endDate);
     const expected = await legacyPoints(endDate, days, windowDays);
-    expect(client.query).toHaveBeenCalledTimes(days * 2);
+    // Per day: cash flow, expenses, payroll plans (no plans: no deposit lookup).
+    expect(client.query).toHaveBeenCalledTimes(days * 3);
     client.query.mockClear();
 
     const result = await getHealthScoreHistory({ days, windowDays });
@@ -179,7 +180,7 @@ describe('health-score-history bulk calculation', () => {
       historyDays: days, windowDays,
       startDate: iso(subDays(endDate, days - 1)), endDate: iso(endDate),
     });
-    expect(client.query).toHaveBeenCalledTimes(4);
+    expect(client.query).toHaveBeenCalledTimes(5);
     expect(client.release).toHaveBeenCalledOnce();
     expect(result.points[0].date).toBe(result.startDate);
     expect(result.points.at(-1).date).toBe(result.endDate);
@@ -198,7 +199,7 @@ describe('health-score-history bulk calculation', () => {
     const scoreWindow = await prepareEnhancedHealthScoreHistory({
       startDate: '2023-12-31', endDate: '2024-04-01', client,
     });
-    expect(client.query).toHaveBeenCalledTimes(2);
+    expect(client.query).toHaveBeenCalledTimes(3);
 
     // Out-of-order requests also work: the prepared data has no advancing cursor.
     for (const [startDate, endDate] of [
@@ -231,5 +232,37 @@ describe('health-score-history bulk calculation', () => {
     client.query.mockRejectedValueOnce(new Error('query failed'));
     await expect(getHealthScoreHistory()).rejects.toThrow('query failed');
     expect(client.release).toHaveBeenCalledOnce();
+  });
+
+  it('adds payroll savings identically in per-day and bulk scores', async () => {
+    const { PAYROLL_TABLE_STATEMENTS } = require('../payroll/schema.js');
+    db.exec('CREATE TABLE investment_accounts (id INTEGER PRIMARY KEY, currency TEXT)');
+    for (const statement of PAYROLL_TABLE_STATEMENTS) db.exec(statement);
+    db.exec(`
+      INSERT INTO household_employment (id, member, gross_monthly, salary_match_pattern, is_active)
+        VALUES (1, 'self', 20000, 'acme salary', 1);
+      INSERT INTO payroll_contribution_plans (employment_id, kind, account_id, employee_pct, employer_pct, start_date, is_active)
+        VALUES (1, 'pension', NULL, 6, 6.5, '2024-01-01', 1);
+    `);
+    insert('2024-02-05', 15_000, 1, 'salary-feb');
+    insert('2024-03-05', 15_000, 1, 'salary-mar');
+    insert('2024-03-10', -6_000, 4);
+    db.exec('ALTER TABLE transactions ADD COLUMN name TEXT');
+    db.exec('ALTER TABLE transactions ADD COLUMN account_number TEXT');
+    db.exec('ALTER TABLE transactions ADD COLUMN transaction_datetime TEXT');
+    db.exec("UPDATE transactions SET name = 'ACME SALARY' WHERE identifier IN ('salary-feb', 'salary-mar')");
+
+    const params = { months: 2, startDate: '2024-02-01', endDate: '2024-03-31', currentBalance: 10_000 };
+    const direct = await computeEnhancedHealthScore({ ...params, client });
+    // Two salaries x 12.5% of 20,000: an unlinked plan still counts as saving.
+    expect(direct.meta.payrollSavings).toBe(5000);
+    // (30,000 + 5,000 - 6,000) / (30,000 + 5,000)
+    expect(direct.meta.savingsRate).toBeCloseTo(29_000 / 35_000, 4);
+
+    const scoreWindow = await prepareEnhancedHealthScoreHistory({
+      startDate: '2024-01-01', endDate: '2024-04-01', client,
+    });
+    expect(scoreWindow(params)).toEqual(direct);
+    expect(scoreWindow({ ...params, startDate: '2024-03-01' }).meta.payrollSavings).toBe(2500);
   });
 });

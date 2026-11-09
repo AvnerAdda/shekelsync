@@ -9,7 +9,12 @@ const { dialect } = require('../../../lib/sql-dialect.js');
 const {
   applyContributionRollforward,
 } = require('./linked-transaction-rollforward.js');
-const { fetchInvestmentContributionRows } = require('./contribution-sources.js');
+const {
+  applyCostBasisCarry,
+  fetchInvestmentContributionRows,
+  fetchPayrollCostBasisCarry,
+} = require('./contribution-sources.js');
+const { fetchKerenHishtalmutLiquidity } = require('../payroll/accruals.js');
 const {
   toNumber,
 } = require('./account-holdings-rollup.js');
@@ -448,6 +453,22 @@ async function getInvestmentSummary(params = {}) {
     const rolledForwardAccounts = applyContributionRollforward(accountsRows, contributionRows, {
       excludePikadonTransactions: true,
     });
+    // Payroll contributions between statements that kept the same cost basis
+    // are paid-in capital, not gains.
+    applyCostBasisCarry(
+      rolledForwardAccounts,
+      await fetchPayrollCostBasisCarry(client, contributionRows),
+    );
+    if (rolledForwardAccounts.length > 0) {
+      const liquidity = await fetchKerenHishtalmutLiquidity(
+        client,
+        rolledForwardAccounts.map((row) => row.id),
+      );
+      rolledForwardAccounts.forEach((account) => {
+        const entry = liquidity.get(Number(account.id));
+        if (entry) account.keren_hishtalmut_withdrawable_from = entry.withdrawableFrom;
+      });
+    }
     const pikadonRollupAccountIds = rolledForwardAccounts
       .filter((account) => account.account_type === 'savings' && account.uses_pikadon_rollup)
       .map((account) => account.id);

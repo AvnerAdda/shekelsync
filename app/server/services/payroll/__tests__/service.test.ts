@@ -161,4 +161,27 @@ describe('payroll service', () => {
     });
     expect(candidates[1]).toMatchObject({ looksLikeSalary: false, monthCount: 2, claimedBy: 'spouse' });
   });
+
+  it('stores the fund opening date and reports when the keren hishtalmut becomes withdrawable', async () => {
+    const view = await service.saveEmployment('self', {
+      gross_monthly: 20000,
+      plans: [
+        { kind: 'keren_hishtalmut', account_id: 8, start_date: '2022-02-01', opened_date: '2019-07-15' },
+        { kind: 'pension', account_id: 7, opened_date: '2010-01-01' },
+      ],
+    });
+    const byKind = Object.fromEntries(view.plans.map((plan: any) => [plan.kind, plan]));
+    expect(byKind.keren_hishtalmut).toMatchObject({
+      opened_date: '2019-07-15', withdrawable_from: '2025-07-15', is_withdrawable: true,
+    });
+    // Only a keren hishtalmut has a withdrawal clock.
+    expect(byKind.pension).toMatchObject({ opened_date: null, withdrawable_from: null, is_withdrawable: null });
+
+    const later = await service.saveEmployment('self', {
+      gross_monthly: 20000,
+      plans: [{ kind: 'keren_hishtalmut', account_id: 8, opened_date: null }],
+    });
+    expect(later.plans.find((plan: any) => plan.kind === 'keren_hishtalmut'))
+      .toMatchObject({ opened_date: null, withdrawable_from: '2028-02-01', is_withdrawable: false });
+  });
 });

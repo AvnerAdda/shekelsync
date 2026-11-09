@@ -2,7 +2,8 @@
 
 // Current schema for household employment and payroll contribution plans
 // (pension, severance, keren hishtalmut), used by the payroll service's
-// ensureSchema. Keep in sync with migration v13 in
+// ensureSchema. Keep in sync with migrations v13 (tables) and v14
+// (payroll_contribution_plans.opened_date) in
 // app/lib/schema-migrations.js and with scripts/init_sqlite_db.js; the
 // migration runner test compares all three.
 
@@ -31,6 +32,7 @@ const PAYROLL_TABLE_STATEMENTS = Object.freeze([
       is_active INTEGER NOT NULL DEFAULT 1 CHECK (is_active IN (0, 1)),
       created_at TEXT NOT NULL DEFAULT (datetime('now')),
       updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+      opened_date TEXT,
       UNIQUE (employment_id, kind)
     )`,
 ]);

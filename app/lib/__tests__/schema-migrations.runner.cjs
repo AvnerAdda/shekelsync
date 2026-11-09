@@ -685,7 +685,7 @@ const scenarios = {
       }
     }),
 
-  'payroll-v13-schema-parity': () =>
+  'payroll-v14-schema-parity': () =>
     withDatabase((db, dbPath, tempDir) => {
       const { PAYROLL_TABLES, PAYROLL_TABLE_STATEMENTS, PAYROLL_INDEX_STATEMENTS } =
         require('../../server/services/payroll/schema.js');
@@ -699,13 +699,16 @@ const scenarios = {
         "SELECT name FROM sqlite_master WHERE type = 'index' AND name LIKE 'idx_payroll_%' ORDER BY name",
       ).all().map((row) => row.name);
 
-      // 1) Upgrade path: a v12 database gains the tables through v13.
+      // 1) Upgrade path: a v12 database gains the tables through v13 and the
+      //    opened_date column through v14.
       db.pragma('user_version = 12');
       runSchemaMigrations(db, { dbPath, logger: { log: () => {} } });
       assert.equal(getSchemaVersion(db), CURRENT_SCHEMA_VERSION);
       const migrated = describeTables(db);
       assert.ok(migrated.household_employment.length > 0);
+      assert.equal(migrated.payroll_contribution_plans.at(-1).name, 'opened_date');
       MIGRATIONS.find((migration) => migration.version === 13).up(db); // idempotent
+      MIGRATIONS.find((migration) => migration.version === 14).up(db);
       assert.deepEqual(describeTables(db), migrated);
 
       // 2) Service ensureSchema statements.

@@ -73,6 +73,16 @@ const InvestmentPerformanceCard: React.FC<InvestmentPerformanceCardProps> = ({
       timeZone: 'UTC',
     })
     : '';
+  const withdrawableFrom = account.keren_hishtalmut_withdrawable_from || null;
+  const isWithdrawable = withdrawableFrom ? withdrawableFrom <= new Date().toISOString().slice(0, 10) : false;
+  const withdrawableLabel = withdrawableFrom
+    ? new Date(`${withdrawableFrom}T00:00:00Z`).toLocaleDateString(locale, {
+      day: 'numeric',
+      month: 'short',
+      year: 'numeric',
+      timeZone: 'UTC',
+    })
+    : '';
 
   // Prepare sparkline data - use last 30 points or all if less
   const sparklineData = (history || [])
@@ -202,6 +212,15 @@ const InvestmentPerformanceCard: React.FC<InvestmentPerformanceCardProps> = ({
           {roi === null ? t('na', 'N/A') : `${isPositive ? '+' : ''}${roi.toFixed(1)}%`}
         </Typography>
       </Box>
+      {withdrawableFrom && (
+        <Typography
+          variant="caption"
+          data-testid="keren-hishtalmut-withdrawable"
+          sx={{ color: isWithdrawable ? 'success.main' : 'text.secondary', display: 'block', mt: 0.25 }}
+        >
+          {t(isWithdrawable ? 'withdrawableSince' : 'withdrawableFrom', { date: withdrawableLabel })}
+        </Typography>
+      )}
       {/* Estimated payroll contributions since the last statement */}
       {estimatedContribution > 0 && (
         <MuiTooltip title={t('estimatedContributionsHint')}>

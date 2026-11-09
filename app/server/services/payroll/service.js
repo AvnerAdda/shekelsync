@@ -16,6 +16,7 @@ const {
   PLAN_KINDS,
   PREFERRED_ACCOUNT_TYPES,
   computeContributionBreakdown,
+  kerenHishtalmutWithdrawableFrom,
   matchesSalaryDeposit,
   normalizeMatchText,
 } = require('./calculator.js');
@@ -151,6 +152,7 @@ function normalizePlanPayload(plan = {}) {
       ? defaults.salary_cap
       : optionalNumber(plan.salary_cap, `${kind}.salary_cap`, { min: 0, max: MAX_GROSS_MONTHLY, exclusiveMin: true }),
     start_date: optionalDate(plan.start_date, `${kind}.start_date`),
+    opened_date: kind === 'keren_hishtalmut' ? optionalDate(plan.opened_date, `${kind}.opened_date`) : null,
     is_active: toFlag(plan.is_active, 1),
   };
 }
@@ -160,6 +162,7 @@ function normalizePlanPayload(plan = {}) {
 // ---------------------------------------------------------------------------
 
 function presentPlan(row) {
+  const withdrawableFrom = kerenHishtalmutWithdrawableFrom(row);
   return {
     id: row.id,
     kind: row.kind,
@@ -168,7 +171,10 @@ function presentPlan(row) {
     employer_pct: Number(row.employer_pct) || 0,
     salary_cap: row.salary_cap === null || row.salary_cap === undefined ? null : Number(row.salary_cap),
     start_date: row.start_date ?? null,
+    opened_date: row.opened_date ?? null,
     is_active: Number(row.is_active) === 1 ? 1 : 0,
+    withdrawable_from: withdrawableFrom,
+    is_withdrawable: withdrawableFrom ? withdrawableFrom <= todayIso() : null,
   };
 }
 
@@ -355,21 +361,22 @@ async function saveEmployment(member, payload = {}) {
         plan.salary_cap,
         startDate,
         plan.is_active,
+        plan.opened_date,
       ];
       if (current) {
         await client.query(
           `UPDATE payroll_contribution_plans
               SET account_id = $1, employee_pct = $2, employer_pct = $3, salary_cap = $4,
-                  start_date = $5, is_active = $6, updated_at = datetime('now')
-            WHERE id = $7`,
+                  start_date = $5, is_active = $6, opened_date = $7, updated_at = datetime('now')
+            WHERE id = $8`,
           [...planValues, current.id],
         );
       } else {
         await client.query(
           `INSERT INTO payroll_contribution_plans (
              account_id, employee_pct, employer_pct, salary_cap, start_date, is_active,
-             employment_id, kind
-           ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+             opened_date, employment_id, kind
+           ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
           [...planValues, employmentId, plan.kind],
         );
       }

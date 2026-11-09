@@ -37,6 +37,8 @@ import {
   candidateMatchesRule,
   computeContributionBreakdown,
   computePlanContribution,
+  formatIsoDate,
+  kerenHishtalmutWithdrawableFrom,
   sortAccountsForPlan,
 } from './payroll-model';
 
@@ -68,9 +70,10 @@ const SalaryDialog: React.FC<SalaryDialogProps> = ({
   onClose,
   onSaved,
 }) => {
-  const { t } = useTranslation('translation', { keyPrefix: 'settings.payroll' });
+  const { t, i18n } = useTranslation('translation', { keyPrefix: 'settings.payroll' });
   const { formatCurrency } = useFinancePrivacy();
   const employment = view.employment;
+  const today = new Date().toISOString().slice(0, 10);
 
   const [employerName, setEmployerName] = useState('');
   const [grossInput, setGrossInput] = useState('');
@@ -155,7 +158,7 @@ const SalaryDialog: React.FC<SalaryDialogProps> = ({
         gross_monthly: gross,
         ...selectedRule,
         is_active: 1,
-        plans: plans.map(({ id: _id, ...plan }) => plan),
+        plans: plans.map(({ id: _id, withdrawable_from: _from, is_withdrawable: _withdrawable, ...plan }) => plan),
       });
       if (!response.ok) {
         throw new Error(response.data?.error || response.statusText);
@@ -351,6 +354,23 @@ const SalaryDialog: React.FC<SalaryDialogProps> = ({
                         slotProps={{ inputLabel: { shrink: true } }}
                       />
                     </Grid>
+                    {plan.kind === 'keren_hishtalmut' && (
+                      <Grid size={{ xs: 12 }}>
+                        <TextField
+                          label={t('dialog.openedDate')}
+                          size="small"
+                          type="date"
+                          fullWidth
+                          value={plan.opened_date ?? ''}
+                          onChange={(event) => updatePlan(plan.kind, { opened_date: event.target.value || null })}
+                          helperText={t('dialog.openedDateHelper', {
+                            date: formatIsoDate(kerenHishtalmutWithdrawableFrom(plan, today) ?? today, i18n.language),
+                          })}
+                          slotProps={{ inputLabel: { shrink: true } }}
+                          data-testid="payroll-opened-date"
+                        />
+                      </Grid>
+                    )}
                   </Grid>
                 )}
               </Box>

@@ -1146,6 +1146,16 @@ const MIGRATIONS = [
       `);
     },
   },
+  {
+    version: 14,
+    name: 'payroll-plan-fund-opened-date',
+    mutatesSchema: true,
+    up: (db) => {
+      // When the fund was opened (can predate the current employer); a
+      // keren hishtalmut becomes withdrawable six years later.
+      addColumnIfMissing(db, 'payroll_contribution_plans', 'opened_date', 'TEXT');
+    },
+  },
 ];
 
 const CURRENT_SCHEMA_VERSION = MIGRATIONS.length

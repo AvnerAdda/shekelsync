@@ -10,6 +10,7 @@ const apiPut = vi.fn();
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
     t: (key: string, options?: Record<string, unknown>) => (options ? `${key} ${JSON.stringify(options)}` : key),
+    i18n: { language: 'en' },
   }),
 }));
 
@@ -157,5 +158,19 @@ describe('SalaryDialog', () => {
     fireEvent.change(screen.getByLabelText('dialog.gross'), { target: { value: '20000' } });
     fireEvent.click(screen.getByText('dialog.save'));
     expect(await screen.findByText(/gross_monthly must be a number/)).toBeTruthy();
+  });
+
+  it('shows when the keren hishtalmut becomes withdrawable and saves the opening date', async () => {
+    apiPut.mockResolvedValue({ ok: true, data: emptyView });
+    renderDialog();
+    const opened = screen.getByLabelText('dialog.openedDate');
+    fireEvent.change(opened, { target: { value: '2019-07-15' } });
+    expect(screen.getByTestId('payroll-opened-date').textContent).toContain('2025');
+    fireEvent.change(screen.getByLabelText('dialog.gross'), { target: { value: '20000' } });
+    fireEvent.click(screen.getByText('dialog.save'));
+    await waitFor(() => expect(apiPut).toHaveBeenCalledTimes(1));
+    const kh = apiPut.mock.calls[0][1].plans.find((plan: any) => plan.kind === 'keren_hishtalmut');
+    expect(kh).toMatchObject({ opened_date: '2019-07-15' });
+    expect(kh).not.toHaveProperty('withdrawable_from');
   });
 });

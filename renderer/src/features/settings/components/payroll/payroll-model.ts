@@ -13,7 +13,12 @@ export interface ContributionPlan {
   employer_pct: number;
   salary_cap: number | null;
   start_date: string | null;
+  /** Keren hishtalmut only: when the fund was opened (starts the 6-year clock). */
+  opened_date?: string | null;
   is_active: 0 | 1;
+  /** Server-computed (keren hishtalmut only). */
+  withdrawable_from?: string | null;
+  is_withdrawable?: boolean | null;
 }
 
 export interface Employment {
@@ -153,6 +158,7 @@ export function buildDraftPlans(
       employer_pct: defaults[kind].employer_pct,
       salary_cap: defaults[kind].salary_cap,
       start_date: null,
+      opened_date: null,
       is_active: isNewSetup ? 1 : 0,
     };
   });
@@ -167,6 +173,31 @@ export function sortAccountsForPlan(
     const leftPreferred = preferredTypes.includes(left.account_type) ? 0 : 1;
     const rightPreferred = preferredTypes.includes(right.account_type) ? 0 : 1;
     return leftPreferred - rightPreferred;
+  });
+}
+
+/**
+ * Tax-free withdrawal date of a keren hishtalmut: six years after the fund
+ * opened, else after the plan start, else after `today` (a new plan starts
+ * today). Mirrors app/server/services/payroll/calculator.js.
+ */
+export function kerenHishtalmutWithdrawableFrom(
+  plan: Pick<ContributionPlan, 'opened_date' | 'start_date'>,
+  today: string,
+): string | null {
+  const opened = String(plan.opened_date || plan.start_date || today || '').slice(0, 10);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(opened)) return null;
+  const [year, month, day] = opened.split('-').map(Number);
+  return new Date(Date.UTC(year + 6, month - 1, day)).toISOString().slice(0, 10);
+}
+
+/** Localized calendar date for a YYYY-MM-DD string (no timezone shift). */
+export function formatIsoDate(isoDate: string, locale?: string): string {
+  return new Date(`${isoDate}T00:00:00Z`).toLocaleDateString(locale, {
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+    timeZone: 'UTC',
   });
 }
 

@@ -20,7 +20,7 @@ import { useTranslation } from 'react-i18next';
 import { apiClient } from '@/lib/api-client';
 import { useFinancePrivacy } from '@app/contexts/FinancePrivacyContext';
 import { useDeleteConfirmation } from '@renderer/shared/hooks/useDeleteConfirmation';
-import { PayrollMember, PayrollMemberView, PayrollSetup } from './payroll-model';
+import { PayrollMember, PayrollMemberView, PayrollSetup, formatIsoDate } from './payroll-model';
 import SalaryDialog from './SalaryDialog';
 
 interface PayrollSavingsSectionProps {
@@ -31,7 +31,7 @@ interface PayrollSavingsSectionProps {
 }
 
 const PayrollSavingsSection: React.FC<PayrollSavingsSectionProps> = ({ isMarried, selfName, spouseName }) => {
-  const { t } = useTranslation('translation', { keyPrefix: 'settings.payroll' });
+  const { t, i18n } = useTranslation('translation', { keyPrefix: 'settings.payroll' });
   const { formatCurrency } = useFinancePrivacy();
   const { confirmDelete, deleteConfirmationDialog } = useDeleteConfirmation();
   const [setup, setSetup] = useState<PayrollSetup | null>(null);
@@ -102,6 +102,7 @@ const PayrollSavingsSection: React.FC<PayrollSavingsSectionProps> = ({ isMarried
             {visibleMembers.map((view) => {
               const employment = view.employment;
               const activePlans = view.plans.filter((plan) => plan.is_active === 1);
+              const studyFund = activePlans.find((plan) => plan.kind === 'keren_hishtalmut' && plan.withdrawable_from);
               return (
                 <Grid size={{ xs: 12, md: 6 }} key={view.member}>
                   <Card variant="outlined" data-testid={`payroll-card-${view.member}`} sx={{ height: '100%' }}>
@@ -137,6 +138,17 @@ const PayrollSavingsSection: React.FC<PayrollSavingsSectionProps> = ({ isMarried
                               );
                             })}
                           </Box>
+                          {studyFund?.withdrawable_from && (
+                            <Chip
+                              size="small"
+                              data-testid={`payroll-withdrawable-${view.member}`}
+                              color={studyFund.is_withdrawable ? 'success' : 'default'}
+                              sx={{ mb: 1 }}
+                              label={t(studyFund.is_withdrawable ? 'card.withdrawableSince' : 'card.withdrawableFrom', {
+                                date: formatIsoDate(studyFund.withdrawable_from, i18n.language),
+                              })}
+                            />
+                          )}
                           {view.breakdown.totals.total > 0 && (
                             <Typography variant="body2" sx={{ color: 'text.secondary' }}>
                               {t('card.monthlyTotal', {

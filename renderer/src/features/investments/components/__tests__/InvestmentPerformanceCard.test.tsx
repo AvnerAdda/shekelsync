@@ -86,4 +86,17 @@ describe('InvestmentPerformanceCard currency display', () => {
     render(<InvestmentPerformanceCard account={account} history={[]} color="#2563eb" />);
     expect(screen.queryByTestId('estimated-contributions')).not.toBeInTheDocument();
   });
+
+  it('shows when a keren hishtalmut becomes withdrawable', () => {
+    const base: InvestmentAccountSummary = {
+      id: 6, account_name: 'Clal', account_type: 'provident', currency: 'ILS', current_value: 125_507, cost_basis: 113_178,
+    };
+    const { unmount } = render(
+      <InvestmentPerformanceCard account={{ ...base, keren_hishtalmut_withdrawable_from: '2099-02-01' }} history={[]} color="#2563eb" />,
+    );
+    expect(screen.getByTestId('keren-hishtalmut-withdrawable').textContent).toMatch(/^withdrawableFrom .*2099/);
+    unmount();
+    render(<InvestmentPerformanceCard account={{ ...base, keren_hishtalmut_withdrawable_from: '2020-02-01' }} history={[]} color="#2563eb" />);
+    expect(screen.getByTestId('keren-hishtalmut-withdrawable').textContent).toMatch(/^withdrawableSince .*2020/);
+  });
 });

@@ -948,6 +948,8 @@
         "noSalaryLink": "No salary deposit linked, so nothing will accrue.",
         "noAccount": "no account",
         "paused": "Paused",
+        "withdrawableFrom": "Keren hishtalmut withdrawable from {{date}}",
+        "withdrawableSince": "Keren hishtalmut withdrawable since {{date}}",
         "removeBody": "The salary link and the pension, severance and keren hishtalmut settings are deleted. Your investment accounts and statements are kept."
       },
       "dialog": {
@@ -971,6 +973,8 @@
         "salaryCap": "Salary cap (₪)",
         "salaryCapHelper": "Tax-exempt ceiling: ₪15,712 in 2026",
         "startDate": "Accrue from",
+        "openedDate": "Fund opened",
+        "openedDateHelper": "Withdrawable tax-free from {{date}}, 6 years after opening. Leave empty to use the accrual start date.",
         "planMonthly": "≈ {{total}}/month",
         "preview": "Every month: ≈ {{total}} ({{employee}} from the salary, {{employer}} from the employer)",
         "noAccountWarning": "Pick an account for each active contribution so it has somewhere to accrue.",
@@ -1909,7 +1913,8 @@
       "metrics": {
         "savings": {
           "label": "Savings",
-          "tooltip": "Measures your savings rate as a percentage of income. Higher scores indicate better financial discipline and future security."
+          "tooltip": "Measures your savings rate as a percentage of income. Higher scores indicate better financial discipline and future security.",
+          "payrollIncluded": "incl. {{amount}} via payroll"
         },
         "diversity": {
           "label": "Diversity",
@@ -3506,6 +3511,8 @@
     "performanceCard": {
       "estimatedContributions": "Includes ≈ {{amount}} estimated payroll contributions since {{date}}",
       "estimatedContributionsHint": "Estimated from your salary in Settings → Profile. Replaced when you enter the next statement.",
+      "withdrawableFrom": "Withdrawable tax-free from {{date}}",
+      "withdrawableSince": "Withdrawable tax-free since {{date}}",
       "high": "High",
       "low": "Low",
       "value": "Value",

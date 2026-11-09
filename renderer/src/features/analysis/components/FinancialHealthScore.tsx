@@ -22,6 +22,7 @@ import RunwayIcon from '@mui/icons-material/Schedule';
 import HelpIcon from '@mui/icons-material/HelpOutlined';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import { startOfMonth, subDays, format } from 'date-fns';
+import { useFinancePrivacy } from '@app/contexts/FinancePrivacyContext';
 import { apiClient } from '@renderer/lib/api-client';
 import { useTranslation } from 'react-i18next';
 import { useThemeMode } from '@renderer/contexts/ThemeContext';
@@ -38,6 +39,12 @@ export interface HealthBreakdown {
 export interface FinancialHealthSnapshot {
   overallHealthScore: number;
   healthBreakdown: HealthBreakdown;
+  healthScoreMeta?: {
+    meta?: {
+      /** Estimated pension / severance / keren hishtalmut contributions in the period. */
+      payrollSavings?: number;
+    };
+  };
 }
 
 interface FinancialHealthScoreProps {
@@ -49,6 +56,7 @@ interface FinancialHealthScoreProps {
 
 const FinancialHealthScore: React.FC<FinancialHealthScoreProps> = ({ data, loading, error, onRefresh }) => {
   const { t } = useTranslation('translation', { keyPrefix: 'analysisPage.health' });
+  const { formatCurrency } = useFinancePrivacy();
   const { setHealthScore } = useThemeMode();
   const hasExternalData = data !== undefined;
   const [intelligence, setIntelligence] = useState<FinancialHealthSnapshot | null>(data ?? null);
@@ -212,6 +220,7 @@ const FinancialHealthScore: React.FC<FinancialHealthScoreProps> = ({ data, loadi
   }
 
   const { overallHealthScore, healthBreakdown } = intelligence;
+  const payrollSavings = Number(intelligence.healthScoreMeta?.meta?.payrollSavings) || 0;
   const description = getHealthScoreDescription(overallHealthScore);
 
   return (
@@ -428,6 +437,17 @@ const FinancialHealthScore: React.FC<FinancialHealthScoreProps> = ({ data, loadi
                           }}>
                           {getHealthMetricName(key)}
                         </Typography>
+                        {key === 'savingsScore' && payrollSavings > 0 && (
+                          <Typography
+                            variant="caption"
+                            data-testid="health-payroll-savings"
+                            sx={{ display: 'block', color: 'text.secondary', fontSize: '0.7rem', mt: 0.25 }}
+                          >
+                            {t('metrics.savings.payrollIncluded', {
+                              amount: formatCurrency(payrollSavings, { maximumFractionDigits: 0 }),
+                            })}
+                          </Typography>
+                        )}
                       </Card>
                     </Tooltip>
                   </Grid>

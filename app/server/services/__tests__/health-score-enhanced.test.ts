@@ -98,7 +98,8 @@ describe('health-score-enhanced', () => {
       client: { query: clientQueryMock },
     });
 
-    expect(clientQueryMock).toHaveBeenCalledTimes(3);
+    // Cash flow, expenses, balance totals, then the payroll plans lookup.
+    expect(clientQueryMock).toHaveBeenCalledTimes(4);
     expect(result.meta.currentBalance).toBe(1800);
   });
 
@@ -120,7 +121,8 @@ describe('health-score-enhanced', () => {
       client: { query: clientQueryMock },
     });
 
-    expect(clientQueryMock).toHaveBeenCalledTimes(2);
+    // Cash flow, expenses, then the payroll plans lookup.
+    expect(clientQueryMock).toHaveBeenCalledTimes(3);
     expect(result.meta.currentBalance).toBe(4200);
   });
 });

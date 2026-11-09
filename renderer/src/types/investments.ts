@@ -116,6 +116,10 @@ export interface InvestmentAccountSummary {
   estimated_contribution_count?: number | null;
   estimated_contribution_since?: string | null;
   estimated_contribution_through?: string | null;
+  /** Contributions estimated before the latest statement, added to its cost basis. */
+  estimated_cost_basis_carry?: number | null;
+  /** Keren hishtalmut: tax-free withdrawal date (YYYY-MM-DD). */
+  keren_hishtalmut_withdrawable_from?: string | null;
   account_value_history?: PortfolioHistoryPoint[];
   assets?: InvestmentAccountAsset[];
 }

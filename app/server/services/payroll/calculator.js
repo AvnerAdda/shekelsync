@@ -31,6 +31,24 @@ const PREFERRED_ACCOUNT_TYPES = Object.freeze({
 });
 const LONG_TERM_SAVINGS_ACCOUNT_TYPES = Object.freeze(['pension', 'provident', 'study_fund']);
 
+// A keren hishtalmut can be withdrawn tax-free six years after the fund was
+// opened (earlier only at retirement age or for qualifying study).
+const KEREN_HISHTALMUT_LOCK_YEARS = 6;
+
+/**
+ * Tax-free withdrawal date for a keren hishtalmut plan: six years after the
+ * fund was opened, falling back to when the plan started.
+ * @returns {string|null} YYYY-MM-DD
+ */
+function kerenHishtalmutWithdrawableFrom(plan) {
+  if (!plan || plan.kind !== 'keren_hishtalmut') return null;
+  const opened = String(plan.opened_date || plan.start_date || '').slice(0, 10);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(opened)) return null;
+  const [year, month, day] = opened.split('-').map(Number);
+  // Date.UTC rolls 29 Feb into 1 Mar on non-leap target years.
+  return new Date(Date.UTC(year + KEREN_HISHTALMUT_LOCK_YEARS, month - 1, day)).toISOString().slice(0, 10);
+}
+
 function roundCurrency(value) {
   return Number.isFinite(value) ? Math.round(value * 100) / 100 : 0;
 }
@@ -121,6 +139,7 @@ function matchesSalaryDeposit(employment, transaction) {
 }
 
 module.exports = {
+  KEREN_HISHTALMUT_LOCK_YEARS,
   KEREN_HISHTALMUT_SALARY_CAP,
   LONG_TERM_SAVINGS_ACCOUNT_TYPES,
   MEMBERS,
@@ -129,6 +148,7 @@ module.exports = {
   PREFERRED_ACCOUNT_TYPES,
   computeContributionBreakdown,
   computePlanContribution,
+  kerenHishtalmutWithdrawableFrom,
   matchesSalaryDeposit,
   normalizeMatchText,
 };
