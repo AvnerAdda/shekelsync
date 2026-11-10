@@ -289,6 +289,85 @@
       "minutes": "~{{count}} min",
       "returnsOn": "Returns {{date}}"
     },
+    "items": {
+      "deposit": {
+        "salary": {
+          "title": "Salary from {{name}} hasn't arrived",
+          "description": "It usually lands around {{date}} (about {{amount}}). Your bank data runs through {{coveredThrough}} and it isn't there.",
+          "descriptionNoAmount": "It usually lands around {{date}}. Your bank data runs through {{coveredThrough}} and it isn't there."
+        },
+        "income": {
+          "title": "Expected income hasn't arrived: {{name}}",
+          "description": "Expected around {{date}} (about {{amount}}). Your account data runs through {{coveredThrough}} and it isn't there.",
+          "descriptionNoAmount": "Expected around {{date}}. Your account data runs through {{coveredThrough}} and it isn't there."
+        },
+        "investment": {
+          "title": "Regular deposit didn't go through: {{name}}",
+          "description": "Expected around {{date}} (about {{amount}}). Your account data runs through {{coveredThrough}} and it isn't there.",
+          "descriptionNoAmount": "Expected around {{date}}. Your account data runs through {{coveredThrough}} and it isn't there."
+        }
+      },
+      "subscription": {
+        "missedCharge": {
+          "title": "Expected charge not found: {{name}}",
+          "description": "Usually charged around {{date}} ({{amount}}). If it was cancelled, mark it as ended.",
+          "descriptionNoAmount": "Usually charged around {{date}}. If it was cancelled, mark it as ended."
+        },
+        "priceIncrease": {
+          "title": "{{name}} got more expensive",
+          "description": "From {{previous}} to {{current}} (+{{percent}}%)."
+        },
+        "duplicate": {
+          "title": "Possible double charge: {{name}}",
+          "description": "{{amount}} was charged more than once on {{date}} on the same card."
+        },
+        "upcomingRenewal": {
+          "title": "{{name}} renews soon",
+          "description": "Next charge expected on {{date}} ({{amount}}).",
+          "descriptionNoAmount": "Next charge expected on {{date}}."
+        },
+        "cancelledStillCharging": {
+          "title": "{{name}} charged after cancellation",
+          "description": "A charge came through on {{date}}."
+        }
+      },
+      "budget": {
+        "exceeded": {
+          "title": "{{category}} is over budget",
+          "description": "{{spent}} of {{budget}} this month ({{percent}}%)."
+        },
+        "warning": {
+          "title": "{{category}} is close to its budget",
+          "description": "{{spent}} of {{budget}} this month ({{percent}}%)."
+        },
+        "projected": {
+          "title": "{{category}} is on track to go over budget",
+          "description": "Projected {{projected}} this month against a {{budget}} budget."
+        }
+      },
+      "staleSync": {
+        "title": "Accounts need a sync",
+        "description": "{{accounts}} accounts haven't synced in over 48 hours. Recent charges and deposits may be missing.",
+        "descriptionOne": "{{account}} hasn't synced in {{days}} days. Recent charges and deposits may be missing."
+      },
+      "uncategorized": {
+        "title": "Transactions need a category",
+        "description": "{{transactions}} transactions ({{amount}}) have no category, so reports leave them out."
+      },
+      "cashFlow": {
+        "title": "Money may run short this month",
+        "description": "At your current pace, what's left lasts about {{days}} days."
+      },
+      "unusualSpending": {
+        "title": "Unusual purchase at {{merchant}}",
+        "description": "{{amount}} in {{category}}, well above what you usually spend there.",
+        "descriptionNoCategory": "{{amount}}, well above what you usually spend."
+      },
+      "largeTransaction": {
+        "title": "Large purchase at {{merchant}}",
+        "description": "{{amount}} on {{date}}."
+      }
+    },
     "filters": {
       "label": "Filter review items",
       "all": "All · {{count}}",

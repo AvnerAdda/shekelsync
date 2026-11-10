@@ -289,6 +289,85 @@
       "minutes": "~{{count}} min",
       "returnsOn": "Revient le {{date}}"
     },
+    "items": {
+      "deposit": {
+        "salary": {
+          "title": "Le salaire de {{name}} n'est pas arrivé",
+          "description": "Il arrive d'habitude vers le {{date}} (environ {{amount}}). Vos données bancaires vont jusqu'au {{coveredThrough}} et il n'y figure pas.",
+          "descriptionNoAmount": "Il arrive d'habitude vers le {{date}}. Vos données bancaires vont jusqu'au {{coveredThrough}} et il n'y figure pas."
+        },
+        "income": {
+          "title": "Revenu attendu non reçu : {{name}}",
+          "description": "Attendu vers le {{date}} (environ {{amount}}). Les données du compte vont jusqu'au {{coveredThrough}} et il n'y figure pas.",
+          "descriptionNoAmount": "Attendu vers le {{date}}. Les données du compte vont jusqu'au {{coveredThrough}} et il n'y figure pas."
+        },
+        "investment": {
+          "title": "Versement régulier non effectué : {{name}}",
+          "description": "Attendu vers le {{date}} (environ {{amount}}). Les données du compte vont jusqu'au {{coveredThrough}} et il n'y figure pas.",
+          "descriptionNoAmount": "Attendu vers le {{date}}. Les données du compte vont jusqu'au {{coveredThrough}} et il n'y figure pas."
+        }
+      },
+      "subscription": {
+        "missedCharge": {
+          "title": "Prélèvement attendu introuvable : {{name}}",
+          "description": "Prélevé d'habitude vers le {{date}} ({{amount}}). S'il a été résilié, marquez-le comme terminé.",
+          "descriptionNoAmount": "Prélevé d'habitude vers le {{date}}. S'il a été résilié, marquez-le comme terminé."
+        },
+        "priceIncrease": {
+          "title": "{{name}} a augmenté",
+          "description": "De {{previous}} à {{current}} (+{{percent}} %)."
+        },
+        "duplicate": {
+          "title": "Double prélèvement possible : {{name}}",
+          "description": "{{amount}} prélevé plusieurs fois le {{date}} sur la même carte."
+        },
+        "upcomingRenewal": {
+          "title": "{{name}} se renouvelle bientôt",
+          "description": "Prochain prélèvement prévu le {{date}} ({{amount}}).",
+          "descriptionNoAmount": "Prochain prélèvement prévu le {{date}}."
+        },
+        "cancelledStillCharging": {
+          "title": "{{name}} prélevé après résiliation",
+          "description": "Un prélèvement est passé le {{date}}."
+        }
+      },
+      "budget": {
+        "exceeded": {
+          "title": "Budget dépassé : {{category}}",
+          "description": "{{spent}} sur {{budget}} ce mois-ci ({{percent}} %)."
+        },
+        "warning": {
+          "title": "Budget presque atteint : {{category}}",
+          "description": "{{spent}} sur {{budget}} ce mois-ci ({{percent}} %)."
+        },
+        "projected": {
+          "title": "Dépassement de budget prévu : {{category}}",
+          "description": "{{projected}} prévus ce mois-ci pour un budget de {{budget}}."
+        }
+      },
+      "staleSync": {
+        "title": "Comptes à synchroniser",
+        "description": "{{accounts}} comptes ne sont pas synchronisés depuis plus de 48 heures. Des opérations récentes peuvent manquer.",
+        "descriptionOne": "{{account}} n'est pas synchronisé depuis {{days}} jours. Des opérations récentes peuvent manquer."
+      },
+      "uncategorized": {
+        "title": "Transactions sans catégorie",
+        "description": "{{transactions}} transactions ({{amount}}) sans catégorie, absentes des rapports."
+      },
+      "cashFlow": {
+        "title": "L'argent pourrait manquer ce mois-ci",
+        "description": "Au rythme actuel, ce qui reste durera environ {{days}} jours."
+      },
+      "unusualSpending": {
+        "title": "Achat inhabituel chez {{merchant}}",
+        "description": "{{amount}} en {{category}}, bien au-dessus de vos dépenses habituelles.",
+        "descriptionNoCategory": "{{amount}}, bien au-dessus de l'habitude."
+      },
+      "largeTransaction": {
+        "title": "Achat important chez {{merchant}}",
+        "description": "{{amount}} le {{date}}."
+      }
+    },
     "filters": {
       "label": "Filtrer les éléments de la revue",
       "all": "Tout · {{count}}",

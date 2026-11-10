@@ -9,6 +9,7 @@ const PATTERN = {
   displayName: 'Partner',
   direction: 'expense',
   isSubscription: true,
+  source: 'detected',
   state: 'active',
   frequency: 'monthly',
   amount: 100,
@@ -24,9 +25,10 @@ const PATTERN = {
 interface Fixture {
   syncedThrough?: string | null;
   storedAlerts?: Record<string, unknown>[];
+  patterns?: Record<string, unknown>[];
 }
 
-function install({ syncedThrough = null, storedAlerts = [] }: Fixture) {
+function install({ syncedThrough = null, storedAlerts = [], patterns = [PATTERN] }: Fixture) {
   const query = vi.fn(async (sql: string) => {
     const text = String(sql);
     if (text.includes('FROM subscription_alerts sa')) return { rows: storedAlerts };
@@ -46,7 +48,7 @@ function install({ syncedThrough = null, storedAlerts = [] }: Fixture) {
   });
   subscriptionsService.__setDatabase({ query });
   subscriptionsService.__setFinancialTruth({
-    getProjectionSnapshot: () => ({ truthRevision: 1, patterns: [PATTERN] }),
+    getProjectionSnapshot: () => ({ truthRevision: 1, patterns }),
   });
   subscriptionsService.__setRecurringAnalyzer({
     normalizePatternKey: (value: string) => String(value || '').trim().toLowerCase(),
@@ -84,6 +86,41 @@ describe('subscription missed-charge alerts', () => {
         expected_date: '2026-10-24',
       }),
     ]);
+  });
+
+  it('ignores gaps in a loose, low-confidence schedule', async () => {
+    install({ syncedThrough: '2026-11-08 07:21:49', patterns: [{ ...PATTERN, confidence: 0.45 }] });
+    const result = await subscriptionsService.getSubscriptionAlerts({ locale: 'en' });
+    expect(missedAlerts(result)).toHaveLength(0);
+  });
+
+  it('ignores a gap when the merchant kept charging under another detected pattern', async () => {
+    install({
+      syncedThrough: '2026-11-08 07:21:49',
+      patterns: [
+        PATTERN,
+        { ...PATTERN, id: 19, frequency: 'quarterly', isSubscription: false, lastSeenDate: '2026-10-26', nextExpectedDate: '2027-01-26' },
+      ],
+    });
+    const result = await subscriptionsService.getSubscriptionAlerts({ locale: 'en' });
+    expect(missedAlerts(result)).toHaveLength(0);
+  });
+
+  it('drops a stored duplicate that is no longer detected within the look-back window', async () => {
+    install({
+      syncedThrough: '2026-11-08 07:21:49',
+      storedAlerts: [{
+        id: 3,
+        subscription_id: 50,
+        alert_type: 'duplicate',
+        identity_key: 'subscription:50:duplicate:2026-10-30:1980',
+        evidence_end_date: '2026-10-30',
+        is_dismissed: 0,
+        created_at: '2026-10-31T00:00:00.000Z',
+      }],
+    });
+    const result = await subscriptionsService.getSubscriptionAlerts({ locale: 'en' });
+    expect(result.alerts.some((alert: { alert_type: string }) => alert.alert_type === 'duplicate')).toBe(false);
   });
 
   it('drops stored missed-charge alerts for an expected date that is no longer missing', async () => {

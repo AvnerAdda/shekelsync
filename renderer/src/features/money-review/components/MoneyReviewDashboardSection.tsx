@@ -32,6 +32,7 @@ import { onStartupReady, scheduleStartupIdleWork } from '@renderer/app/startup/s
 import { useMoneyReview } from '../hooks/useMoneyReview';
 import type { MoneyReviewGroup, MoneyReviewItem } from '../types';
 import { buildMoneyReviewTimeScopeLabel } from '../time-scope';
+import { useMoneyReviewItemText } from '../item-text';
 
 const MoneyReviewPage = lazy(() => import('../pages/MoneyReviewPage'));
 const MoneyReviewItemDetailDialog = lazy(() => import('./MoneyReviewItemDetailDialog'));
@@ -54,6 +55,7 @@ const MoneyReviewDashboardSection: React.FC = () => {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
   const { t, i18n } = useTranslation('translation', { keyPrefix: 'moneyReview' });
+  const getItemText = useMoneyReviewItemText();
   const { formatCurrency } = useFinancePrivacy();
   const [searchParams, setSearchParams] = useSearchParams();
   const scrollerRef = useRef<HTMLDivElement | null>(null);
@@ -251,6 +253,7 @@ const MoneyReviewDashboardSection: React.FC = () => {
             const palette = theme.palette[GROUP_COLORS[item.group]];
             const minutes = item.group === 'data' ? 1 : 2;
             const timeScopeLabel = buildMoneyReviewTimeScopeLabel(item, i18n?.language || 'en');
+            const itemText = getItemText(item);
             return (
               <Card
                 key={item.id}
@@ -276,7 +279,7 @@ const MoneyReviewDashboardSection: React.FC = () => {
               >
                 <CardActionArea
                   onClick={() => openReviewItem(item.id)}
-                  aria-label={t('dashboard.openItem', { title: item.title })}
+                  aria-label={t('dashboard.openItem', { title: itemText.title })}
                   sx={{ height: '100%', p: 1.75, alignItems: 'stretch' }}
                 >
                   <Stack spacing={1.25} sx={{ height: '100%' }}>
@@ -314,7 +317,7 @@ const MoneyReviewDashboardSection: React.FC = () => {
                           overflow: 'hidden',
                         }}
                       >
-                        {item.title}
+                        {itemText.title}
                       </Typography>
                       <Typography
                         variant="caption"
@@ -328,7 +331,7 @@ const MoneyReviewDashboardSection: React.FC = () => {
                           overflow: 'hidden',
                         }}
                       >
-                        {item.description}
+                        {itemText.description}
                       </Typography>
                     </Box>
 

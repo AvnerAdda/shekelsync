@@ -86,8 +86,32 @@ function missedChargeFreshnessDays(subscription) {
 // sync that has not caught up yet.
 const MISSED_CHARGE_DATA_GRACE_DAYS = 7;
 
+// Detected patterns below this confidence are too loose (a supermarket or
+// bakery visited now and then) for a gap to mean anything.
+const SCHEDULE_MIN_CONFIDENCE = 0.6;
+const DUPLICATE_LOOKBACK_DAYS = 14;
+
 function rowsOf(result) {
   return Array.isArray(result?.rows) ? result.rows : [];
+}
+
+function isUserBackedTruthPattern(pattern) {
+  return Boolean(pattern) && (
+    pattern.source !== 'detected'
+    || Boolean(pattern.confirmed)
+    || (pattern.corrections || []).some((correction) => correction.action === 'override_pattern')
+  );
+}
+
+/** Newest charge per merchant across every expense pattern, keyed by normalized name. */
+function latestChargeByMerchant(snapshot) {
+  const latest = new Map();
+  (snapshot?.patterns || []).forEach((pattern) => {
+    if (pattern.direction !== 'expense' || !pattern.normalizedName || !pattern.lastSeenDate) return;
+    const date = String(pattern.lastSeenDate).slice(0, 10);
+    latest.set(pattern.normalizedName, laterDate(latest.get(pattern.normalizedName), date));
+  });
+  return latest;
 }
 
 function laterDate(left, right) {
@@ -658,15 +682,18 @@ async function getSubscriptionAlerts(options = {}) {
   const newAlerts = await persistDetectedAlerts(detectedAlerts);
   // A missed charge is a live condition, not an event: once the charge arrives
   // (or the expected date moves), the stored alert for the old date is stale.
-  const currentMissedIdentities = new Set(detectedAlerts
-    .filter((alert) => alert.alert_type === 'missed_charge')
-    .map((alert) => alert.identity_key)
-    .filter(Boolean));
-  const liveStoredAlerts = alerts.filter((alert) => (
-    alert.alert_type !== 'missed_charge'
-    || !alert.identity_key
-    || currentMissedIdentities.has(alert.identity_key)
-  ));
+  // A duplicate inside the detector's look-back window that is no longer
+  // detected was not a duplicate (for example, two cards each paying a fee).
+  const currentIdentities = new Set(detectedAlerts.map((alert) => alert.identity_key).filter(Boolean));
+  const duplicateWindowStart = addCalendarDays(new Date().toISOString().slice(0, 10), -DUPLICATE_LOOKBACK_DAYS);
+  const isStaleStoredAlert = (alert) => {
+    if (!alert.identity_key || currentIdentities.has(alert.identity_key)) return false;
+    // Missed charges and renewal reminders are re-derived on every run.
+    if (alert.alert_type === 'missed_charge' || alert.alert_type === 'upcoming_renewal') return true;
+    const evidenceDate = String(alert.evidence_end_date || '').slice(0, 10);
+    return alert.alert_type === 'duplicate' && Boolean(evidenceDate) && evidenceDate >= duplicateWindowStart;
+  };
+  const liveStoredAlerts = alerts.filter((alert) => !isStaleStoredAlert(alert));
   const storedIdentities = new Set(liveStoredAlerts.map((alert) => alert.identity_key).filter(Boolean));
   const freshAlerts = newAlerts.filter((alert) => !storedIdentities.has(alert.identity_key));
   const combined = [...liveStoredAlerts, ...freshAlerts];
@@ -695,6 +722,36 @@ async function detectNewAlerts(locale = 'he', existingSubscriptionResult = null)
     if (!patternId) return null;
     if (!patternCoverage) patternCoverage = await loadPatternDataCoverage(today);
     return patternCoverage.get(Number(patternId)) || null;
+  };
+  let truthContext = null;
+  const loadTruthContext = () => {
+    if (!truthContext) {
+      const snapshot = loadTruthSnapshot();
+      truthContext = {
+        byId: new Map((snapshot.patterns || []).map((pattern) => [Number(pattern.id), pattern])),
+        latestByMerchant: latestChargeByMerchant(snapshot),
+      };
+    }
+    return truthContext;
+  };
+  // A gap only counts for a trusted schedule whose merchant has really gone
+  // quiet: the same merchant charged again under another detected pattern
+  // means the cadence was wrong, not that the charge is missing.
+  const isTrustedSchedule = (sub, patternId) => {
+    const truthPattern = patternId ? loadTruthContext().byId.get(Number(patternId)) : null;
+    // 'keep' is the automatic status for low-confidence detections, not a user choice.
+    if (isUserBackedTruthPattern(truthPattern)) return true;
+    const confidence = Number(sub.consistency_score ?? truthPattern?.confidence);
+    return !(Number.isFinite(confidence) && confidence < SCHEDULE_MIN_CONFIDENCE);
+  };
+  const isTrustedMissedCharge = (sub, patternId) => {
+    if (!isTrustedSchedule(sub, patternId)) return false;
+    const { byId, latestByMerchant } = loadTruthContext();
+    const truthPattern = patternId ? byId.get(Number(patternId)) : null;
+    const merchantKey = truthPattern?.normalizedName || sub.pattern_key;
+    const lastMerchantCharge = merchantKey ? latestByMerchant.get(merchantKey) : null;
+    const halfInterval = Math.round((FREQUENCY_INTERVALS[sub.user_frequency || sub.detected_frequency] || 30) / 2);
+    return !(lastMerchantCharge && lastMerchantCharge >= addCalendarDays(sub.next_expected_date, -halfInterval));
   };
 
   for (const sub of subscriptions) {
@@ -851,8 +908,10 @@ async function detectNewAlerts(locale = 'he', existingSubscriptionResult = null)
           AND t.status = 'completed'
           AND t.category_type = 'expense'
           AND t.price < 0
-          AND t.date >= date('now', '-14 days')
-        GROUP BY substr(t.date, 1, 10), ROUND(ABS(t.price), 2)
+          AND t.date >= date('now', '-${DUPLICATE_LOOKBACK_DAYS} days')
+        -- Same card only: two cards each paying their own monthly fee on the
+        -- same day is not a duplicate.
+        GROUP BY substr(t.date, 1, 10), ROUND(ABS(t.price), 2), t.vendor, COALESCE(t.account_number, '')
         HAVING COUNT(*) >= 2
         ORDER BY charge_date DESC
         LIMIT 1
@@ -907,7 +966,10 @@ async function detectNewAlerts(locale = 'he', existingSubscriptionResult = null)
       const accountDataCaughtUp = coveredDaysPastDue === null
         || coveredDaysPastDue > MISSED_CHARGE_DATA_GRACE_DAYS;
 
-      if (daysPastDue !== null && daysPastDue > 7 && daysPastDue <= freshnessDays && accountDataCaughtUp) {
+      if (
+        daysPastDue !== null && daysPastDue > 7 && daysPastDue <= freshnessDays
+        && accountDataCaughtUp && isTrustedMissedCharge(sub, patternId)
+      ) {
         const occurrenceId = patternId
           ? `pattern:${patternId}:${sub.next_expected_date}`
           : null;
@@ -946,7 +1008,7 @@ async function detectNewAlerts(locale = 'he', existingSubscriptionResult = null)
     const effectiveFrequency = sub.user_frequency || sub.detected_frequency;
     if (sub.next_expected_date && ['quarterly', 'yearly'].includes(effectiveFrequency)) {
       const daysUntilRenewal = -calendarDaysSince(sub.next_expected_date, today);
-      if (daysUntilRenewal >= 0 && daysUntilRenewal <= 14) {
+      if (daysUntilRenewal >= 0 && daysUntilRenewal <= 14 && isTrustedSchedule(sub, sub.patternId || sub.financial_pattern_id)) {
         alerts.push({
           id: null,
           identity_key: `subscription:${sub.id}:upcoming_renewal:${sub.next_expected_date}`,

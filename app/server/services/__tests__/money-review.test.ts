@@ -185,6 +185,83 @@ describe('Money Review service contracts', () => {
     })).toBeNull();
   });
 
+  it('queues only price increases that add a meaningful monthly amount', () => {
+    const alert = {
+      id: 5,
+      subscription_id: 38,
+      alert_type: 'price_increase',
+      detected_frequency: 'bimonthly',
+      old_amount: 36,
+      new_amount: 39.02,
+    };
+    expect(moneyReview.utils.subscriptionAlertToSmartAction(alert)).toBeNull();
+    expect(moneyReview.utils.subscriptionAlertToSmartAction({
+      ...alert,
+      detected_frequency: 'monthly',
+      old_amount: 50,
+      new_amount: 60,
+    })).toMatchObject({ actionType: 'fixed_recurring_change', potentialImpact: 10 });
+  });
+
+  it('turns a missing salary into a critical, correction-free review item', () => {
+    const action = moneyReview.utils.missingDepositToSmartAction({
+      kind: 'salary',
+      key: 'salary:2:2026-11',
+      name: 'Gan Dalia',
+      searchText: 'בנק לאומי משכורת',
+      member: 'spouse',
+      employmentId: 2,
+      patternId: null,
+      expectedDate: '2026-11-08',
+      deadline: '2026-11-11',
+      daysLate: 12,
+      expectedAmount: 7029,
+      lastReceivedDate: '2026-10-05',
+      coveredThrough: '2026-11-19',
+    });
+
+    expect(action).toMatchObject({
+      actionType: 'fixed_recurring_missing',
+      severity: 'critical',
+      recurrenceKey: 'money_review:deposit:salary:2:2026-11',
+      potentialImpact: 0,
+      metadata: {
+        source: 'expected_deposit',
+        notificationType: 'missing_deposit',
+        depositKind: 'salary',
+        patternId: null,
+        occurrenceId: null,
+        correctionCapabilities: [],
+        timeScope: { kind: 'overdue_since', start: '2026-11-08' },
+        data: { name: 'Gan Dalia', member: 'spouse', expected_amount: 7029, days_late: 12 },
+        actions: [{ action: 'view_vendor', params: { vendor: 'בנק לאומי משכורת' } }],
+      },
+    });
+  });
+
+  it('lets a missing pattern deposit be skipped or corrected', () => {
+    const action = moneyReview.utils.missingDepositToSmartAction({
+      kind: 'investment',
+      key: 'pattern:7:2026-11-10',
+      name: 'הפקדה לפיקדון מפתח',
+      patternId: 7,
+      frequency: 'monthly',
+      expectedDate: '2026-11-10',
+      deadline: '2026-11-14',
+      daysLate: 10,
+      expectedAmount: 100,
+      coveredThrough: '2026-11-19',
+    });
+    expect(action).toMatchObject({
+      severity: 'medium',
+      metadata: {
+        patternId: 7,
+        occurrenceId: 'pattern:7:2026-11-10',
+        correctionCapabilities: ['skip_occurrence', 'end_pattern', 'pause_pattern', 'override_pattern'],
+      },
+    });
+  });
+
   describe('generated item lifecycle', () => {
     const PREFIX = 'money_review:notification:';
 

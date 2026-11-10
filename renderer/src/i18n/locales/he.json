@@ -289,6 +289,85 @@
       "minutes": "כ־{{count}} דק׳",
       "returnsOn": "חוזר ב־{{date}}"
     },
+    "items": {
+      "deposit": {
+        "salary": {
+          "title": "המשכורת מ־{{name}} עוד לא נכנסה",
+          "description": "בדרך כלל היא נכנסת בסביבות {{date}} (כ־{{amount}}). נתוני הבנק מעודכנים עד {{coveredThrough}} והיא לא מופיעה.",
+          "descriptionNoAmount": "בדרך כלל היא נכנסת בסביבות {{date}}. נתוני הבנק מעודכנים עד {{coveredThrough}} והיא לא מופיעה."
+        },
+        "income": {
+          "title": "הכנסה צפויה לא התקבלה: {{name}}",
+          "description": "היא הייתה צפויה בסביבות {{date}} (כ־{{amount}}). נתוני החשבון מעודכנים עד {{coveredThrough}} והיא לא מופיעה.",
+          "descriptionNoAmount": "היא הייתה צפויה בסביבות {{date}}. נתוני החשבון מעודכנים עד {{coveredThrough}} והיא לא מופיעה."
+        },
+        "investment": {
+          "title": "הפקדה קבועה לא בוצעה: {{name}}",
+          "description": "היא הייתה צפויה בסביבות {{date}} (כ־{{amount}}). נתוני החשבון מעודכנים עד {{coveredThrough}} והיא לא מופיעה.",
+          "descriptionNoAmount": "היא הייתה צפויה בסביבות {{date}}. נתוני החשבון מעודכנים עד {{coveredThrough}} והיא לא מופיעה."
+        }
+      },
+      "subscription": {
+        "missedCharge": {
+          "title": "חיוב צפוי לא נמצא: {{name}}",
+          "description": "בדרך כלל מחויב בסביבות {{date}} ({{amount}}). אם השירות בוטל, אפשר לסמן אותו כהסתיים.",
+          "descriptionNoAmount": "בדרך כלל מחויב בסביבות {{date}}. אם השירות בוטל, אפשר לסמן אותו כהסתיים."
+        },
+        "priceIncrease": {
+          "title": "{{name}} התייקר",
+          "description": "מ־{{previous}} ל־{{current}} (+{{percent}}%)."
+        },
+        "duplicate": {
+          "title": "ייתכן חיוב כפול: {{name}}",
+          "description": "{{amount}} חויב יותר מפעם אחת ב־{{date}} באותו כרטיס."
+        },
+        "upcomingRenewal": {
+          "title": "{{name}} מתחדש בקרוב",
+          "description": "החיוב הבא צפוי ב־{{date}} ({{amount}}).",
+          "descriptionNoAmount": "החיוב הבא צפוי ב־{{date}}."
+        },
+        "cancelledStillCharging": {
+          "title": "{{name}} חייב אחרי ביטול",
+          "description": "נרשם חיוב ב־{{date}}."
+        }
+      },
+      "budget": {
+        "exceeded": {
+          "title": "חריגה מהתקציב: {{category}}",
+          "description": "{{spent}} מתוך {{budget}} החודש ({{percent}}%)."
+        },
+        "warning": {
+          "title": "מתקרבים לתקציב: {{category}}",
+          "description": "{{spent}} מתוך {{budget}} החודש ({{percent}}%)."
+        },
+        "projected": {
+          "title": "צפויה חריגה מהתקציב: {{category}}",
+          "description": "צפי של {{projected}} החודש מול תקציב של {{budget}}."
+        }
+      },
+      "staleSync": {
+        "title": "חשבונות ממתינים לסנכרון",
+        "description": "{{accounts}} חשבונות לא סונכרנו יותר מ־48 שעות. ייתכן שחסרים חיובים והפקדות אחרונים.",
+        "descriptionOne": "{{account}} לא סונכרן כבר {{days}} ימים. ייתכן שחסרים חיובים והפקדות אחרונים."
+      },
+      "uncategorized": {
+        "title": "עסקאות ללא קטגוריה",
+        "description": "{{transactions}} עסקאות ({{amount}}) ללא קטגוריה, ולכן הן לא נכללות בדוחות."
+      },
+      "cashFlow": {
+        "title": "הכסף החודש עלול לא להספיק",
+        "description": "בקצב הנוכחי, מה שנשאר יספיק לכ־{{days}} ימים."
+      },
+      "unusualSpending": {
+        "title": "רכישה חריגה ב־{{merchant}}",
+        "description": "{{amount}} בקטגוריית {{category}}, הרבה מעל מה שאתם מוציאים שם בדרך כלל.",
+        "descriptionNoCategory": "{{amount}}, הרבה מעל הרגיל."
+      },
+      "largeTransaction": {
+        "title": "רכישה גדולה ב־{{merchant}}",
+        "description": "{{amount}} ב־{{date}}."
+      }
+    },
     "filters": {
       "label": "סינון פריטי הסקירה",
       "all": "הכול · {{count}}",

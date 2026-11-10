@@ -603,6 +603,11 @@ function isExcludedCategoryName(name, nameEn) {
     return true;
   }
 
+  // Municipal tax (arnona) is a fixed bill: spending less on it is not a habit change.
+  if (/(ארנונה|מיסים עירוניים|מס עירוני)/.test(primary) || /\b(municipal tax(es)?|property tax(es)?|arnona)\b/.test(combinedLower)) {
+    return true;
+  }
+
   if (/(credit\s*card\s*(payment|repayment)|card\s*repayment|cc\s*payment)/.test(combinedLower)) {
     return true;
   }

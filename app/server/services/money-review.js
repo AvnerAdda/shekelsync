@@ -3,9 +3,11 @@ const notificationsService = require('./notifications.js');
 const subscriptionsService = require('./analytics/subscriptions.js');
 const financialTruthService = require('./financial-truth.js');
 const forecastService = require('./forecast.js');
+const expectedDepositsService = require('./analytics/expected-deposits.js');
 
 const REVIEW_NOTIFICATION_PREFIX = 'money_review:notification:';
 const REVIEW_SUBSCRIPTION_PREFIX = 'money_review:subscription:';
+const REVIEW_DEPOSIT_PREFIX = 'money_review:deposit:';
 const REVIEW_STATUSES = new Set(['active', 'accepted', 'snoozed', 'resolved', 'dismissed']);
 const SNOOZE_DAYS = new Map([
   ['1_week', 7],
@@ -132,10 +134,28 @@ function subscriptionAlertImpact(alert) {
 // Informational subscription alerts: nothing for the user to do, so they stay
 // on the Subscriptions page and out of the action queue.
 const NON_ACTIONABLE_SUBSCRIPTION_ALERTS = new Set(['price_decrease']);
+// A price increase is only worth a review item when it adds at least this much
+// per month; smaller drifts (a market's basket going from 36 to 39) stay on the
+// Subscriptions page.
+const MIN_QUEUED_MONTHLY_INCREASE = 5;
+const MONTHS_PER_CYCLE = {
+  weekly: 7 / 30,
+  biweekly: 14 / 30,
+  monthly: 1,
+  bimonthly: 2,
+  quarterly: 3,
+  yearly: 12,
+};
+
+function monthlyIncrease(alert) {
+  const months = MONTHS_PER_CYCLE[alert.detected_frequency] || 1;
+  return (number(alert.new_amount) - number(alert.old_amount)) / months;
+}
 
 function subscriptionAlertToSmartAction(alert) {
   if (!alert?.subscription_id || !alert?.alert_type) return null;
   if (NON_ACTIONABLE_SUBSCRIPTION_ALERTS.has(alert.alert_type)) return null;
+  if (alert.alert_type === 'price_increase' && monthlyIncrease(alert) < MIN_QUEUED_MONTHLY_INCREASE) return null;
   const evidenceDate = alert.evidence_end_date || alert.expected_date || null;
   const stableAlertId = alert.id
     || `${alert.subscription_id}:${alert.alert_type}${evidenceDate ? `:${evidenceDate}` : ''}`;
@@ -166,6 +186,7 @@ function subscriptionAlertToSmartAction(alert) {
         || [],
       timeScope: alert.time_scope || null,
       data: {
+        subscription_name: alert.subscription_name || null,
         old_amount: alert.old_amount,
         new_amount: alert.new_amount,
         percentage_change: alert.percentage_change,
@@ -182,6 +203,56 @@ function subscriptionAlertToSmartAction(alert) {
         time_scope: alert.time_scope || null,
       },
       actions: [{ action: 'view_subscriptions', params: { subscription_id: alert.subscription_id } }],
+    },
+  };
+}
+
+const DEPOSIT_SEVERITY = { salary: 'critical', income: 'high', investment: 'medium' };
+const DEPOSIT_TITLES = {
+  salary: (name) => `Salary from ${name} has not arrived`,
+  income: (name) => `Expected income from ${name} has not arrived`,
+  investment: (name) => `Regular deposit to ${name} did not happen`,
+};
+
+/** A missing salary, income or investment deposit as a review item. */
+function missingDepositToSmartAction(deposit) {
+  if (!deposit?.key || !DEPOSIT_TITLES[deposit.kind]) return null;
+  const occurrenceId = deposit.patternId ? `pattern:${deposit.patternId}:${deposit.expectedDate}` : null;
+  const correctionCapabilities = deposit.patternId
+    ? ['skip_occurrence', 'end_pattern', 'pause_pattern', 'override_pattern']
+    : [];
+  const amountText = deposit.expectedAmount > 0 ? ` (about ${deposit.expectedAmount})` : '';
+  return {
+    actionType: 'fixed_recurring_missing',
+    severity: DEPOSIT_SEVERITY[deposit.kind],
+    title: DEPOSIT_TITLES[deposit.kind](deposit.name),
+    description: `Expected around ${deposit.expectedDate}${amountText}; your account data runs through ${deposit.coveredThrough} and it is not there.`,
+    detectedAt: `${deposit.deadline}T00:00:00.000Z`,
+    recurrenceKey: `${REVIEW_DEPOSIT_PREFIX}${deposit.key}`,
+    potentialImpact: 0,
+    confidence: deposit.kind === 'salary' ? 0.95 : 0.85,
+    metadata: {
+      source: 'expected_deposit',
+      notificationType: 'missing_deposit',
+      depositKind: deposit.kind,
+      patternId: deposit.patternId || null,
+      occurrenceId,
+      employmentId: deposit.employmentId || null,
+      correctionCapabilities,
+      timeScope: { kind: 'overdue_since', start: deposit.expectedDate },
+      data: {
+        name: deposit.name,
+        member: deposit.member || null,
+        expected_date: deposit.expectedDate,
+        expected_amount: deposit.expectedAmount || null,
+        detected_frequency: deposit.frequency || (deposit.kind === 'salary' ? 'monthly' : null),
+        days_late: deposit.daysLate,
+        last_received_date: deposit.lastReceivedDate || null,
+        covered_through: deposit.coveredThrough,
+        occurrence_id: occurrenceId,
+        correction_capabilities: correctionCapabilities,
+      },
+      actions: [{ action: 'view_vendor', params: { vendor: deposit.searchText || deposit.name } }],
     },
   };
 }
@@ -412,7 +483,13 @@ async function getMoneyReview(options = {}) {
     console.warn('Money Review subscription alerts unavailable:', error?.message || error);
     return { available: false, payload: { alerts: [] } };
   });
-  const [notificationPayload, subscriptionResult] = await Promise.all([
+  const depositRequest = expectedDepositsService.detectMissingDeposits()
+    .then((result) => ({ available: true, ...result }))
+    .catch((error) => {
+      console.warn('Money Review expected deposits unavailable:', error?.message || error);
+      return { available: false, missing: [], trackedPatternIds: new Set() };
+    });
+  const [notificationPayload, subscriptionResult, depositResult] = await Promise.all([
     notificationsService.getNotifications({
       type: 'all',
       severity: 'all',
@@ -420,12 +497,22 @@ async function getMoneyReview(options = {}) {
       include_dismissed: 'true',
     }),
     subscriptionRequest,
+    depositRequest,
   ]);
   const notificationActions = normalizeNotificationResponse(notificationPayload)
     .map(notificationToSmartAction)
     .filter(Boolean);
+  // Investment deposits are also tracked as subscriptions; the deposit item
+  // replaces their "missed charge" so the same gap is not listed twice.
   const subscriptionActions = (subscriptionResult.payload?.alerts || [])
+    .filter((alert) => !(
+      alert?.alert_type === 'missed_charge'
+      && depositResult.trackedPatternIds.has(Number(alert.financial_pattern_id || alert.patternId))
+    ))
     .map(subscriptionAlertToSmartAction)
+    .filter(Boolean);
+  const depositActions = depositResult.missing
+    .map(missingDepositToSmartAction)
     .filter(Boolean);
 
   const client = await database.getClient();
@@ -442,6 +529,9 @@ async function getMoneyReview(options = {}) {
       await upsertGeneratedActions(client, notificationActions, REVIEW_NOTIFICATION_PREFIX);
       if (subscriptionResult.available) {
         await upsertGeneratedActions(client, subscriptionActions, REVIEW_SUBSCRIPTION_PREFIX);
+      }
+      if (depositResult.available) {
+        await upsertGeneratedActions(client, depositActions, REVIEW_DEPOSIT_PREFIX);
       }
       const result = await client.query(`
         SELECT * FROM smart_action_items
@@ -597,6 +687,7 @@ module.exports = {
   utils: {
     buildSummary,
     loadForecastAccuracy,
+    missingDepositToSmartAction,
     normalizeNotificationResponse,
     normalizeReviewRow,
     notificationToSmartAction,
