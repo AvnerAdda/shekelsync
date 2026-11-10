@@ -112,8 +112,15 @@ const MoneyReviewDashboardSection: React.FC = () => {
     updatingId,
     loadReview,
     updateStatus,
+    applyItemUpdate,
     performPrimaryAction,
   } = useMoneyReview({ enabled: reviewEnabled, onExternalAction: closeReview });
+  // Mirror single-item changes made in the "review all" dialog locally instead
+  // of recomputing the whole queue (notifications + forecast) on every click.
+  const handleDialogReviewChanged = useCallback((updatedItem?: MoneyReviewItem) => {
+    if (updatedItem) applyItemUpdate(updatedItem);
+    else void loadReview(true);
+  }, [applyItemUpdate, loadReview]);
   const reviewLoading = !reviewEnabled || loading;
 
   const openItems = useMemo(
@@ -385,7 +392,7 @@ const MoneyReviewDashboardSection: React.FC = () => {
             presentation="dialog"
             initialResponse={!reviewLoading && !error ? response : null}
             onClose={closeReview}
-            onReviewChanged={() => void loadReview(true)}
+            onReviewChanged={handleDialogReviewChanged}
           />
         </Suspense>
       </Dialog>

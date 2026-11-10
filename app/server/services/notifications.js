@@ -562,6 +562,13 @@ async function getNotifications(query = {}) {
     start: currentMonthStartStr,
     end: currentMonthEndStr,
   };
+  // Month-scoped alerts carry the month in their id so that resolving or
+  // hiding one in Money Review / the bell panel lasts for that month only,
+  // instead of silencing the category forever.
+  const monthKey = currentMonthStartStr.slice(0, 7);
+  // null = budgets were not loaded for this request; a number lets the
+  // forecast-driven projection skip its (expensive) forecast when it is 0.
+  let positiveBudgetCount = null;
 
   const client = await database.getClient();
   let credentialSyncsCache = null;
@@ -593,9 +600,11 @@ async function getNotifications(query = {}) {
            AND cb.period_type = 'monthly'`,
       );
 
+      positiveBudgetCount = 0;
       for (const budget of budgetsResult.rows) {
         const budgetLimit = Number.parseFloat(budget.budget_limit || 0);
         if (budgetLimit <= 0) continue;
+        positiveBudgetCount += 1;
 
         let categoryId = budget.category_definition_id || null;
         let categoryName = budget.category_name || null;
@@ -613,7 +622,7 @@ async function getNotifications(query = {}) {
 
         const isExceeded = usagePercentage >= 100;
         notifications.push({
-          id: `budget_${categoryId || budget.id}`,
+          id: `budget_${categoryId || budget.id}_${monthKey}`,
           type: isExceeded ? NOTIFICATION_TYPES.BUDGET_EXCEEDED : NOTIFICATION_TYPES.BUDGET_WARNING,
           severity: isExceeded ? SEVERITY_LEVELS.CRITICAL : SEVERITY_LEVELS.WARNING,
           title: isExceeded ? 'Budget Exceeded!' : 'Budget Warning',
@@ -713,10 +722,11 @@ async function getNotifications(query = {}) {
             type: NOTIFICATION_TYPES.UNUSUAL_SPENDING,
             severity: SEVERITY_LEVELS.WARNING,
             title: 'Unusual Spending Detected',
-            message: `₪${txn.amount.toLocaleString()} spent at ${txn.vendor} (${categoryName}) - ${(zScore * 100).toFixed(0)}% above average`,
+            message: `₪${txn.amount.toLocaleString()} spent at ${txn.name || txn.vendor} (${categoryName}) - ${(zScore * 100).toFixed(0)}% above average`,
             data: {
               transaction_id: txn.identifier,
               vendor: txn.vendor,
+              merchant: txn.name || null,
               amount: txn.amount,
               category_definition_id: txn.categoryDefinitionId,
               category_name: categoryName,
@@ -806,10 +816,11 @@ async function getNotifications(query = {}) {
               type: NOTIFICATION_TYPES.HIGH_TRANSACTION,
               severity: SEVERITY_LEVELS.INFO,
               title: 'Large Transaction',
-              message: `₪${txn.amount.toLocaleString()} transaction at ${txn.vendor} on ${formatShortMonthDay(txn.date)}`,
+              message: `₪${txn.amount.toLocaleString()} transaction at ${txn.name || txn.vendor} on ${formatShortMonthDay(txn.date)}`,
               data: {
                 transaction_id: txn.identifier,
                 vendor: txn.vendor,
+                merchant: txn.name || null,
                 amount: txn.amount,
                 category_definition_id: txn.categoryDefinitionId,
                 category_name: txn.categoryName,
@@ -837,10 +848,11 @@ async function getNotifications(query = {}) {
 
     // 5. Projected budget overruns (forecast-driven)
     if (
-      type === 'all' ||
-      type === NOTIFICATION_TYPES.BUDGET_WARNING ||
-      type === NOTIFICATION_TYPES.BUDGET_EXCEEDED ||
-      type === NOTIFICATION_TYPES.BUDGET_PROJECTED
+      (type === 'all' ||
+        type === NOTIFICATION_TYPES.BUDGET_WARNING ||
+        type === NOTIFICATION_TYPES.BUDGET_EXCEEDED ||
+        type === NOTIFICATION_TYPES.BUDGET_PROJECTED) &&
+      positiveBudgetCount !== 0
     ) {
       try {
         // Budget outlook is part of the enriched forecast contract. Calling the
@@ -851,6 +863,9 @@ async function getNotifications(query = {}) {
 
         outlook.forEach((item) => {
           if (!item || !item.categoryDefinitionId) return;
+          // The outlook also lists unbudgeted categories (limit 0) for the
+          // forecast UI; an overrun only exists against a real budget.
+          if (!(Number(item.limit) > 0)) return;
           const utilizationNow = item.limit > 0 ? item.actualSpent / item.limit : 0;
           const projectedOver = item.projectedTotal > item.limit;
           const alreadyCovered = utilizationNow >= 0.8; // existing budget warning logic
@@ -859,7 +874,7 @@ async function getNotifications(query = {}) {
 
           const overrunAmount = item.projectedTotal - item.limit;
           notifications.push({
-            id: `budget_projected_${item.categoryDefinitionId}`,
+            id: `budget_projected_${item.categoryDefinitionId}_${monthKey}`,
             type: NOTIFICATION_TYPES.BUDGET_PROJECTED,
             severity: SEVERITY_LEVELS.WARNING,
             title: 'Projected Budget Overrun',
@@ -976,7 +991,7 @@ async function getNotifications(query = {}) {
 
         if (daysRemaining < 10 && netFlow > 0) {
           notifications.push({
-            id: 'cash_flow_warning',
+            id: `cash_flow_warning_${monthKey}`,
             type: NOTIFICATION_TYPES.CASH_FLOW_ALERT,
             severity: SEVERITY_LEVELS.WARNING,
             title: 'Cash Flow Alert',

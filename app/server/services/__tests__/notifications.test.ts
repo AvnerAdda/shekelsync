@@ -122,6 +122,49 @@ describe('notifications service', () => {
     });
   });
 
+  it('scopes monthly budget alert ids to the month so resolving one does not silence later months', async () => {
+    const client = createMockClient(async (sql) => {
+      const text = String(sql);
+      if (text.includes('FROM category_budgets')) {
+        return { rows: [{ id: 1, category_definition_id: 11, budget_limit: 1000, category_name: 'Groceries' }] };
+      }
+      if (text.includes('AS spent')) return { rows: [{ spent: 1200 }] };
+      return { rows: [] };
+    });
+    vi.spyOn(database, 'getClient').mockResolvedValue(client);
+    vi.spyOn(forecastService, 'getForecast').mockResolvedValue({ budgetOutlook: [] });
+
+    const result = await notificationsService.getNotifications({ type: 'budget_warning' });
+
+    expect(result.data.notifications[0].id).toBe('budget_11_2026-02');
+  });
+
+  it('never reports a projected overrun for a category without a budget', async () => {
+    const client = createMockClient();
+    vi.spyOn(database, 'getClient').mockResolvedValue(client);
+    vi.spyOn(forecastService, 'getForecast').mockResolvedValue({
+      generated: '2026-02-09T12:00:00.000Z',
+      budgetOutlook: [
+        { categoryDefinitionId: 3, categoryName: 'Groceries', limit: 0, actualSpent: 400, projectedTotal: 1900 },
+        { categoryDefinitionId: 4, categoryName: 'Pharmacy', actualSpent: 100, projectedTotal: 640 },
+      ],
+    });
+
+    const result = await notificationsService.getNotifications({ type: 'budget_projected' });
+
+    expect(result.data.notifications).toHaveLength(0);
+  });
+
+  it('skips the budget forecast entirely when no budgets are defined', async () => {
+    const client = createMockClient();
+    vi.spyOn(database, 'getClient').mockResolvedValue(client);
+    const forecastSpy = vi.spyOn(forecastService, 'getForecast').mockResolvedValue({ budgetOutlook: [] });
+
+    await notificationsService.getNotifications({ type: 'all' });
+
+    expect(forecastSpy).not.toHaveBeenCalled();
+  });
+
   it('generates projected-budget alerts from forecast output', async () => {
     const client = createMockClient();
     vi.spyOn(database, 'getClient').mockResolvedValue(client);

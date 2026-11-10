@@ -35,7 +35,7 @@ import MoneyReviewCard from '../components/MoneyReviewCard';
 import MoneyReviewItemDetailDialog from '../components/MoneyReviewItemDetailDialog';
 import { useMoneyReview } from '../hooks/useMoneyReview';
 import { filterMoneyReviewItems, type MoneyReviewFilter } from '../review-helpers';
-import type { MoneyReviewGroup, MoneyReviewResponse } from '../types';
+import type { MoneyReviewGroup, MoneyReviewItem, MoneyReviewResponse } from '../types';
 import FinancialCorrectionsDialog from '@renderer/features/financial-truth/FinancialCorrectionsDialog';
 
 type MoneyReviewGroupFilter = 'all' | MoneyReviewGroup;
@@ -50,7 +50,7 @@ interface MoneyReviewPageProps {
   presentation?: 'page' | 'dialog';
   initialResponse?: MoneyReviewResponse | null;
   onClose?: () => void;
-  onReviewChanged?: () => void;
+  onReviewChanged?: (updatedItem?: MoneyReviewItem) => void;
 }
 
 const MoneyReviewPage: React.FC<MoneyReviewPageProps> = ({

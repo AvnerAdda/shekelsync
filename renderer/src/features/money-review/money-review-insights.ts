@@ -110,7 +110,7 @@ export function buildMoneyReviewInsight(item: MoneyReviewItem): MoneyReviewInsig
     explanation = 'detail.explanations.uncategorized';
   } else if (['unusual_spending', 'high_transaction'].includes(notificationType)) {
     metrics.push(metric('detail.labels.amount', data.amount, 'currency'));
-    metrics.push(metric('detail.labels.vendor', data.vendor, 'text'));
+    metrics.push(metric('detail.labels.vendor', data.merchant ?? data.vendor, 'text'));
     metrics.push(metric('detail.labels.category', data.category_name, 'text'));
     metrics.push(metric('detail.labels.deviation', data.deviation, 'number'));
     explanation = notificationType === 'unusual_spending'

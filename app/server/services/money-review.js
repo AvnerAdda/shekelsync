@@ -129,8 +129,13 @@ function subscriptionAlertImpact(alert) {
   return 0;
 }
 
+// Informational subscription alerts: nothing for the user to do, so they stay
+// on the Subscriptions page and out of the action queue.
+const NON_ACTIONABLE_SUBSCRIPTION_ALERTS = new Set(['price_decrease']);
+
 function subscriptionAlertToSmartAction(alert) {
   if (!alert?.subscription_id || !alert?.alert_type) return null;
+  if (NON_ACTIONABLE_SUBSCRIPTION_ALERTS.has(alert.alert_type)) return null;
   const evidenceDate = alert.evidence_end_date || alert.expected_date || null;
   const stableAlertId = alert.id
     || `${alert.subscription_id}:${alert.alert_type}${evidenceDate ? `:${evidenceDate}` : ''}`;
@@ -248,26 +253,74 @@ function normalizeReviewRow(row) {
   };
 }
 
+// Completion markers for generated items. `auto_resolved`: the condition went
+// away on its own. `condition_cleared`: the user marked it done and the
+// condition has since gone away, so a later recurrence is new work again.
+const REACTIVATABLE_COMPLETIONS = new Set(['auto_resolved', 'condition_cleared']);
+const EXISTING_LOOKUP_CHUNK = 400;
+
+function placeholders(count, offset = 0) {
+  return Array.from({ length: count }, (_, index) => `$${index + 1 + offset}`).join(', ');
+}
+
+async function loadExistingGeneratedRows(client, keys) {
+  const existing = new Map();
+  for (let start = 0; start < keys.length; start += EXISTING_LOOKUP_CHUNK) {
+    const chunk = keys.slice(start, start + EXISTING_LOOKUP_CHUNK);
+    const result = await client.query(`
+      SELECT id, recurrence_key, user_status, completion_result, action_type, severity,
+        title, description, metadata, potential_impact, detection_confidence
+      FROM smart_action_items
+      WHERE recurrence_key IN (${placeholders(chunk.length)})
+      ORDER BY id DESC
+    `, chunk);
+    // Newest row per key wins, matching the previous per-key lookup.
+    (result.rows || []).forEach((row) => {
+      if (!existing.has(row.recurrence_key)) existing.set(row.recurrence_key, row);
+    });
+  }
+  return existing;
+}
+
+function generatedFieldsChanged(row, action, metadataJson) {
+  return row.action_type !== action.actionType
+    || row.severity !== action.severity
+    || row.title !== action.title
+    || (row.description || '') !== (action.description || '')
+    || (row.metadata || '') !== metadataJson
+    || number(row.potential_impact) !== number(action.potentialImpact)
+    || number(row.detection_confidence) !== number(action.confidence);
+}
+
 async function upsertGeneratedActions(client, actions, recurrencePrefix) {
-  const activeKeys = [];
-  for (const action of actions) {
-    activeKeys.push(action.recurrenceKey);
-    const existing = await client.query(
-      'SELECT id, user_status, completion_result FROM smart_action_items WHERE recurrence_key = $1 ORDER BY id DESC LIMIT 1',
-      [action.recurrenceKey],
-    );
-    const existingRow = existing.rows[0];
+  const uniqueActions = [];
+  const seenKeys = new Set();
+  actions.forEach((action) => {
+    if (seenKeys.has(action.recurrenceKey)) return;
+    seenKeys.add(action.recurrenceKey);
+    uniqueActions.push(action);
+  });
+  const activeKeys = uniqueActions.map((action) => action.recurrenceKey);
+  const existingByKey = await loadExistingGeneratedRows(client, activeKeys);
+
+  for (const action of uniqueActions) {
+    const metadataJson = JSON.stringify(action.metadata);
+    const existingRow = existingByKey.get(action.recurrenceKey);
     if (existingRow) {
       const shouldReactivate = existingRow.user_status === 'resolved'
-        && existingRow.completion_result === 'auto_resolved';
+        && REACTIVATABLE_COMPLETIONS.has(existingRow.completion_result);
+      // Skip no-op writes: every Money Review load used to rewrite every row,
+      // holding the write lock and bumping updated_at (which kept completed
+      // items in the 30-day "Completed" window forever).
+      if (!shouldReactivate && !generatedFieldsChanged(existingRow, action, metadataJson)) continue;
       await client.query(`
         UPDATE smart_action_items
         SET action_type = $1, severity = $2, title = $3, description = $4,
-          detected_at = $5, metadata = $6, potential_impact = $7,
-          detection_confidence = $8,
-          user_status = CASE WHEN $9 THEN 'active' ELSE user_status END,
-          resolved_at = CASE WHEN $9 THEN NULL ELSE resolved_at END,
-          completion_result = CASE WHEN $9 THEN NULL ELSE completion_result END,
+          metadata = $5, potential_impact = $6, detection_confidence = $7,
+          detected_at = CASE WHEN $8 = 1 THEN $9 ELSE detected_at END,
+          user_status = CASE WHEN $8 = 1 THEN 'active' ELSE user_status END,
+          resolved_at = CASE WHEN $8 = 1 THEN NULL ELSE resolved_at END,
+          completion_result = CASE WHEN $8 = 1 THEN NULL ELSE completion_result END,
           updated_at = datetime('now')
         WHERE id = $10
       `, [
@@ -275,11 +328,11 @@ async function upsertGeneratedActions(client, actions, recurrencePrefix) {
         action.severity,
         action.title,
         action.description,
-        action.detectedAt,
-        JSON.stringify(action.metadata),
+        metadataJson,
         action.potentialImpact,
         action.confidence,
-        shouldReactivate,
+        shouldReactivate ? 1 : 0,
+        action.detectedAt,
         existingRow.id,
       ]);
       continue;
@@ -296,7 +349,7 @@ async function upsertGeneratedActions(client, actions, recurrencePrefix) {
       action.title,
       action.description,
       action.detectedAt,
-      JSON.stringify(action.metadata),
+      metadataJson,
       action.potentialImpact,
       action.confidence,
       action.recurrenceKey,
@@ -305,7 +358,7 @@ async function upsertGeneratedActions(client, actions, recurrencePrefix) {
 
   const params = [`${recurrencePrefix}%`, ...activeKeys];
   const notInClause = activeKeys.length > 0
-    ? `AND recurrence_key NOT IN (${activeKeys.map((_, index) => `$${index + 2}`).join(', ')})`
+    ? `AND recurrence_key NOT IN (${placeholders(activeKeys.length, 1)})`
     : '';
   await client.query(`
     UPDATE smart_action_items
@@ -313,6 +366,16 @@ async function upsertGeneratedActions(client, actions, recurrencePrefix) {
       completion_result = 'auto_resolved', updated_at = datetime('now')
     WHERE recurrence_key LIKE $1
       AND user_status IN ('active', 'accepted', 'snoozed')
+      ${notInClause}
+  `, params);
+  // Items the user marked done stay done while the condition persists; once it
+  // clears, a recurrence (e.g. accounts going stale again) is surfaced again.
+  await client.query(`
+    UPDATE smart_action_items
+    SET completion_result = 'condition_cleared'
+    WHERE recurrence_key LIKE $1
+      AND user_status = 'resolved'
+      AND completion_result = 'user_resolved'
       ${notInClause}
   `, params);
 }
@@ -539,6 +602,7 @@ module.exports = {
     notificationToSmartAction,
     priorityForRow,
     subscriptionAlertToSmartAction,
+    upsertGeneratedActions,
   },
 };
 module.exports.default = module.exports;

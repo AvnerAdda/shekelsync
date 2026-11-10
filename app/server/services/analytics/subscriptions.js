@@ -81,6 +81,76 @@ function missedChargeFreshnessDays(subscription) {
   return Math.min(120, Math.max(30, Math.ceil(intervalDays * 2)));
 }
 
+// A charge is only "missed" once the account that pays it has data covering
+// at least this many days past the expected date. Otherwise the gap is just a
+// sync that has not caught up yet.
+const MISSED_CHARGE_DATA_GRACE_DAYS = 7;
+
+function rowsOf(result) {
+  return Array.isArray(result?.rows) ? result.rows : [];
+}
+
+function laterDate(left, right) {
+  if (!left) return right || null;
+  if (!right) return left;
+  return left > right ? left : right;
+}
+
+/**
+ * Map each financial pattern to the latest date its paying account has data for:
+ * the later of that institution's last successful sync and its newest
+ * non-future transaction. Patterns whose account cannot be resolved are absent,
+ * which keeps the previous (ungated) missed-charge behavior for them.
+ */
+async function loadPatternDataCoverage(today = new Date()) {
+  try {
+    const patternVendors = await database.query(`
+      SELECT pattern_id, transaction_vendor AS vendor, MAX(transaction_date) AS last_date
+      FROM financial_pattern_transactions
+      GROUP BY pattern_id
+    `);
+    const vendorRows = rowsOf(patternVendors);
+    if (vendorRows.length === 0) return new Map();
+
+    const vendorCoverage = new Map();
+    const transactionCoverage = await database.query(`
+      SELECT vendor, MAX(date) AS last_date
+      FROM transactions
+      WHERE date <= $1
+      GROUP BY vendor
+    `, [today.toISOString()]);
+    rowsOf(transactionCoverage).forEach((row) => {
+      vendorCoverage.set(row.vendor, String(row.last_date || '').slice(0, 10) || null);
+    });
+    try {
+      const syncCoverage = await database.query(`
+        SELECT vendor, MAX(last_scrape_success) AS last_date
+        FROM vendor_credentials
+        WHERE last_scrape_success IS NOT NULL
+        GROUP BY vendor
+      `);
+      rowsOf(syncCoverage).forEach((row) => {
+        const synced = String(row.last_date || '').slice(0, 10) || null;
+        vendorCoverage.set(row.vendor, laterDate(vendorCoverage.get(row.vendor), synced));
+      });
+    } catch {
+      // Imported-only ledgers have no credentials; transaction coverage is enough.
+    }
+
+    const coverage = new Map();
+    vendorRows.forEach((row) => {
+      const covered = vendorCoverage.get(row.vendor);
+      if (covered) coverage.set(Number(row.pattern_id), covered);
+    });
+    return coverage;
+  } catch (error) {
+    if (process.env.NODE_ENV !== 'test') {
+      console.warn('[Subscriptions] Missed-charge data coverage unavailable:', error?.message || error);
+    }
+    return new Map();
+  }
+}
+
 function addCalendarDays(dateValue, days) {
   const parsed = parseDateOnlyParts(dateValue);
   if (!parsed) return null;
@@ -586,9 +656,20 @@ async function getSubscriptionAlerts(options = {}) {
   const subscriptionResult = await getSubscriptions({ locale });
   const detectedAlerts = await detectNewAlerts(locale, subscriptionResult);
   const newAlerts = await persistDetectedAlerts(detectedAlerts);
-  const storedIdentities = new Set(alerts.map((alert) => alert.identity_key).filter(Boolean));
+  // A missed charge is a live condition, not an event: once the charge arrives
+  // (or the expected date moves), the stored alert for the old date is stale.
+  const currentMissedIdentities = new Set(detectedAlerts
+    .filter((alert) => alert.alert_type === 'missed_charge')
+    .map((alert) => alert.identity_key)
+    .filter(Boolean));
+  const liveStoredAlerts = alerts.filter((alert) => (
+    alert.alert_type !== 'missed_charge'
+    || !alert.identity_key
+    || currentMissedIdentities.has(alert.identity_key)
+  ));
+  const storedIdentities = new Set(liveStoredAlerts.map((alert) => alert.identity_key).filter(Boolean));
   const freshAlerts = newAlerts.filter((alert) => !storedIdentities.has(alert.identity_key));
-  const combined = [...alerts, ...freshAlerts];
+  const combined = [...liveStoredAlerts, ...freshAlerts];
 
   return {
     alerts: combined,
@@ -609,6 +690,12 @@ async function detectNewAlerts(locale = 'he', existingSubscriptionResult = null)
   const repaymentCategoryCondition = getCreditCardRepaymentCategoryCondition('cd');
 
   const today = new Date();
+  let patternCoverage = null;
+  const coverageForPattern = async (patternId) => {
+    if (!patternId) return null;
+    if (!patternCoverage) patternCoverage = await loadPatternDataCoverage(today);
+    return patternCoverage.get(Number(patternId)) || null;
+  };
 
   for (const sub of subscriptions) {
     if (sub.status === 'cancelled' && sub.id && sub.last_charge_date) {
@@ -810,8 +897,17 @@ async function detectNewAlerts(locale = 'he', existingSubscriptionResult = null)
       const daysPastDue = calendarDaysSince(sub.next_expected_date, today);
       const freshnessDays = missedChargeFreshnessDays(sub);
 
-      if (daysPastDue !== null && daysPastDue > 7 && daysPastDue <= freshnessDays) {
-        const patternId = sub.patternId || sub.financial_pattern_id || null;
+      const patternId = sub.patternId || sub.financial_pattern_id || null;
+      const coveredThrough = daysPastDue !== null && daysPastDue > 7 && daysPastDue <= freshnessDays
+        ? await coverageForPattern(patternId)
+        : null;
+      const coveredDaysPastDue = coveredThrough
+        ? calendarDaysSince(sub.next_expected_date, new Date(`${coveredThrough}T12:00:00`))
+        : null;
+      const accountDataCaughtUp = coveredDaysPastDue === null
+        || coveredDaysPastDue > MISSED_CHARGE_DATA_GRACE_DAYS;
+
+      if (daysPastDue !== null && daysPastDue > 7 && daysPastDue <= freshnessDays && accountDataCaughtUp) {
         const occurrenceId = patternId
           ? `pattern:${patternId}:${sub.next_expected_date}`
           : null;

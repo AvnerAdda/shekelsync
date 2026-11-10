@@ -1,3 +1,4 @@
+import { DatabaseSync } from 'node:sqlite';
 import { describe, expect, it, vi } from 'vitest';
 
 // eslint-disable-next-line @typescript-eslint/no-var-requires
@@ -171,6 +172,107 @@ describe('Money Review service contracts', () => {
       estimatedMinutes: 3,
       potentialImpact: 450,
       byGroup: { data: 1, cash: 1, improve: 0 },
+    });
+  });
+
+  it('keeps price decreases out of the action queue', () => {
+    expect(moneyReview.utils.subscriptionAlertToSmartAction({
+      id: 3,
+      subscription_id: 14,
+      alert_type: 'price_decrease',
+      old_amount: 41.8,
+      new_amount: 39.49,
+    })).toBeNull();
+  });
+
+  describe('generated item lifecycle', () => {
+    const PREFIX = 'money_review:notification:';
+
+    function createClient() {
+      const db = new DatabaseSync(':memory:');
+      db.exec(`
+        CREATE TABLE smart_action_items (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          action_type TEXT, severity TEXT, title TEXT, description TEXT,
+          detected_at TEXT, resolved_at TEXT, user_status TEXT,
+          metadata TEXT, potential_impact REAL, detection_confidence REAL,
+          recurrence_key TEXT, is_recurring INTEGER, completion_result TEXT,
+          updated_at TEXT
+        );
+      `);
+      let writes = 0;
+      const client = {
+        query: async (sql: string, params: unknown[] = []) => {
+          const statement = db.prepare(sql.replace(/\$(\d+)/g, '?$1'));
+          if (/^\s*SELECT/i.test(sql)) return { rows: statement.all(...(params as never[])) };
+          const info = statement.run(...(params as never[]));
+          writes += Number(info.changes);
+          return { rows: [] };
+        },
+      };
+      return {
+        client,
+        db,
+        writes: () => writes,
+        row: (key: string) => db.prepare('SELECT * FROM smart_action_items WHERE recurrence_key = ?').get(key) as Record<string, unknown>,
+      };
+    }
+
+    const staleSync = (description = '4 accounts need sync') => ({
+      actionType: 'optimization_low_confidence',
+      severity: 'high',
+      title: 'Accounts Need Sync',
+      description,
+      detectedAt: '2026-11-10T08:00:00.000Z',
+      recurrenceKey: `${PREFIX}stale_sync:stale_sync_alert`,
+      potentialImpact: 0,
+      confidence: 0.9,
+      metadata: { source: 'notification', notificationType: 'stale_sync' },
+    });
+
+    it('does not rewrite unchanged items on every load', async () => {
+      const harness = createClient();
+      await moneyReview.utils.upsertGeneratedActions(harness.client, [staleSync()], PREFIX);
+      const writesAfterInsert = harness.writes();
+
+      await moneyReview.utils.upsertGeneratedActions(harness.client, [staleSync()], PREFIX);
+      expect(harness.writes()).toBe(writesAfterInsert);
+
+      await moneyReview.utils.upsertGeneratedActions(harness.client, [staleSync('5 accounts need sync')], PREFIX);
+      expect(harness.writes()).toBe(writesAfterInsert + 1);
+      expect(harness.row(staleSync().recurrenceKey).description).toBe('5 accounts need sync');
+    });
+
+    it('resurfaces an item the user marked done once its condition clears and returns', async () => {
+      const harness = createClient();
+      const key = staleSync().recurrenceKey;
+      await moneyReview.utils.upsertGeneratedActions(harness.client, [staleSync()], PREFIX);
+      harness.db.prepare(`
+        UPDATE smart_action_items SET user_status = 'resolved', completion_result = 'user_resolved'
+        WHERE recurrence_key = ?
+      `).run(key);
+
+      // Condition still present: the user's "done" sticks.
+      await moneyReview.utils.upsertGeneratedActions(harness.client, [staleSync()], PREFIX);
+      expect(harness.row(key)).toMatchObject({ user_status: 'resolved', completion_result: 'user_resolved' });
+
+      // Condition clears (accounts synced), then returns later.
+      await moneyReview.utils.upsertGeneratedActions(harness.client, [], PREFIX);
+      expect(harness.row(key)).toMatchObject({ user_status: 'resolved', completion_result: 'condition_cleared' });
+      await moneyReview.utils.upsertGeneratedActions(harness.client, [staleSync()], PREFIX);
+      expect(harness.row(key)).toMatchObject({ user_status: 'active', completion_result: null });
+    });
+
+    it('auto-resolves open items whose condition disappeared and leaves dismissals alone', async () => {
+      const harness = createClient();
+      const other = { ...staleSync(), recurrenceKey: `${PREFIX}uncategorized_transactions:uncategorized_transactions` };
+      await moneyReview.utils.upsertGeneratedActions(harness.client, [staleSync(), other], PREFIX);
+      harness.db.prepare(`UPDATE smart_action_items SET user_status = 'dismissed' WHERE recurrence_key = ?`).run(other.recurrenceKey);
+
+      await moneyReview.utils.upsertGeneratedActions(harness.client, [], PREFIX);
+
+      expect(harness.row(staleSync().recurrenceKey)).toMatchObject({ user_status: 'resolved', completion_result: 'auto_resolved' });
+      expect(harness.row(other.recurrenceKey)).toMatchObject({ user_status: 'dismissed', completion_result: null });
     });
   });
 
