@@ -115,7 +115,7 @@ function createForecastRouter({
 
   router.get('/daily', async (req, res) => {
     try {
-      const { months, days, includeToday, verbose, noCache, budgetDays: budgetDaysParam } = req.query;
+      const { months, days, includeToday, fromLastData, verbose, noCache, budgetDays: budgetDaysParam } = req.query;
       const skipCache = parseBooleanQueryParam(noCache);
 
       // Default outlook covers this calendar month. An explicit lookback is
@@ -133,11 +133,13 @@ function createForecastRouter({
       const forecastMonthsValue = requestedMonths;
       const includeTodayValue = parseBooleanQueryParam(includeToday);
       const verboseValue = parseBooleanQueryParam(verbose);
+      const fromLastDataValue = parseBooleanQueryParam(fromLastData);
 
       const opts = {
         forecastMonths: forecastMonthsValue,
         forecastDays: forecastDaysValue,
         includeToday: includeTodayValue,
+        ...(fromLastDataValue ? { fromLastData: true } : {}),
         verbose: verboseValue,
         noCache: skipCache,
       };
@@ -146,6 +148,7 @@ function createForecastRouter({
         forecastMonths: forecastMonthsValue ?? null,
         forecastDays: forecastDaysValue ?? null,
         includeToday: includeTodayValue,
+        fromLastData: fromLastDataValue,
         budgetDays,
       });
 
@@ -177,8 +180,11 @@ function createForecastRouter({
       // End of the current month for forecast filtering.
       const monthEnd = new Date(today.getFullYear(), today.getMonth() + 1, 0);
       const monthEndStr = formatLocalDate(monthEnd);
+      // Days after the last imported transaction have no actuals, so their
+      // predictions count toward the month instead of being dropped.
+      const forecastFrom = budgetResult.observedThrough || todayStr;
       const isBudgetForecastDay = day => budgetDays === undefined
-        && day.date > todayStr && day.date <= monthEndStr;
+        && day.date > forecastFrom && day.date >= budgetStartStr && day.date <= monthEndStr;
 
       // Use SQLite directly for actuals/budgets/category lookups
       const db = getDbInstance();
@@ -671,6 +677,7 @@ function createForecastRouter({
         truthRevision: result.truthRevision || 0,
         refreshState: 'ready',
         forecastPeriod: result.forecastPeriod,
+        observedThrough: result.observedThrough ?? null,
         dailyForecasts: dailyMinimal,
         predictionIntervals: result.predictionIntervals || { level: 0.8, daily: [] },
         scenarios: {

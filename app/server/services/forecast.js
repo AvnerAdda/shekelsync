@@ -230,6 +230,31 @@ function resolveForecastWindow(now, { includeToday, forecastDays, forecastMonths
   return { startDate, endDate };
 }
 
+const MAX_UNOBSERVED_DAYS = 62;
+
+// Without imports after the last completed transaction, the days since then are
+// unknown rather than empty. Forecasting from that day's point of view puts
+// bills and salary on their real dates instead of carrying them to tomorrow.
+function resolveLastObservedDay(db, now) {
+  const today = formatDate(now);
+  const row = db.prepare(`
+    SELECT MAX(substr(date, 1, 10)) AS last_date
+    FROM transactions
+    WHERE status = 'completed' AND substr(date, 1, 10) <= ?
+  `).get(today);
+  const lastDate = row?.last_date;
+  if (!lastDate || lastDate >= today) return null;
+  const last = parseLocalDate(lastDate);
+  const todayStart = parseLocalDate(today);
+  const unobservedDays = Math.round((todayStart - last) / 86400000);
+  if (!(unobservedDays > 0) || unobservedDays > MAX_UNOBSERVED_DAYS) return null;
+  return {
+    date: lastDate,
+    asOf: new Date(last.getFullYear(), last.getMonth(), last.getDate(), 23, 59, 59, 999),
+    unobservedDays,
+  };
+}
+
 function getDayName(dayOfWeek) {
   const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
   return days[dayOfWeek];
@@ -2425,9 +2450,11 @@ function buildForecastEngine() {
 
 // ==================== MAIN EXPORT ====================
 async function generateDailyForecastLocal(options = {}) {
-  const now = new Date();
-  const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
-  const currentDay = now.getDate();
+  const realNow = new Date();
+  let now = realNow;
+  let currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+  let currentDay = now.getDate();
+  const fromLastData = options.fromLastData === true;
 
   const cacheDurationMs = Number.isFinite(options.cacheDurationMs)
     ? Math.max(0, Math.floor(Number(options.cacheDurationMs)))
@@ -2462,6 +2489,17 @@ async function generateDailyForecastLocal(options = {}) {
   const db = openForecastDb({ writable: true });
 
   try {
+    // Only a day-count window can stretch to keep its end date.
+    const lastObserved = fromLastData && CONFIG.forecastDays !== null ? resolveLastObservedDay(db, realNow) : null;
+    if (lastObserved) {
+      now = lastObserved.asOf;
+      currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+      currentDay = now.getDate();
+      // Same last day as before: tomorrow (or today) + forecastDays.
+      CONFIG.forecastDays += lastObserved.unobservedDays - (CONFIG.includeToday ? 1 : 0);
+      CONFIG.includeToday = false;
+    }
+
     let truthSnapshot = {
       truthRevision: 0,
       patterns: [],
@@ -2478,7 +2516,8 @@ async function generateDailyForecastLocal(options = {}) {
       }
     }
     const cacheKey = JSON.stringify({
-      date: formatDate(now),
+      date: formatDate(realNow),
+      observedThrough: lastObserved?.date ?? null,
       includeToday: CONFIG.includeToday,
       forecastDays: CONFIG.forecastDays,
       forecastMonths: CONFIG.forecastMonths,
@@ -2557,7 +2596,10 @@ async function generateDailyForecastLocal(options = {}) {
       },
     });
 
-    if (options.recordSnapshot !== false) {
+    // A forecast as of an earlier day would skew accuracy horizons; record only live ones.
+    if (lastObserved) {
+      results.observedThrough = lastObserved.date;
+    } else if (options.recordSnapshot !== false) {
       recordForecastPredictionSnapshots(db, results, now, modelId);
     }
 
@@ -2636,6 +2678,7 @@ async function generateDailyForecast(options = {}) {
   const activeModelId = forecastModelRegistry.resolveActiveModelId(options);
   const normalizedKey = JSON.stringify({
     includeToday: options.includeToday ?? false,
+    fromLastData: options.fromLastData === true,
     forecastDays: options.forecastDays ?? null,
     forecastMonths: options.forecastMonths ?? 6,
     monteCarloRuns: options.monteCarloRuns ?? DEFAULT_MONTE_CARLO_RUNS,

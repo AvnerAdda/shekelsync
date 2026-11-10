@@ -77,7 +77,7 @@ export function useDashboardInsights(healthRange: DashboardHealthRange): UseDash
 
     try {
       const response = await apiClient.get<DashboardForecastData>(
-        `/api/forecast/daily?days=${MAX_PROJECTION_DAYS}${noCache ? '&noCache=1' : ''}`,
+        `/api/forecast/daily?days=${MAX_PROJECTION_DAYS}&fromLastData=1${noCache ? '&noCache=1' : ''}`,
       );
       if (requestId !== forecastRequestIdRef.current) return;
       if (response.ok) {

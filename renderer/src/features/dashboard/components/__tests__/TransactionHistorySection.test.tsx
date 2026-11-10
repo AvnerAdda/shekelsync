@@ -213,6 +213,45 @@ describe('TransactionHistorySection income, expense, and investment chart', () =
     expect(screen.queryAllByTestId('line-series').some(line => line.getAttribute('data-key') === 'forecastAfterInvesting')).toBe(false);
   });
 
+  describe('days after the last imported data', () => {
+    const gapHistory = [
+      { date: '2026-09-01', income: 1000, expenses: 200 },
+      { date: '2026-09-02', income: 0, expenses: 0 },
+      { date: '2026-09-03', income: 0, expenses: 0 },
+    ];
+    const gapForecast = { observedThrough: '2026-09-01', dailyForecasts: [
+      { date: '2026-09-02', income: 0, expenses: 40, cashFlow: -40 },
+      { date: '2026-09-03', income: 5000, expenses: 60, cashFlow: 4940 },
+      { date: '2026-09-04', income: 0, expenses: 50, cashFlow: -50 },
+    ] };
+
+    it('shows no actuals but keeps the prediction, on the log axis too', () => {
+      renderHistory({ data: { history: gapHistory }, forecastData: gapForecast, yAxisScale: 'log' });
+      const rows = getChartData();
+      expect(rows.map((row: any) => row.date)).toEqual(['2026-09-01', '2026-09-02', '2026-09-03', '2026-09-04']);
+      for (const gapRow of rows.slice(1, 3)) {
+        expect(gapRow).toMatchObject({ isInGap: true, hasGapForecast: true });
+        expect(gapRow).not.toHaveProperty('income');
+        expect(gapRow).not.toHaveProperty('expenses');
+      }
+      expect(rows[1].forecastExpenses).toBeCloseTo(Math.log10(40));
+      expect(rows[2].forecastIncome).toBeCloseTo(Math.log10(5000));
+      const tooltip = within(screen.getByTestId('chart-tooltip-2026-09-03'));
+      expect(tooltip.getByText('legend.noData')).toBeInTheDocument();
+      expect(tooltip.getByText('Forecast')).toBeInTheDocument();
+      expect(tooltip.getByText('legend.income: ₪5000')).toBeInTheDocument();
+    });
+
+    it('starts the projection at the last day with data and accumulates the predicted gap', () => {
+      renderHistory({ data: { history: gapHistory }, forecastData: gapForecast });
+      fireEvent.click(screen.getByRole('button', { name: 'tabs.netPosition' }));
+      const rows = getChartData();
+      expect(rows.map((row: any) => row.historicalCumulative)).toEqual([800, undefined, undefined, undefined]);
+      expect(rows.map((row: any) => row.forecastCumulative)).toEqual([800, 760, 5700, 5650]);
+      expect(rows.map((row: any) => Boolean(row.isInGap))).toEqual([false, true, true, false]);
+    });
+  });
+
   it('keeps the last known investments deducted past missing investment data', () => {
     renderHistory({ data: { history: [{ date: '2026-09-03', income: 1000, expenses: 200 }] },
       forecastData: { dailyForecasts: [
