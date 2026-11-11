@@ -22,6 +22,7 @@ const { getInstitutionById, mapInstitutionToVendorCode } = require('../instituti
 const { syncBankBalanceToInvestments, forwardFillForCredential } = require('../investments/balance-sync.js');
 const { autoClosePikadonReturns } = require('../investments/pikadon.js');
 const { getCreditCardRepaymentCategoryId } = require('../accounts/repayment-category.js');
+const { repairTransactionCategoryTypes } = require('../categorization/category-type-sync.js');
 const lastTransactionDateService = require('../accounts/last-transaction-date.js');
 const { dialect } = require('../../../lib/sql-dialect.js');
 
@@ -1669,6 +1670,10 @@ async function applyCategorizationRules(client) {
     const updateResult = await client.query(
       `UPDATE transactions
          SET category_definition_id = COALESCE($2, category_definition_id),
+             category_type = COALESCE(
+               (SELECT category_type FROM category_definitions WHERE id = COALESCE($2, transactions.category_definition_id)),
+               category_type
+             ),
              auto_categorized = true,
              confidence_score = CASE
                WHEN confidence_score IS NULL OR confidence_score < $3 THEN $3
@@ -1691,6 +1696,9 @@ async function applyCategorizationRules(client) {
 
     totalUpdated += updateResult.rowCount;
   }
+
+  // Heal rows that older syncs filed under income/investment categories as "expense".
+  await repairTransactionCategoryTypes(client);
 
   return { rulesApplied: rules.length, transactionsUpdated: totalUpdated };
 }

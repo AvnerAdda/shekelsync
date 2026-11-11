@@ -1681,6 +1681,159 @@
     },
     "modals": {
       "rhythm": {
+        "tabs": {
+          "month": "Mois",
+          "week": "Semaine",
+          "day": "Jour",
+          "habits": "Habitudes"
+        },
+        "compare": {
+          "metric": {
+            "spend": "Dépenses",
+            "income": "Revenus"
+          },
+          "scope": {
+            "all": "Tout",
+            "everyday": "Courant",
+            "hint": "Courant exclut les paiements récurrents (prêt immobilier, abonnements, paiements échelonnés) pour faire ressortir vos dépenses habituelles."
+          },
+          "loadFailed": "Impossible de charger la comparaison.",
+          "notEnoughHistory": "Pas encore assez d'historique synchronisé pour comparer.",
+          "uncategorized": "Sans catégorie",
+          "series": {
+            "current": {
+              "month": "Ce mois-ci",
+              "week": "Cette semaine"
+            },
+            "previous": {
+              "month": "Le mois dernier",
+              "week": "La semaine dernière"
+            },
+            "median": "Habituel",
+            "medianOf": {
+              "month_one": "Habituel (sur {{count}} mois)",
+              "month_other": "Habituel (milieu de {{count}} mois)",
+              "week_one": "Habituel (sur {{count}} semaine)",
+              "week_other": "Habituel (milieu de {{count}} semaines)"
+            },
+            "band": "Plage habituelle"
+          },
+          "axis": {
+            "dayN": "Jour {{day}}",
+            "today": "Aujourd'hui"
+          },
+          "chart": {
+            "title": {
+              "month": "{{metric}} au fil du mois",
+              "week": "{{metric}} au fil de la semaine"
+            },
+            "subtitle": {
+              "month_one": "Cumul par jour du mois, comparé à votre dernier mois complet",
+              "month_other": "Cumul par jour du mois, comparé à vos {{count}} derniers mois complets",
+              "week_one": "Cumul depuis dimanche, comparé à la semaine dernière",
+              "week_other": "Cumul depuis dimanche, comparé à vos {{count}} dernières semaines"
+            }
+          },
+          "drivers": {
+            "title": "Ce qui change",
+            "subtitle": {
+              "month": "Catégories les plus éloignées de l'habituel au jour {{day}}",
+              "week": "Catégories les plus éloignées de l'habituel jusqu'à {{day}}"
+            },
+            "none": "Toutes les catégories sont proches de l'habituel.",
+            "compare": "{{current}} jusqu'ici · habituellement {{typical}}"
+          },
+          "totals": {
+            "title": {
+              "month": "Mois par mois",
+              "week": "Semaine par semaine"
+            },
+            "subtitle": "Totaux complets ; la période en cours affiche sa projection",
+            "soFar": "{{amount}} jusqu'ici",
+            "projected": "En route vers {{amount}}",
+            "legend": "Barre en pointillés : période en cours, projetée jusqu'à sa fin"
+          },
+          "newMerchants": {
+            "title": {
+              "month": "Nouveau ce mois-ci",
+              "week": "Nouveau cette semaine"
+            },
+            "subtitle": "Commerçants sans paiement les mois précédents"
+          },
+          "position": {
+            "month": "Jour {{day}} sur {{length}}",
+            "week": "De dimanche à {{day}}",
+            "day": "7 derniers jours"
+          },
+          "soFar": {
+            "spend": "dépensés jusqu'ici",
+            "income": "reçus jusqu'ici"
+          },
+          "status": {
+            "above": "{{percent}} % au-dessus de l'habituel ({{amount}})",
+            "below": "{{percent}} % en dessous de l'habituel ({{amount}})",
+            "within": "Dans votre plage habituelle",
+            "insufficient": "Pas assez d'historique pour comparer"
+          },
+          "usual": {
+            "month": "Habituellement {{median}} à ce stade (plage {{low}} – {{high}})",
+            "week": "Habituellement {{median}} à ce stade (plage {{low}} – {{high}})",
+            "day": "7 jours habituels : {{median}} (plage {{low}} – {{high}})"
+          },
+          "projection": {
+            "month": "En route vers {{projected}} ce mois-ci · un mois habituel : {{typical}}",
+            "week": "En route vers {{projected}} cette semaine · une semaine habituelle : {{typical}}"
+          },
+          "day": {
+            "unusualCount_one": "{{count}} jour inhabituel ces 6 dernières semaines",
+            "unusualCount_other": "{{count}} jours inhabituels ces 6 dernières semaines",
+            "chartTitle": "{{metric}} par jour",
+            "chartSubtitle": "6 dernières semaines · chaque jour est comparé au même jour de la semaine sur les 8 semaines précédentes",
+            "usualFor": "Habituel pour un {{weekday}} : {{median}} (plage {{low}} – {{high}})",
+            "unusual": "Jour inhabituel",
+            "legendNormal": "Jour",
+            "legendUnusual": "Jour inhabituel",
+            "pickDay": "Choisissez un jour",
+            "clickHint": "Cliquez sur une barre pour voir les transactions du jour",
+            "nothing": "Rien ce jour-là.",
+            "unusualTitle": "Jours inhabituels",
+            "unusualSubtitle": "Au moins le double du haut de la plage habituelle pour ce jour de la semaine",
+            "noUnusual": "Aucun jour inhabituel ces 6 dernières semaines.",
+            "usually": "habituellement {{amount}}"
+          },
+          "checks": {
+            "title_one": "{{count}} vérification des données",
+            "title_other": "{{count}} vérifications des données",
+            "subtitle": "Problèmes qui rendent ces chiffres moins fiables",
+            "uncategorized": "Sans catégorie",
+            "types": {
+              "income": "revenu",
+              "investment": "investissement",
+              "expense": "dépense"
+            },
+            "typeMismatch": {
+              "title_one": "{{count}} transaction est enregistrée comme dépense mais classée dans une catégorie de revenu ou d'investissement",
+              "title_other": "{{count}} transactions sont enregistrées comme dépenses mais classées dans des catégories de revenu ou d'investissement",
+              "body": "Les écrans qui lisent le type enregistré les comptent comme dépenses. La correction donne à chacune le type de sa catégorie.",
+              "item": "{{date}} · {{name}} · {{amount}} → {{category}} ({{categoryType}})",
+              "fix": "Corriger",
+              "failed": "La correction a échoué. Réessayez."
+            },
+            "stale": {
+              "title_one": "{{account}} synchronisé pour la dernière fois le {{date}} (il y a {{count}} jour)",
+              "title_other": "{{account}} synchronisé pour la dernière fois le {{date}} (il y a {{count}} jours)",
+              "titleFailed_one": "{{account}} synchronisé pour la dernière fois le {{date}} (il y a {{count}} jour) et la dernière synchronisation a échoué",
+              "titleFailed_other": "{{account}} synchronisé pour la dernière fois le {{date}} (il y a {{count}} jours) et la dernière synchronisation a échoué",
+              "never": "{{account}} n'a jamais été synchronisé",
+              "body": "Les transactions récentes de ce compte manquent, la période en cours peut donc paraître plus basse qu'en réalité."
+            },
+            "drift": {
+              "title": "{{merchant}} a été classé dans {{category}}",
+              "body_one": "Le {{date}} ({{amount}}). Habituellement : {{usual}} ({{count}} paiement précédent). Vérifiez que c'est correct.",
+              "body_other": "Le {{date}} ({{amount}}). Habituellement : {{usual}} ({{count}} paiements précédents). Vérifiez que c'est correct."
+            }
+          }
+        },
         "title": "Votre rythme financier - Analyse détaillée",
         "timeRange": {
           "3months": "3 mois",

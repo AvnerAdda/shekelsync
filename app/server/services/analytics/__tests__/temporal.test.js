@@ -243,4 +243,19 @@ describe('temporal analytics service', () => {
 
     expect(queryMock).toHaveBeenCalledTimes(1);
   });
+
+  it('never counts card bills paid from the bank or pikadon moves as spending', async () => {
+    const queryMock = vi.fn().mockResolvedValue({ rows: [] });
+    temporalService.__setDatabase({ query: queryMock });
+
+    await temporalService.getTemporalAnalytics({ timeRange: '3months', noCache: true });
+
+    expect(queryMock).toHaveBeenCalledTimes(6);
+    queryMock.mock.calls.forEach(([sql]) => {
+      expect(sql).toContain('LEFT JOIN category_definitions cd');
+      expect(sql).toContain('transaction_pairing_exclusions');
+      expect(sql).toContain('פרעון כרטיס אשראי');
+      expect(sql).toContain('is_pikadon_related');
+    });
+  });
 });

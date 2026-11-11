@@ -1171,6 +1171,12 @@ describe('scraping run service', () => {
       );
       expect(updateSql).toContain('child.parent_id = transactions.category_definition_id');
       expect(updateSql).not.toContain('depth_level < 2');
+      // A rule that files a bank row under Salary must make it income, not leave the bank's "expense".
+      expect(updateSql).toMatch(/category_type = COALESCE\(\s*\(SELECT category_type FROM category_definitions/);
+      const healSql = mockClient.query.mock.calls
+        .map(([sql]: any[]) => String(sql))
+        .find((sql: string) => sql.includes("WHERE category_type = 'expense'"));
+      expect(healSql).toContain("category_type IN ('income', 'investment')");
     });
 
     it('applies account pairings including repayment category resolution and log insert', async () => {

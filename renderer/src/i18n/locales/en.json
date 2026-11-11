@@ -1686,6 +1686,159 @@
     },
     "modals": {
       "rhythm": {
+        "tabs": {
+          "month": "Month",
+          "week": "Week",
+          "day": "Day",
+          "habits": "Habits"
+        },
+        "compare": {
+          "metric": {
+            "spend": "Spending",
+            "income": "Income"
+          },
+          "scope": {
+            "all": "All",
+            "everyday": "Everyday",
+            "hint": "Everyday leaves out recurring payments (mortgage, subscriptions, installments) so changes in your regular spending stand out."
+          },
+          "loadFailed": "Couldn't load the comparison.",
+          "notEnoughHistory": "Not enough synced history yet to compare with.",
+          "uncategorized": "Uncategorized",
+          "series": {
+            "current": {
+              "month": "This month",
+              "week": "This week"
+            },
+            "previous": {
+              "month": "Last month",
+              "week": "Last week"
+            },
+            "median": "Usual",
+            "medianOf": {
+              "month_one": "Usual (from {{count}} month)",
+              "month_other": "Usual (middle of {{count}} months)",
+              "week_one": "Usual (from {{count}} week)",
+              "week_other": "Usual (middle of {{count}} weeks)"
+            },
+            "band": "Usual range"
+          },
+          "axis": {
+            "dayN": "Day {{day}}",
+            "today": "Today"
+          },
+          "chart": {
+            "title": {
+              "month": "{{metric}} through the month",
+              "week": "{{metric}} through the week"
+            },
+            "subtitle": {
+              "month_one": "Running total by day of month, against your last full month",
+              "month_other": "Running total by day of month, against your last {{count}} full months",
+              "week_one": "Running total from Sunday, against your last week",
+              "week_other": "Running total from Sunday, against your last {{count}} weeks"
+            }
+          },
+          "drivers": {
+            "title": "What's different",
+            "subtitle": {
+              "month": "Categories furthest from usual by day {{day}}",
+              "week": "Categories furthest from usual by {{day}}"
+            },
+            "none": "Every category is close to usual.",
+            "compare": "{{current}} so far · usually {{typical}}"
+          },
+          "totals": {
+            "title": {
+              "month": "Month by month",
+              "week": "Week by week"
+            },
+            "subtitle": "Full totals; the current period shows its projection",
+            "soFar": "{{amount}} so far",
+            "projected": "On pace for {{amount}}",
+            "legend": "Dashed bar: current period, projected to its end"
+          },
+          "newMerchants": {
+            "title": {
+              "month": "New this month",
+              "week": "New this week"
+            },
+            "subtitle": "Merchants with no payments in the previous months"
+          },
+          "position": {
+            "month": "Day {{day}} of {{length}}",
+            "week": "Sunday to {{day}}",
+            "day": "Last 7 days"
+          },
+          "soFar": {
+            "spend": "spent so far",
+            "income": "received so far"
+          },
+          "status": {
+            "above": "{{percent}}% above usual ({{amount}})",
+            "below": "{{percent}}% below usual ({{amount}})",
+            "within": "Within your usual range",
+            "insufficient": "Not enough history to compare"
+          },
+          "usual": {
+            "month": "Usually {{median}} by now (range {{low}} – {{high}})",
+            "week": "Usually {{median}} by now (range {{low}} – {{high}})",
+            "day": "A usual 7 days: {{median}} (range {{low}} – {{high}})"
+          },
+          "projection": {
+            "month": "On pace for {{projected}} this month · a usual month is {{typical}}",
+            "week": "On pace for {{projected}} this week · a usual week is {{typical}}"
+          },
+          "day": {
+            "unusualCount_one": "{{count}} unusual day in the last 6 weeks",
+            "unusualCount_other": "{{count}} unusual days in the last 6 weeks",
+            "chartTitle": "{{metric}} per day",
+            "chartSubtitle": "Last 6 weeks · each day is compared with the same weekday in the 8 weeks before",
+            "usualFor": "Usual for a {{weekday}}: {{median}} (range {{low}} – {{high}})",
+            "unusual": "Unusual day",
+            "legendNormal": "Day",
+            "legendUnusual": "Unusual day",
+            "pickDay": "Pick a day",
+            "clickHint": "Click a bar to see that day's transactions",
+            "nothing": "Nothing on this day.",
+            "unusualTitle": "Unusual days",
+            "unusualSubtitle": "At least double the high end of that weekday's usual range",
+            "noUnusual": "No unusual days in the last 6 weeks.",
+            "usually": "usually {{amount}}"
+          },
+          "checks": {
+            "title_one": "{{count}} data check",
+            "title_other": "{{count}} data checks",
+            "subtitle": "Problems that make these numbers less reliable",
+            "uncategorized": "Uncategorized",
+            "types": {
+              "income": "income",
+              "investment": "investment",
+              "expense": "expense"
+            },
+            "typeMismatch": {
+              "title_one": "{{count}} transaction is stored as an expense but filed under an income or investment category",
+              "title_other": "{{count}} transactions are stored as expenses but filed under income or investment categories",
+              "body": "Screens that read the stored type count these as spending. Fixing sets each one to its category's type.",
+              "item": "{{date}} · {{name}} · {{amount}} → {{category}} ({{categoryType}})",
+              "fix": "Fix now",
+              "failed": "Couldn't fix them. Try again."
+            },
+            "stale": {
+              "title_one": "{{account}} last synced on {{date}} ({{count}} day ago)",
+              "title_other": "{{account}} last synced on {{date}} ({{count}} days ago)",
+              "titleFailed_one": "{{account}} last synced on {{date}} ({{count}} day ago) and the latest sync failed",
+              "titleFailed_other": "{{account}} last synced on {{date}} ({{count}} days ago) and the latest sync failed",
+              "never": "{{account}} has never synced",
+              "body": "Recent transactions on this account are missing, so the current period can look lower than it is."
+            },
+            "drift": {
+              "title": "{{merchant}} was filed under {{category}}",
+              "body_one": "On {{date}} ({{amount}}). It's usually {{usual}} ({{count}} earlier payment). Check whether this is right.",
+              "body_other": "On {{date}} ({{amount}}). It's usually {{usual}} ({{count}} earlier payments). Check whether this is right."
+            }
+          }
+        },
         "title": "Your Financial Rhythm - Detailed Analysis",
         "timeRange": {
           "3months": "3 Months",
