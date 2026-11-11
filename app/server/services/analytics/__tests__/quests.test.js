@@ -170,3 +170,75 @@ describe('new actionable quest types', () => {
     });
   });
 });
+
+describe('spending challenges only target spending', () => {
+  const SALARY = 90;
+  const DINING = 12;
+  const categoryTypes = [
+    { id: SALARY, category_type: 'income' },
+    { id: DINING, category_type: 'expense' },
+  ];
+  const variablePattern = (overrides) => ({
+    patternType: 'monthly',
+    avgAmount: 450,
+    avgOccurrencesPerMonth: 12,
+    monthsOfHistory: 6,
+    coefficientOfVariation: 0.5,
+    confidence: 0.8,
+    isFixedRecurring: false,
+    isFixedAmount: false,
+    ...overrides,
+  });
+
+  let inserted;
+  let client;
+
+  beforeEach(() => {
+    inserted = [];
+    getBehavioralPatterns.mockResolvedValue({ recurringPatterns: [] });
+    client = {
+      release: vi.fn(),
+      query: vi.fn(async (sql, params = []) => {
+        const text = String(sql);
+        if (text.includes('SELECT id, category_type FROM category_definitions')) return { rows: categoryTypes };
+        if (/INSERT INTO smart_action_items/i.test(text)) {
+          inserted.push({ sql: text, params });
+          return { rows: [{ id: inserted.length }] };
+        }
+        return { rows: [] };
+      }),
+    };
+    questsService.__setDatabase({ getClient: vi.fn().mockResolvedValue(client), query: vi.fn() });
+  });
+
+  afterEach(() => {
+    questsService.__resetDatabase();
+  });
+
+  it('never asks to "reduce" salary, even when the forecast pattern looks variable', async () => {
+    await questsService.generateQuests({
+      locale: 'en',
+      force: true,
+      forecastData: {
+        budgetOutlook: [],
+        patterns: [
+          // Mislabelled the way older forecasts could be: the category itself is income.
+          variablePattern({ categoryDefinitionId: SALARY, categoryName: 'Salary', categoryType: 'expense', avgAmount: 5400, avgOccurrencesPerMonth: 1 }),
+          variablePattern({ categoryDefinitionId: DINING, categoryName: 'Dining', categoryType: 'expense' }),
+        ],
+      },
+    });
+
+    const reduceQuests = inserted.filter((row) => row.params.includes('quest_reduce_spending'));
+    expect(reduceQuests.length).toBeGreaterThan(0);
+    expect(reduceQuests.every((row) => !row.params.includes(SALARY))).toBe(true);
+    expect(reduceQuests.some((row) => row.params.includes(DINING))).toBe(true);
+  });
+
+  it('retires open spending challenges on non-spending categories', async () => {
+    await questsService.retireNonExpenseSpendingQuests(client);
+    const retire = client.query.mock.calls.find(([sql]) => /UPDATE smart_action_items/.test(sql));
+    expect(retire[0]).toMatch(/category_type <> 'expense'/);
+    expect(retire[1]).toEqual(expect.arrayContaining(['quest_reduce_spending', 'quest_set_budget']));
+  });
+});

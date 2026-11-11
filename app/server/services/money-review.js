@@ -4,6 +4,7 @@ const subscriptionsService = require('./analytics/subscriptions.js');
 const financialTruthService = require('./financial-truth.js');
 const forecastService = require('./forecast.js');
 const expectedDepositsService = require('./analytics/expected-deposits.js');
+const questsService = require('./analytics/quests.js');
 
 const REVIEW_NOTIFICATION_PREFIX = 'money_review:notification:';
 const REVIEW_SUBSCRIPTION_PREFIX = 'money_review:subscription:';
@@ -526,6 +527,7 @@ async function getMoneyReview(options = {}) {
           AND snoozed_until IS NOT NULL
           AND snoozed_until <= datetime('now')
       `);
+      await questsService.retireNonExpenseSpendingQuests(client);
       await upsertGeneratedActions(client, notificationActions, REVIEW_NOTIFICATION_PREFIX);
       if (subscriptionResult.available) {
         await upsertGeneratedActions(client, subscriptionActions, REVIEW_SUBSCRIPTION_PREFIX);
