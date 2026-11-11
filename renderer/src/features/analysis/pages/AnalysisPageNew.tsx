@@ -47,8 +47,6 @@ import TrendingDownIcon from '@mui/icons-material/TrendingDown';
 import TrendingUpIcon from '@mui/icons-material/TrendingUp';
 import ReceiptLongIcon from '@mui/icons-material/ReceiptLong';
 import {
-  BarChart as RechartsBarChart,
-  Bar,
   CartesianGrid,
   XAxis,
   YAxis,
@@ -93,8 +91,8 @@ import {
 } from '../utils/budget-forecast-helpers';
 import {
   buildPersonalityHighlightDescriptors,
-  buildRhythmHighlightDescriptors,
 } from '../utils/dashboard-card-highlights';
+import RhythmMonthGlance from '../components/rhythm/RhythmMonthGlance';
 
 const FinancialRhythmModal = lazy(() => import('../components/FinancialRhythmModal'));
 const MoneyPersonalityModal = lazy(() => import('../components/MoneyPersonalityModal'));
@@ -548,16 +546,6 @@ const AnalysisPageNew: React.FC = () => {
     variability: false,
   });
   const handledBudgetDeepLinkRef = useRef<string | null>(null);
-
-  // Helper function to format hour based on locale
-  const formatHour = useCallback((hour: number): string => {
-    const date = new Date(2000, 0, 1, hour);
-    return date.toLocaleTimeString(i18n.language, {
-      hour: 'numeric',
-      minute: '2-digit',
-      hour12: i18n.language !== 'he'
-    });
-  }, [i18n.language]);
 
   const fetchTemporalData = useCallback(async () => {
     if (shouldBlockPageData) return;
@@ -1567,49 +1555,6 @@ const AnalysisPageNew: React.FC = () => {
 
   const isRefreshing = loading || budgetForecastLoading || temporalLoading || behavioralLoading || futureLoading || timeValueLoading || snapshotLoading;
 
-  const hourlySeries = useMemo(() => {
-    const series = temporalData?.hourlySpending ?? intelligence?.temporalIntelligence?.hourlyHeatmap;
-    if (!Array.isArray(series)) return [];
-    return series.map((value) => (typeof value === 'number' ? value : Number(value) || 0));
-  }, [intelligence?.temporalIntelligence?.hourlyHeatmap, temporalData?.hourlySpending]);
-
-  const rhythmBuckets = useMemo(() => {
-    if (hourlySeries.length === 0) return [];
-    return Array.from({ length: 8 }, (_, idx) => {
-      const startHour = idx * 3;
-      const amount = hourlySeries.slice(startHour, startHour + 3).reduce((sum, val) => sum + val, 0);
-      return {
-        time: formatHour(startHour),
-        amount,
-      };
-    });
-  }, [formatHour, hourlySeries]);
-
-  const rhythmStats = useMemo(() => {
-    if (hourlySeries.length === 0 && !temporalData && !intelligence?.temporalIntelligence) {
-      return null;
-    }
-
-    const peakHour = hourlySeries.reduce(
-      (best, value, idx) => (value > best.value ? { value, idx } : best),
-      { value: -Infinity, idx: 0 }
-    ).idx;
-
-    const dailyEvolution = temporalData?.dailyEvolution;
-    const avgDailySpend = temporalData?.avgDailySpend ?? (
-      dailyEvolution?.length
-        ? dailyEvolution.reduce((sum: number, day: any) => sum + (day.amount || 0), 0) / dailyEvolution.length
-        : intelligence?.temporalIntelligence?.dailyBurnRate ?? null
-    );
-
-    return {
-      peakHour,
-      avgDailySpend,
-      weekendPercentage: temporalData?.weekendPercentage ?? intelligence?.temporalIntelligence?.weekendVsWeekday?.weekendPercentage ?? null,
-      preciseTimePercentage: temporalData?.preciseTimePercentage ?? intelligence?.temporalIntelligence?.preciseTimePercentage ?? null,
-    };
-  }, [hourlySeries, intelligence?.temporalIntelligence, temporalData]);
-
   const personalityMetrics = useMemo(() => {
     const impulsePercentage = behavioralData?.impulsePercentage ?? intelligence?.behavioralIntelligence?.impulseSpendingScore ?? 0;
     const programmedPercentage = behavioralData?.programmedPercentage ?? (100 - impulsePercentage);
@@ -1624,39 +1569,6 @@ const AnalysisPageNew: React.FC = () => {
       topCategoryName: behavioralData?.topCategoryName ?? behavioralData?.categoryAverages?.[0]?.category ?? null,
     };
   }, [behavioralData, intelligence?.behavioralIntelligence?.impulseSpendingScore]);
-
-  const rhythmHighlights = useMemo(() => {
-    if (!rhythmStats) {
-      return [];
-    }
-
-    return buildRhythmHighlightDescriptors(rhythmStats).map((descriptor) => {
-      switch (descriptor.key) {
-        case 'avgDaily':
-          return {
-            ...descriptor,
-            label: `${t('dashboard.rhythm.avgDaily')}: ${formatCurrencyValue(rhythmStats.avgDailySpend || 0)}`,
-          };
-        case 'weekendShare':
-          return {
-            ...descriptor,
-            label: `${t('dashboard.rhythm.weekendShare')}: ${Math.round(rhythmStats.weekendPercentage || 0)}%`,
-          };
-        case 'peakHour':
-          return {
-            ...descriptor,
-            label: `${t('dashboard.rhythm.peakHour')}: ${formatHour(rhythmStats.peakHour)}`,
-          };
-        case 'preciseTime':
-          return {
-            ...descriptor,
-            label: `${t('dashboard.rhythm.preciseTime')}: ${Math.round(rhythmStats.preciseTimePercentage || 0)}%`,
-          };
-        default:
-          return null;
-      }
-    }).filter((descriptor): descriptor is NonNullable<typeof descriptor> => descriptor !== null);
-  }, [formatCurrencyValue, formatHour, rhythmStats, t]);
 
   const personalityHighlights = useMemo(
     () => buildPersonalityHighlightDescriptors(personalityMetrics).map((descriptor) => {
@@ -2021,92 +1933,8 @@ const AnalysisPageNew: React.FC = () => {
                     </Tooltip>
                   </Box>
 
-                  {/* Hourly Spending Heatmap */}
-                  {(temporalLoading && rhythmBuckets.length === 0) ? (
-                    <Box sx={{ mb: 2 }}>
-                      <Skeleton variant="text" width="60%" height={20} sx={{ mb: 1 }} />
-                      <Skeleton variant="rectangular" width="100%" height={100} sx={{ borderRadius: 2 }} />
-                    </Box>
-                  ) : rhythmBuckets.length > 0 ? (
-                    <Box sx={{ mb: 2 }}>
-                      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
-                        <Typography variant="caption" sx={{
-                          color: "text.secondary"
-                        }}>
-                          {t('dashboard.rhythm.spendingByHour')}
-                        </Typography>
-                        {rhythmStats?.preciseTimePercentage !== undefined && rhythmStats.preciseTimePercentage < 50 && (
-                          <Typography
-                            variant="caption"
-                            sx={{
-                              color: "warning.main",
-                              fontSize: '0.75rem'
-                            }}>
-                            {t('dashboard.rhythm.lowPrecision', { percentage: Math.round(rhythmStats.preciseTimePercentage) })}
-                          </Typography>
-                        )}
-                      </Box>
-                      <ResponsiveContainer width="100%" height={100} minHeight={100}>
-                        <RechartsBarChart
-                          data={rhythmBuckets}
-                          margin={{ top: 10, bottom: 30, left: 40, right: 10 }}
-                        >
-                          <XAxis
-                            dataKey="time"
-                            stroke={theme.palette.text.secondary}
-                            style={{ fontSize: 10 }}
-                          />
-                          <YAxis
-                            stroke={theme.palette.text.secondary}
-                            style={{ fontSize: 9 }}
-                          />
-                          <RechartsTooltip
-                            contentStyle={{
-                              backgroundColor: theme.palette.background.paper,
-                              border: `1px solid ${theme.palette.divider}`,
-                              borderRadius: '8px',
-                            }}
-                          />
-                          <Bar dataKey="amount" fill={theme.palette.primary.main} />
-                        </RechartsBarChart>
-                      </ResponsiveContainer>
-                    </Box>
-                  ) : temporalError ? (
-                    <Alert severity="warning" sx={{ mb: 1 }}>
-                      {temporalError}
-                    </Alert>
-                  ) : (
-                    <Typography variant="body2" sx={{
-                      color: "text.secondary"
-                    }}>
-                      {t('states.noData')}
-                    </Typography>
-                  )}
-
-                  <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
-                    {rhythmHighlights.map((metric) => (
-                      <Chip
-                        key={metric.key}
-                        label={metric.label}
-                        size="small"
-                        color={metric.tone}
-                        variant={metric.priority === 'primary' ? 'filled' : 'outlined'}
-                        sx={{
-                          height: 'auto',
-                          borderRadius: 999,
-                          alignItems: 'flex-start',
-                          '& .MuiChip-label': {
-                            display: 'block',
-                            whiteSpace: 'normal',
-                            px: 1.25,
-                            py: 0.85,
-                            fontWeight: metric.priority === 'primary' ? 700 : 500,
-                            lineHeight: 1.25,
-                          },
-                        }}
-                      />
-                    ))}
-                  </Box>
+                  {/* Spending through the month */}
+                  <RhythmMonthGlance />
                 </CardContent>
               </Card>
             </Grid>
