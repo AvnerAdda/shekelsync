@@ -81,6 +81,9 @@ const reviewResponse = {
   items: reviewItems,
 };
 
+const staleSyncTitle = 'Accounts need a sync';
+const budgetTitle = 'Dining is over budget';
+
 test('Money Review prioritizes work and exposes flexible lifecycle controls', async ({ page }, testInfo) => {
   let lifecyclePayload: Record<string, unknown> | null = null;
   let currentReviewResponse = reviewResponse;
@@ -117,21 +120,21 @@ test('Money Review prioritizes work and exposes flexible lifecycle controls', as
   await page.goto('/#/', { waitUntil: 'domcontentloaded' });
 
   const dashboardReview = page.locator('section[aria-labelledby="money-review-dashboard-title"]');
-  await expect(dashboardReview.getByText('One account needs a fresh sync')).toBeVisible({ timeout: 30_000 });
+  await expect(dashboardReview.getByText(staleSyncTitle)).toBeVisible({ timeout: 30_000 });
   await expect(dashboardReview.getByTestId('money-review-carousel')).toBeVisible();
 
   if (process.env.CAPTURE_MONEY_REVIEW === 'true') {
     await dashboardReview.screenshot({ path: testInfo.outputPath('money-review-dashboard.png') });
   }
 
-  await dashboardReview.getByRole('button', { name: 'Review One account needs a fresh sync' }).click();
+  await dashboardReview.getByRole('button', { name: `Review ${staleSyncTitle}` }).click();
 
   let reviewDialog = page.getByRole('dialog');
-  await expect(reviewDialog.getByRole('heading', { name: 'One account needs a fresh sync' })).toBeVisible({ timeout: 30_000 });
+  await expect(reviewDialog.getByRole('heading', { name: staleSyncTitle })).toBeVisible({ timeout: 30_000 });
   await expect(reviewDialog.getByText('Why this appeared')).toBeVisible();
   await expect(reviewDialog.getByText('Accounts affected')).toBeVisible();
   await expect(reviewDialog.getByText(/No external AI or API key is required/)).toBeVisible();
-  await expect(reviewDialog.getByText('Dining budget is over plan')).not.toBeVisible();
+  await expect(reviewDialog.getByText(budgetTitle)).not.toBeVisible();
 
   await page.setViewportSize({ width: 1024, height: 768 });
   const compactViewportWidth = await page.evaluate(() => document.documentElement.clientWidth);
@@ -147,11 +150,11 @@ test('Money Review prioritizes work and exposes flexible lifecycle controls', as
   await reviewDialog.getByRole('button', { name: 'Close item' }).click();
   await expect(reviewDialog).not.toBeVisible();
 
-  await dashboardReview.getByRole('button', { name: 'Review Dining budget is over plan' }).click();
+  await dashboardReview.getByRole('button', { name: `Review ${budgetTitle}` }).click();
   reviewDialog = page.getByRole('dialog');
-  await expect(reviewDialog.getByRole('heading', { name: 'Dining budget is over plan' })).toBeVisible();
-  await expect(reviewDialog.getByText('Dining budget is over plan')).toBeVisible();
-  await expect(reviewDialog.getByText('One account needs a fresh sync')).not.toBeVisible();
+  await expect(reviewDialog.getByRole('heading', { name: budgetTitle })).toBeVisible();
+  await expect(reviewDialog.getByText(budgetTitle)).toBeVisible();
+  await expect(reviewDialog.getByText(staleSyncTitle)).not.toBeVisible();
   await expect(reviewDialog.getByText('What the numbers show')).toBeVisible();
   await expect(reviewDialog.getByText('Spent')).toBeVisible();
   await expect(reviewDialog.getByText('Budget', { exact: true })).toBeVisible();
