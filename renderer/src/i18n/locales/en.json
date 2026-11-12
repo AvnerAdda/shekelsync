@@ -710,7 +710,39 @@
       "appearance": "Appearance",
       "sync": "Sync",
       "privacySecurity": "Privacy & Security",
-      "system": "System"
+      "system": "System",
+      "about": "About"
+    },
+    "about": {
+      "title": "About ShekelSync",
+      "version": "Version {{version}}",
+      "description": "ShekelSync is a personal finance app for Israeli bank accounts and credit cards. It syncs your transactions, categorizes your spending and turns it into insights that help you manage your money better.",
+      "featuresTitle": "What it does",
+      "features": {
+        "sync": "Automatic sync with Israeli banks and credit cards",
+        "categorize": "Smart categorization of every transaction",
+        "insights": "Financial Health Score and personal spending insights",
+        "forecast": "Cash-flow forecasts, budgets and investment tracking",
+        "assistant": "Optional AI assistant for questions about your finances"
+      },
+      "madeWith": "Made with ❤️ in Israel",
+      "sourceCode": "Source code",
+      "contact": {
+        "title": "Contact me",
+        "description": "Have a question, an idea or a partnership in mind? Reach out to me directly.",
+        "action": "Get in touch"
+      },
+      "feedback": {
+        "title": "Feedback",
+        "description": "Tell me what works, what doesn't and what you would like to see next.",
+        "action": "Share feedback",
+        "bug": "Report a bug"
+      },
+      "coffee": {
+        "title": "Buy me a coffee",
+        "description": "ShekelSync is built in my free time. If it helps you, a coffee keeps development going.",
+        "action": "Buy me a coffee"
+      }
     },
     "language": {
       "title": "Language & locale",

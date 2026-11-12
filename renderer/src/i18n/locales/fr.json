@@ -705,7 +705,39 @@
       "appearance": "Apparence",
       "sync": "Synchronisation",
       "privacySecurity": "Confidentialité et sécurité",
-      "system": "Système"
+      "system": "Système",
+      "about": "À propos"
+    },
+    "about": {
+      "title": "À propos de ShekelSync",
+      "version": "Version {{version}}",
+      "description": "ShekelSync est une application de finances personnelles pour les comptes bancaires et cartes de crédit israéliens. Elle synchronise vos transactions, catégorise vos dépenses et les transforme en analyses pour mieux gérer votre argent.",
+      "featuresTitle": "Ce qu'elle fait",
+      "features": {
+        "sync": "Synchronisation automatique avec les banques et cartes israéliennes",
+        "categorize": "Catégorisation intelligente de chaque transaction",
+        "insights": "Score de santé financière et analyses de dépenses personnalisées",
+        "forecast": "Prévisions de trésorerie, budgets et suivi des investissements",
+        "assistant": "Assistant IA optionnel pour vos questions financières"
+      },
+      "madeWith": "Fait avec ❤️ en Israël",
+      "sourceCode": "Code source",
+      "contact": {
+        "title": "Me contacter",
+        "description": "Une question, une idée ou un partenariat en tête ? Contactez-moi directement.",
+        "action": "Prendre contact"
+      },
+      "feedback": {
+        "title": "Commentaires",
+        "description": "Dites-moi ce qui fonctionne, ce qui ne va pas et ce que vous aimeriez voir ensuite.",
+        "action": "Donner mon avis",
+        "bug": "Signaler un bug"
+      },
+      "coffee": {
+        "title": "Offrez-moi un café",
+        "description": "ShekelSync est développé sur mon temps libre. S'il vous aide, un café permet de continuer.",
+        "action": "Offrez-moi un café"
+      }
     },
     "language": {
       "title": "Langue et région",

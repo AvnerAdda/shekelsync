@@ -19,6 +19,7 @@ import TextSizeIcon from '@mui/icons-material/FormatSize';
 import LightIcon from '@mui/icons-material/LightMode';
 import ThemeIcon from '@mui/icons-material/Palette';
 import ProfileTabIcon from '@mui/icons-material/Person';
+import AboutTabIcon from '@mui/icons-material/InfoOutlined';
 import SecurityIcon from '@mui/icons-material/Security';
 import SystemIcon from '@mui/icons-material/SettingsBrightness';
 import SyncTabIcon from '@mui/icons-material/Sync';
@@ -39,6 +40,7 @@ import DiagnosticsPanel from '../components/DiagnosticsPanel';
 import EnhancedProfileSection from '../components/EnhancedProfileSection';
 import SecuritySettingsPanel from '../components/SecuritySettingsPanel';
 import TelegramPanel from '../components/TelegramPanel';
+import AboutPanel from '../components/AboutPanel';
 import { UsageAnalyticsPanel } from '@renderer/features/usage-analytics';
 import {
   DEFAULT_SETTINGS_TAB_ID,
@@ -208,6 +210,7 @@ const SettingsPage: React.FC = () => {
     { id: 'sync' as const, icon: <SyncTabIcon sx={{ fontSize: 20 }} />, label: tSettings('tabs.sync') },
     { id: 'privacy' as const, icon: <SecurityIcon sx={{ fontSize: 20 }} />, label: tSettings('tabs.privacySecurity') },
     { id: 'system' as const, icon: <BugReportIcon sx={{ fontSize: 20 }} />, label: tSettings('tabs.system') },
+    { id: 'about' as const, icon: <AboutTabIcon sx={{ fontSize: 20 }} />, label: tSettings('tabs.about') },
   ];
 
   return (
@@ -836,58 +839,10 @@ const SettingsPage: React.FC = () => {
           </Box>
 
           <DiagnosticsPanel />
-
-          <Divider sx={{ my: 4 }} />
-
-          <Paper id="about" sx={{ p: 3, scrollMarginTop: SECTION_SCROLL_MARGIN }}>
-            <Typography variant="h6" gutterBottom>
-              About ShekelSync
-            </Typography>
-            <Typography
-              variant="body2"
-              sx={{
-                color: "text.secondary",
-                marginBottom: "16px"
-              }}>
-              Version: {appTagVersion} (Personal Intelligence Edition)
-            </Typography>
-            <Typography
-              variant="body2"
-              sx={{
-                color: "text.secondary",
-                marginBottom: "16px"
-              }}>
-              ShekelSync is a personal finance tracking application for Israeli bank accounts and credit cards.
-              It automatically scrapes transactions, categorizes expenses, and provides AI-powered analytics
-              to help you manage your finances better.
-            </Typography>
-            <Typography
-              variant="body2"
-              sx={{
-                color: "text.secondary",
-                marginBottom: "16px"
-              }}>
-              <strong>New Features:</strong>
-            </Typography>
-            <Typography variant="body2" component="ul" sx={{
-              color: "text.secondary"
-            }}>
-              <li>🧠 Personal Financial Intelligence with 9 insight categories</li>
-              <li>💬 AI-powered chatbot for financial questions</li>
-              <li>📊 Behavioral analytics (impulse score, payday effect, FOMO score)</li>
-              <li>🔮 Predictive analytics and savings recommendations</li>
-              <li>📈 Peer comparisons based on age, income, and location</li>
-            </Typography>
-            <Typography
-              variant="body2"
-              sx={{
-                color: "text.secondary",
-                mt: 2
-              }}>
-              Made with ❤️ for better financial sync
-            </Typography>
-          </Paper>
         </Box>
+      </SettingsTabPanel>
+      <SettingsTabPanel value={activeTabIndex} index={SETTINGS_TAB_INDEX_BY_ID.about} tabId="about">
+        <AboutPanel appVersion={appTagVersion} />
       </SettingsTabPanel>
     </Box>
   );

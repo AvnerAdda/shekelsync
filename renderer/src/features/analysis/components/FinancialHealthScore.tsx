@@ -25,7 +25,8 @@ import { startOfMonth, subDays, format } from 'date-fns';
 import { useFinancePrivacy } from '@app/contexts/FinancePrivacyContext';
 import { apiClient } from '@renderer/lib/api-client';
 import { useTranslation } from 'react-i18next';
-import { useThemeMode } from '@renderer/contexts/ThemeContext';
+import { useTheme } from '@mui/material/styles';
+import { getHealthScoreLevel } from '../utils/health-score-level';
 import HealthScoreTrendModal from './HealthScoreTrendModal';
 
 export interface HealthBreakdown {
@@ -57,7 +58,7 @@ interface FinancialHealthScoreProps {
 const FinancialHealthScore: React.FC<FinancialHealthScoreProps> = ({ data, loading, error, onRefresh }) => {
   const { t } = useTranslation('translation', { keyPrefix: 'analysisPage.health' });
   const { formatCurrency } = useFinancePrivacy();
-  const { setHealthScore } = useThemeMode();
+  const theme = useTheme();
   const hasExternalData = data !== undefined;
   const [intelligence, setIntelligence] = useState<FinancialHealthSnapshot | null>(data ?? null);
   const [internalLoading, setInternalLoading] = useState(!hasExternalData);
@@ -84,11 +85,8 @@ const FinancialHealthScore: React.FC<FinancialHealthScoreProps> = ({ data, loadi
   useEffect(() => {
     if (hasExternalData) {
       setIntelligence(data ?? null);
-      if (data?.overallHealthScore != null) {
-        setHealthScore(data.overallHealthScore);
-      }
     }
-  }, [data, hasExternalData, setHealthScore]);
+  }, [data, hasExternalData]);
 
   const fetchHealthScore = useCallback(async () => {
     setInternalLoading(true);
@@ -102,9 +100,6 @@ const FinancialHealthScore: React.FC<FinancialHealthScoreProps> = ({ data, loadi
         throw new Error(t('errors.fetchFailed'));
       }
       setIntelligence(response.data);
-      if (response.data?.overallHealthScore != null) {
-        setHealthScore(response.data.overallHealthScore);
-      }
     } catch (err) {
       const message = err instanceof Error ? err.message : t('errors.generic');
       setInternalError(message);
@@ -112,7 +107,7 @@ const FinancialHealthScore: React.FC<FinancialHealthScoreProps> = ({ data, loadi
     } finally {
       setInternalLoading(false);
     }
-  }, [t, periodPreset, getPeriodDates, setHealthScore]);
+  }, [t, periodPreset, getPeriodDates]);
 
   useEffect(() => {
     if (!hasExternalData) {
@@ -135,11 +130,7 @@ const FinancialHealthScore: React.FC<FinancialHealthScoreProps> = ({ data, loadi
   const effectiveLoading = hasExternalData ? (loading ?? false) : internalLoading;
   const effectiveError = hasExternalData ? (error ?? null) : internalError;
 
-  const getHealthScoreColor = (score: number) => {
-    if (score >= 80) return '#4caf50';
-    if (score >= 60) return '#ff9800';
-    return '#f44336';
-  };
+  const getHealthScoreColor = (score: number) => theme.palette[getHealthScoreLevel(score)].main;
 
   const getHealthMetricIcon = (key: string) => {
     switch (key.toLowerCase()) {
@@ -171,24 +162,12 @@ const FinancialHealthScore: React.FC<FinancialHealthScoreProps> = ({ data, loadi
   };
 
   const getHealthScoreDescription = (score: number) => {
-    if (score >= 80) {
-      return {
-        status: t('scorecard.status.excellent.title'),
-        message: t('scorecard.status.excellent.message'),
-        color: '#4caf50',
-      };
-    }
-    if (score >= 60) {
-      return {
-        status: t('scorecard.status.good.title'),
-        message: t('scorecard.status.good.message'),
-        color: '#ff9800',
-      };
-    }
+    const level = getHealthScoreLevel(score);
+    const statusKey = level === 'success' ? 'excellent' : level === 'warning' ? 'good' : 'needsAttention';
     return {
-      status: t('scorecard.status.needsAttention.title'),
-      message: t('scorecard.status.needsAttention.message'),
-      color: '#f44336',
+      status: t(`scorecard.status.${statusKey}.title`),
+      message: t(`scorecard.status.${statusKey}.message`),
+      color: theme.palette[level].main,
     };
   };
 

@@ -1,4 +1,4 @@
-export type SettingsTabId = 'profile' | 'appearance' | 'sync' | 'privacy' | 'system';
+export type SettingsTabId = 'profile' | 'appearance' | 'sync' | 'privacy' | 'system' | 'about';
 
 export type SettingsTabConfig = {
   id: SettingsTabId;
@@ -36,7 +36,13 @@ export const SETTINGS_TABS: SettingsTabConfig[] = [
     id: 'system',
     labelKey: 'tabs.system',
     canonicalHash: 'system',
-    legacyHashes: ['diagnostics', 'about'],
+    legacyHashes: ['diagnostics'],
+  },
+  {
+    id: 'about',
+    labelKey: 'tabs.about',
+    canonicalHash: 'about',
+    legacyHashes: [],
   },
 ];
 
@@ -51,6 +57,7 @@ export const SETTINGS_TAB_INDEX_BY_ID = SETTINGS_TABS.reduce<Record<SettingsTabI
   sync: 2,
   privacy: 3,
   system: 4,
+  about: 5,
 });
 
 const SETTINGS_TAB_ID_BY_HASH = SETTINGS_TABS.reduce<Record<string, SettingsTabId>>((accumulator, tab) => {
