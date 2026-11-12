@@ -1408,6 +1408,24 @@ const defaultHandlers: Record<string, Handler> = {
     errors: [],
   }),
   'GET /api/analytics/personal-intelligence': respondWith(personalIntelligence),
+  'GET /api/analytics/rhythm-comparison': respondWith({
+    granularity: 'month',
+    metric: 'spend',
+    scope: 'all',
+    asOf: '2026-11-12',
+    coverageStart: null,
+    current: { key: '2026-11', start: '2026-11-01', end: '2026-11-30' },
+    pace: {
+      x: 12, length: 30, current: 0, median: null, low: null, high: null,
+      status: 'insufficient', deltaAmount: null, deltaPercent: null,
+      typicalTotal: null, projectedTotal: null,
+    },
+    points: [],
+    drivers: [],
+    newMerchants: [],
+    periods: [],
+    checks: [],
+  }),
   'GET /api/analytics/profiling': respondWith({
     missingFields: [],
     isStale: false,
@@ -1482,6 +1500,18 @@ const defaultHandlers: Record<string, Handler> = {
     totalTransactions: 12,
   }),
   'GET /api/profile': respondWith(defaultProfile),
+  'GET /api/payroll': respondWith({
+    members: ['self', 'spouse'].map((member) => ({
+      member,
+      displayName: null,
+      available: member === 'self',
+      employment: null,
+      plans: [],
+      breakdown: { items: [], totals: { employee: 0, employer: 0, total: 0 } },
+    })),
+    accounts: [],
+    defaults: { plans: {}, preferredAccountTypes: {} },
+  }),
   'GET /api/profile/income-suggestion': respondWith({ suggestion: null }),
   'PUT /api/profile': async ({ route, request }) => {
     const payload = request.postData() ? JSON.parse(request.postData() as string) : defaultProfile;
