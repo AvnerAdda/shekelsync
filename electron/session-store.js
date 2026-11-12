@@ -143,7 +143,8 @@ class SessionStore {
         flag: 'wx',
         mode: 0o600,
       });
-      fileHandle = await open(temporaryPath, 'r');
+      // Windows FlushFileBuffers requires a handle opened with write access.
+      fileHandle = await open(temporaryPath, 'r+');
       await fileHandle.sync();
       await fileHandle.close();
       fileHandle = null;

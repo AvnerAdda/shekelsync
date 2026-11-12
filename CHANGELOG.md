@@ -12,6 +12,19 @@ Release binaries are published at
 
 ## [Unreleased]
 
+## [0.2.7] - 2026-11-12
+
+### Fixed
+- Restore application settings and session saves on Windows by flushing the
+  temporary file through a writable handle. This fixes the `EPERM: fsync` error
+  that prevented the anonymous usage statistics choice from being saved.
+- Add a Close button and Escape/backdrop dismissal to "Help improve ShekelSync?"
+  and show a clear error when saving the choice fails. Dismissing the prompt
+  does not enable analytics.
+
+### Changed
+- Keep the database schema unchanged from v0.2.6; no migration is required.
+
 ## [0.2.6] - 2026-11-12
 
 ### Added
