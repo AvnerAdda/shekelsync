@@ -15,6 +15,7 @@ type LoadOptions = {
   keytarReadError?: 'scoped' | 'legacy';
   renameFailureOnce?: 'scoped' | 'authority';
   readFailure?: 'scoped' | 'legacy' | 'marker' | 'settings';
+  rejectReadOnlyFileSync?: boolean;
 };
 
 const repoRoot = path.resolve(process.cwd(), '..');
@@ -96,7 +97,15 @@ async function loadSessionStore(options: LoadOptions) {
   });
   const sync = vi.fn(async () => {});
   const close = vi.fn(async () => {});
-  const open = vi.fn(async () => ({ sync, close }));
+  const open = vi.fn(async (file: string, flags: string) => ({
+    sync: async () => {
+      if (options.rejectReadOnlyFileSync && file.endsWith('.tmp') && flags === 'r') {
+        throw Object.assign(new Error('EPERM: operation not permitted, fsync'), { code: 'EPERM' });
+      }
+      await sync();
+    },
+    close,
+  }));
   const statSync = vi.fn((file: string) => {
     if (fsState.has(file)) return { isFile: () => true };
     const error: NodeJS.ErrnoException = new Error('Missing file');
@@ -407,6 +416,39 @@ describe('electron session store', () => {
     expect(fs.writeFile).toHaveBeenCalledTimes(1);
 
     warnSpy.mockRestore();
+  });
+
+  it('persists the analytics choice when Windows rejects flushing a read-only file handle', async () => {
+    const { sessionStore, mocks } = await loadSessionStore({
+      mode: 'missing',
+      rejectReadOnlyFileSync: true,
+    });
+    const choice = { enabled: false, decidedAt: '2026-11-12T15:00:00.000Z' };
+
+    try {
+      await sessionStore.updateSettings({ usageAnalytics: choice });
+      sessionStore.settingsCache = null;
+
+      expect((await sessionStore.getSettings()).usageAnalytics).toEqual(choice);
+      expect(JSON.parse(mocks.fs.state.get(sessionStore.getSettingsFilePath())!)).toEqual({ usageAnalytics: choice });
+    } finally {
+      mocks.warnSpy.mockRestore();
+    }
+  });
+
+  it('preserves saved settings and cleans up the temporary file when flushing fails', async () => {
+    const { sessionStore, mocks } = await loadSessionStore({ mode: 'missing' });
+    try {
+      await sessionStore.updateSettings({ appLocale: 'he' });
+      mocks.fs.sync.mockRejectedValueOnce(Object.assign(new Error('Disk error'), { code: 'EIO' }));
+
+      await expect(sessionStore.updateSettings({ appLocale: 'fr' })).rejects.toMatchObject({ code: 'EIO' });
+      expect(await sessionStore.getSettings()).toEqual({ appLocale: 'he' });
+      expect(JSON.parse(mocks.fs.state.get(sessionStore.getSettingsFilePath())!)).toEqual({ appLocale: 'he' });
+      expect([...mocks.fs.state.keys()].filter((name) => name.endsWith('.tmp'))).toEqual([]);
+    } finally {
+      mocks.warnSpy.mockRestore();
+    }
   });
 
   it('migrates a validated legacy file without overwriting it', async () => {
