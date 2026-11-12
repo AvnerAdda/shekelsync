@@ -12,6 +12,40 @@ Release binaries are published at
 
 ## [Unreleased]
 
+## [0.2.6] - 2026-11-12
+
+### Added
+- Compare spending pace by month, week, and day in Financial Rhythm, with a
+  monthly overview and checks for unusual spending.
+- Track household salaries and payroll savings for pension, severance, and
+  keren hishtalmut, with contributions accrued from detected salary deposits.
+- Flag missing salary, recurring income, and investment deposits in Money Review,
+  with localized explanations in English, French, and Hebrew.
+- View the app version and support links in Settings → About.
+
+### Fixed
+- Avoid counting imported card repayments twice and refresh stale transaction
+  types after category changes.
+- Calculate payroll savings cost basis and investment balances consistently,
+  and determine keren hishtalmut liquidity from the fund opening date.
+- Reduce Money Review noise by using configured budgets, reopening recurring
+  issues when needed, and checking recent missed charges.
+- Keep the Home Financial Health score aligned with the selected dashboard period,
+  and synchronize its theme accent across screens.
+- Open investment accounts consistently from performance and portfolio cards.
+
+### Security
+- Lock the app at launch and require re-authentication for sensitive actions.
+
+### Changed
+- Allow forecasts to start from the last imported transaction.
+- Limit dependency installation scripts to explicitly allowed native dependencies.
+- Upgrade local databases automatically to schema version 14 with household
+  employment and payroll contribution tables. Existing databases are backed up
+  before migration; failures roll back and block startup. No manual migration is
+  required. To roll back to an earlier app version, restore the pre-migration
+  database backup.
+
 ## [0.2.5] - 2026-11-03
 
 ### Security
