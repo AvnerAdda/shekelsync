@@ -179,6 +179,20 @@ describe('rhythm comparison', () => {
     ]);
   });
 
+  it.each([
+    { today: ['2026-11-11'] },
+    { today: ['2026-11-11', '2026-11-12'] },
+    { today: [] },
+    { today: { value: '2026-11-11' } },
+    { today: 20261111 },
+  ])('rejects a non-string date before querying transactions: $today', async ({ today }) => {
+    const query = vi.fn();
+    service.__setDatabase({ query });
+
+    await expect(service.getRhythmComparison({ today })).rejects.toMatchObject({ status: 400 });
+    expect(query).not.toHaveBeenCalled();
+  });
+
   it('reads counted spending only and rejects unknown options', async () => {
     const query = vi.fn().mockResolvedValue({ rows: [] });
     service.__setDatabase({ query });

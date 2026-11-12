@@ -472,8 +472,11 @@ async function getRhythmComparison(params = {}) {
   const granularity = parseOption(params.granularity, GRANULARITIES, 'month', 'granularity');
   const metric = parseOption(params.metric, METRICS, 'spend', 'metric');
   const scope = parseOption(params.scope, SCOPES, 'all', 'scope');
-  if (params.today != null && !validDate(params.today)) throw invalid('Invalid date');
-  const today = params.today || dateKey();
+  const requestedDay = params.today;
+  if (requestedDay != null && (typeof requestedDay !== 'string' || !validDate(requestedDay))) {
+    throw invalid('Invalid date');
+  }
+  const today = typeof requestedDay === 'string' ? requestedDay : dateKey();
   const cacheKey = JSON.stringify({ granularity, metric, scope, today });
   const skipCache = process.env.NODE_ENV === 'test' || params.noCache === '1' || params.noCache === true;
   if (!skipCache) {

@@ -39,6 +39,8 @@ Release binaries are published at
 
 ### Changed
 - Allow forecasts to start from the last imported transaction.
+- Update application, bank scraper, interface, and build dependencies within
+  their existing major versions.
 - Limit dependency installation scripts to explicitly allowed native dependencies.
 - Upgrade local databases automatically to schema version 14 with household
   employment and payroll contribution tables. Existing databases are backed up
