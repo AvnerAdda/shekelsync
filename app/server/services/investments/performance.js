@@ -1,9 +1,7 @@
 const actualDatabase = require('../database.js');
 const historyModule = require('./history.js');
 const fxModule = require('./fx.js');
-const {
-  fetchLinkedInvestmentTransactions,
-} = require('./linked-transaction-rollforward.js');
+const { fetchInvestmentContributionRows } = require('./contribution-sources.js');
 
 let database = actualDatabase;
 let historyService = historyModule;
@@ -840,7 +838,9 @@ async function getInvestmentPerformance(params = {}) {
 
   const [fetchedTransactions, pikadonReturnResult, fetchedPositionEvents] = accountIds.length > 0 && flowStartDate < flowEndDate
     ? await Promise.all([
-      fetchLinkedInvestmentTransactions(database, accountIds, {
+      // Estimated payroll contributions are external flows too: history rolls
+      // them into balances, so they must not be counted as returns.
+      fetchInvestmentContributionRows(database, accountIds, {
         startDate: flowStartDate,
         endDate: flowEndDate,
       }),

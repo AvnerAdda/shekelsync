@@ -9,6 +9,7 @@ import AppLockGate from '@renderer/features/security/components/AppLockGate';
 import { DonationStatusProvider } from '@renderer/features/support/contexts/DonationStatusContext';
 import type { PropsWithChildren } from 'react';
 import { I18nProvider, useLocaleSettings } from '@renderer/i18n/I18nProvider';
+import HealthScoreThemeSync from '@renderer/features/analysis/components/HealthScoreThemeSync';
 
 const ConnectedProviders: React.FC<PropsWithChildren> = ({ children }) => {
   const { direction, locale } = useLocaleSettings();
@@ -23,7 +24,11 @@ const ConnectedProviders: React.FC<PropsWithChildren> = ({ children }) => {
               <NotificationProvider>
                 <SecurityProvider>
                   <DonationStatusProvider>
-                    <OnboardingProvider>{children}</OnboardingProvider>
+                    <OnboardingProvider>
+                      {/* App accent follows the health score from launch. */}
+                      <HealthScoreThemeSync />
+                      {children}
+                    </OnboardingProvider>
                   </DonationStatusProvider>
                 </SecurityProvider>
               </NotificationProvider>

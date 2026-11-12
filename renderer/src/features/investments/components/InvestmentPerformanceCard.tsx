@@ -1,5 +1,5 @@
 import React from 'react';
-import { Box, Typography, useTheme, alpha, Avatar } from '@mui/material';
+import { Box, Typography, useTheme, alpha, Avatar, Tooltip as MuiTooltip } from '@mui/material';
 import {
   LineChart,
   Line,
@@ -63,6 +63,26 @@ const InvestmentPerformanceCard: React.FC<InvestmentPerformanceCardProps> = ({
     ? ((account.current_value - account.cost_basis) / account.cost_basis) * 100
     : null;
   const isPositive = roi === null || roi >= 0;
+
+  // Estimates are always ILS (payroll), whatever the display currency.
+  const estimatedContribution = Number(account.estimated_contribution_adjustment) || 0;
+  const estimatedSince = account.estimated_contribution_since
+    ? new Date(`${account.estimated_contribution_since}T00:00:00Z`).toLocaleDateString(locale, {
+      day: 'numeric',
+      month: 'short',
+      timeZone: 'UTC',
+    })
+    : '';
+  const withdrawableFrom = account.keren_hishtalmut_withdrawable_from || null;
+  const isWithdrawable = withdrawableFrom ? withdrawableFrom <= new Date().toISOString().slice(0, 10) : false;
+  const withdrawableLabel = withdrawableFrom
+    ? new Date(`${withdrawableFrom}T00:00:00Z`).toLocaleDateString(locale, {
+      day: 'numeric',
+      month: 'short',
+      year: 'numeric',
+      timeZone: 'UTC',
+    })
+    : '';
 
   // Prepare sparkline data - use last 30 points or all if less
   const sparklineData = (history || [])
@@ -192,6 +212,30 @@ const InvestmentPerformanceCard: React.FC<InvestmentPerformanceCardProps> = ({
           {roi === null ? t('na', 'N/A') : `${isPositive ? '+' : ''}${roi.toFixed(1)}%`}
         </Typography>
       </Box>
+      {withdrawableFrom && (
+        <Typography
+          variant="caption"
+          data-testid="keren-hishtalmut-withdrawable"
+          sx={{ color: isWithdrawable ? 'success.main' : 'text.secondary', display: 'block', mt: 0.25 }}
+        >
+          {t(isWithdrawable ? 'withdrawableSince' : 'withdrawableFrom', { date: withdrawableLabel })}
+        </Typography>
+      )}
+      {/* Estimated payroll contributions since the last statement */}
+      {estimatedContribution > 0 && (
+        <MuiTooltip title={t('estimatedContributionsHint')}>
+          <Typography
+            variant="caption"
+            data-testid="estimated-contributions"
+            sx={{ color: 'text.secondary', fontStyle: 'italic', display: 'block', mt: 0.25 }}
+          >
+            {t('estimatedContributions', {
+              amount: maskAmounts ? '***' : formatCurrency(estimatedContribution, { maximumFractionDigits: 0 }),
+              date: estimatedSince,
+            })}
+          </Typography>
+        </MuiTooltip>
+      )}
       {/* Period High/Low */}
       {sparklineData.length > 1 && (
         <Box

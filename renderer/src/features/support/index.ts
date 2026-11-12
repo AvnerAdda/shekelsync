@@ -13,4 +13,11 @@ export type {
   MarkReminderShownPayload,
 } from './types';
 export { getDonationTier, getCurrentMonthKey, createDefaultDonationStatus } from './types';
-export { DONATION_STATUS_CHANGED_EVENT, DONATION_OPEN_MODAL_EVENT } from './constants';
+export {
+  DONATION_STATUS_CHANGED_EVENT,
+  DONATION_OPEN_MODAL_EVENT,
+  PROJECT_REPO_URL,
+  FEEDBACK_URL,
+  BUG_REPORT_URL,
+  CONTACT_URL,
+} from './constants';

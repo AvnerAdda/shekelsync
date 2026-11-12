@@ -30,6 +30,7 @@ import { useSpendingCategories } from '@renderer/features/budgets/hooks/useSpend
 import type { PendingExpenseBreakdown } from '@renderer/types/dashboard';
 import type { SpendingCategory } from '@renderer/types/spending-categories';
 import { useTranslation } from 'react-i18next';
+import { getHealthScoreLevel } from '@renderer/features/analysis/utils/health-score-level';
 import type {
   DashboardForecastData,
   DashboardHealthSnapshot,
@@ -193,8 +194,7 @@ const SummaryCards: React.FC<SummaryCardsProps> = ({
 
   const clampPercent = (value: number) => Math.max(0, Math.min(100, Math.round(value)));
 
-  const getMetricColor = (value: number): 'success' | 'warning' | 'error' =>
-    value >= 70 ? 'success' : value >= 40 ? 'warning' : 'error';
+  const getMetricColor = getHealthScoreLevel;
 
   const allocationTotal = allocationItems.reduce((sum, item) => sum + item.actual, 0);
   const hasAllocationData = allocationTotal > 0;
@@ -593,9 +593,7 @@ const SummaryCards: React.FC<SummaryCardsProps> = ({
       icon: <SavingsIcon />,
       mainValue: `${overallHealthScore}`,
       subtitle: t('summary.health.subtitle'),
-      color: overallHealthScore >= 70 ? theme.palette.success.main
-        : overallHealthScore >= 40 ? theme.palette.warning.main
-        : theme.palette.error.main,
+      color: theme.palette[getHealthScoreLevel(overallHealthScore)].main,
       details: (
         <Box sx={{ mt: 0.75, display: 'flex', flexDirection: 'column', gap: 1 }}>
           {hasBudgetData && <Box

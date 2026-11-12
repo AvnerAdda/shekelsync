@@ -293,7 +293,15 @@ function createBetterSqliteMock(dataset: Dataset) {
       pragma: () => undefined,
       prepare: (sql: string) => ({
         run: () => ({ changes: 1 }),
-        get: () => undefined,
+        get: (...params: unknown[]) => {
+          if (!normalize(sql).includes('MAX(substr(date, 1, 10)) AS last_date')) return undefined;
+          const today = String(params[0] ?? '');
+          const dates = dataset.transactions
+            .filter((tx) => tx.status === 'completed' && tx.date.slice(0, 10) <= today)
+            .map((tx) => tx.date.slice(0, 10))
+            .sort();
+          return { last_date: dates.at(-1) ?? null };
+        },
         all: (...params: unknown[]) => executeQuery(dataset, sql, params),
       }),
       close: () => undefined,
@@ -410,6 +418,36 @@ describe('forecast service integration', () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+
+  it('forecasts the days after the last imported transaction when asked to start from the last data', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date(2026, 5, 15, 12));
+    const categories: Category[] = [
+      { id: 2, name: 'Groceries', name_en: 'Groceries', name_fr: 'Courses', icon: 'cart', color: '#2E7D32', parent_id: null, category_type: 'expense' },
+    ];
+    const transactions: Tx[] = ['2026-03', '2026-04', '2026-05', '2026-06'].flatMap((month) => ['03', '10'].map((day) => ({
+      date: `${month}-${day}`,
+      name: 'Grocery Basket',
+      price: -200,
+      category_type: 'expense' as const,
+      category_definition_id: 2,
+      status: 'completed' as const,
+      identifier: `${month}-${day}`,
+      vendor: 'supermarket',
+    })));
+    const forecast = await loadForecastModule({ categories, budgets: [], transactions, exclusions: [] });
+    const options = { forecastDays: 10, historyMonths: 24, monteCarloRuns: 4, noCache: true };
+
+    const live = await forecast.generateDailyForecast(options);
+    expect(live.observedThrough).toBeUndefined();
+    expect(live.forecastPeriod).toMatchObject({ start: '2026-06-16', end: '2026-06-25' });
+
+    const fromLastData = await forecast.generateDailyForecast({ ...options, fromLastData: true });
+    expect(fromLastData.observedThrough).toBe('2026-06-10');
+    // The unobserved days are predicted; the window still ends where the live one does.
+    expect(fromLastData.forecastPeriod).toMatchObject({ start: '2026-06-11', end: '2026-06-25', days: 15 });
+    expect(fromLastData.dailyForecasts[0].date).toBe('2026-06-11');
   });
 
   it('uses cached forecasts when cache is enabled and bypasses with noCache', async () => {

@@ -17,6 +17,7 @@ const TAB_LABELS: Record<SettingsTabId, string> = {
   sync: 'Sync',
   privacy: 'Privacy & Security',
   system: 'System',
+  about: 'About',
 };
 
 const SYNC_INPUT_LABEL = 'Sync draft';
@@ -153,6 +154,13 @@ describe('SettingsPage tab helpers', () => {
   it('resolves legacy hashes to the matching section id within the chosen tab', () => {
     expect(resolveSettingsSectionIdFromHash('#language', 'appearance')).toBe('language');
     expect(resolveSettingsSectionIdFromHash('#diagnostics', 'system')).toBe('diagnostics');
-    expect(resolveSettingsSectionIdFromHash('#about', 'system')).toBe('about');
+    expect(resolveSettingsSectionIdFromHash('#about', 'about')).toBe('about');
+  });
+
+  it('opens the About tab from #about', () => {
+    renderHarness({ pathname: '/settings', hash: '#about' });
+
+    expect(screen.getByRole('tab', { name: 'About' })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByTestId('settings-tabpanel-about')).not.toHaveAttribute('hidden');
   });
 });

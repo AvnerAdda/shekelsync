@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   calculatePortfolioRoi,
+  canOpenPortfolioAccount,
   getPortfolioAccountColor,
   PORTFOLIO_CHART_COLORS,
   resolvePortfolioInstitutionName,
@@ -54,5 +55,13 @@ describe('PortfolioBreakdownSection helpers', () => {
         'en',
       ),
     ).toBe('fallback_vendor');
+  });
+
+  it('opens every account type except synced bank balances', () => {
+    for (const type of ['pension', 'provident', 'study_fund', 'brokerage', 'savings', 'real_estate', 'crypto']) {
+      expect(canOpenPortfolioAccount({ account_type: type })).toBe(true);
+    }
+    expect(canOpenPortfolioAccount({ account_type: 'bank_balance' })).toBe(false);
+    expect(canOpenPortfolioAccount({ account_type: null })).toBe(false);
   });
 });

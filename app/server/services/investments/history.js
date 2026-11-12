@@ -8,9 +8,10 @@ const {
 const {
   DEFAULT_INVESTMENT_TIME_ZONE,
   appendContributionHistory,
-  fetchLinkedInvestmentTransactions,
   toIsoDateInTimeZone,
 } = require('./linked-transaction-rollforward.js');
+const { fetchInvestmentContributionRows, fetchPayrollCostBasisCarry } = require('./contribution-sources.js');
+const { applyCostBasisCarryToHistory } = require('../payroll/accruals.js');
 const {
   toNumber,
 } = require('./account-holdings-rollup.js');
@@ -615,13 +616,17 @@ async function getInvestmentHistory(params = {}) {
     accountHistories.set(accountKey, buildAccountHistoryPoints(rows, institutionByVendorCode));
   });
 
-  const linkedTransactions = await fetchLinkedInvestmentTransactions(
+  // Linked bank flows stay out of currency-normalized history (see below);
+  // estimated payroll contributions are ILS-only and always apply.
+  const linkedTransactions = await fetchInvestmentContributionRows(
     database,
     Array.from(accountHistories.keys()),
     {
       endDate: todayDateStr,
+      includeLinked: !normalizeCurrencies,
     },
   );
+  const costBasisCarry = await fetchPayrollCostBasisCarry(database, linkedTransactions);
   const linkedTransactionsByAccount = new Map();
   linkedTransactions.forEach((transaction) => {
     const accountKey = Number(transaction.account_id);
@@ -641,17 +646,16 @@ async function getInvestmentHistory(params = {}) {
     // Contribution roll-forward uses the linked bank transaction amount. That
     // amount can be denominated differently from the investment account, so it
     // cannot safely be added before FX normalization. Currency-normalized
-    // history therefore remains snapshot-based; performance converts the
-    // linked flows independently on their transaction dates.
-    const augmentedPoints = normalizeCurrencies
-      ? points
-      : appendContributionHistory(
-        points,
-        linkedTransactionsByAccount.get(id) || [],
-        {
-          excludePikadonTransactions: true,
-        },
-      );
+    // history therefore only receives ILS payroll estimates (fetched above);
+    // performance converts the linked flows independently on their dates.
+    const carriedPoints = applyCostBasisCarryToHistory(points, costBasisCarry.get(id)?.schedule);
+    const augmentedPoints = appendContributionHistory(
+      carriedPoints,
+      linkedTransactionsByAccount.get(id) || [],
+      {
+        excludePikadonTransactions: true,
+      },
+    );
     filledPerAccount.set(id, forwardFillHistory(augmentedPoints, startDate, today));
   }
 

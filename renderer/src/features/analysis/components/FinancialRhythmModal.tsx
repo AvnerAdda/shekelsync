@@ -15,6 +15,8 @@ import {
   Alert,
   Button,
   Tooltip as MuiTooltip,
+  Tabs,
+  Tab,
   alpha,
 } from '@mui/material';
 import CloseIcon from '@mui/icons-material/Close';
@@ -26,12 +28,15 @@ import {
   CartesianGrid,
   Tooltip,
   ResponsiveContainer,
-  Area,
-  ComposedChart
 } from 'recharts';
 import { useTranslation } from 'react-i18next';
 import { apiClient } from '@renderer/lib/api-client';
 import { useFinancePrivacy } from '@app/contexts/FinancePrivacyContext';
+import RhythmPeriodView from './rhythm/RhythmPeriodView';
+import RhythmDayView from './rhythm/RhythmDayView';
+import RhythmChecks from './rhythm/RhythmChecks';
+import { clearRhythmComparisonCache, useRhythmComparison } from './rhythm/useRhythmComparison';
+import type { RhythmMetric, RhythmScope } from './rhythm/types';
 
 interface FinancialRhythmModalProps {
   open: boolean;
@@ -39,6 +44,8 @@ interface FinancialRhythmModalProps {
 }
 
 type TimeRange = 'all' | '6months' | '3months';
+type RhythmTab = 'month' | 'week' | 'day' | 'habits';
+const RHYTHM_TABS: RhythmTab[] = ['month', 'week', 'day', 'habits'];
 const CACHE_DURATION_MS = 5 * 60 * 1000;
 
 const CustomTooltip = ({ active, payload, label }: any) => {
@@ -69,10 +76,19 @@ const FinancialRhythmModal: React.FC<FinancialRhythmModalProps> = ({ open, onClo
   const { t } = useTranslation('translation', { keyPrefix: 'analysisPage.modals.rhythm' });
   const { i18n } = useTranslation();
   const { formatCurrency } = useFinancePrivacy();
+  const [tab, setTab] = useState<RhythmTab>('month');
+  const [metric, setMetric] = useState<RhythmMetric>('spend');
+  const [scope, setScope] = useState<RhythmScope>('all');
+  const isComparison = tab !== 'habits';
+  const comparison = useRhythmComparison(
+    isComparison ? tab : 'month',
+    metric,
+    metric === 'income' ? 'all' : scope,
+    open && isComparison,
+  );
   const [loading, setLoading] = useState(false);
   const [timeRange, setTimeRange] = useState<TimeRange>('6months');
   const [viewMode, setViewMode] = useState<'amount' | 'count'>('amount');
-  const [evolutionGranularity, setEvolutionGranularity] = useState<'daily' | 'weekly' | 'monthly'>('weekly');
   const [data, setData] = useState<any>(null);
   const [error, setError] = useState<string | null>(null);
   const [lastFetch, setLastFetch] = useState<Record<TimeRange, number>>({ all: 0, '6months': 0, '3months': 0 });
@@ -96,40 +112,12 @@ const FinancialRhythmModal: React.FC<FinancialRhythmModalProps> = ({ open, onClo
   }, [t, timeRange]);
 
   useEffect(() => {
-    if (open && (Date.now() - lastFetch[timeRange]) > CACHE_DURATION_MS) {
+    if (open && tab === 'habits' && (Date.now() - lastFetch[timeRange]) > CACHE_DURATION_MS) {
       fetchData();
     }
-  }, [fetchData, lastFetch, open, timeRange]);
+  }, [fetchData, lastFetch, open, tab, timeRange]);
 
   const formatCurrencyValue = (value: number) => formatCurrency(value, { absolute: true, maximumFractionDigits: 0 });
-
-  const getEvolutionData = () => {
-    if (!data) return [];
-
-    let evolutionData;
-    switch (evolutionGranularity) {
-      case 'daily':
-        evolutionData = data.dailyEvolution || [];
-        break;
-      case 'monthly':
-        evolutionData = data.monthlyEvolution || [];
-        break;
-      case 'weekly':
-      default:
-        evolutionData = data.weeklyEvolution || [];
-    }
-
-    return evolutionData.map((item: any) => ({
-      label: evolutionGranularity === 'daily'
-        ? new Date(item.date).toLocaleDateString(i18n.language, { month: 'short', day: 'numeric' })
-        : evolutionGranularity === 'monthly'
-        ? new Date(item.date).toLocaleDateString(i18n.language, { year: 'numeric', month: 'short' })
-        : `Week ${item.week.split('-')[1]}`,
-      value: viewMode === 'amount' ? item.amount : item.count,
-      date: item.date,
-      daysAgo: item.daysAgo
-    }));
-  };
 
   const dayLabels = [
     t('days.sun'),
@@ -198,7 +186,75 @@ const FinancialRhythmModal: React.FC<FinancialRhythmModalProps> = ({ open, onClo
           </IconButton>
         </Box>
       </DialogTitle>
-      <DialogContent dividers sx={{ minHeight: { xs: '60vh', sm: '70vh', md: '80vh' }, maxHeight: { xs: '85vh', sm: '85vh', md: '80vh' }, overflow: 'auto', p: { xs: 2, sm: 3 } }}>
+      <Box sx={{ px: { xs: 2, sm: 3 }, borderBottom: 1, borderColor: 'divider' }}>
+        <Tabs
+          value={tab}
+          onChange={(_, value: RhythmTab) => setTab(value)}
+          variant="scrollable"
+          allowScrollButtonsMobile
+        >
+          {RHYTHM_TABS.map((value) => (
+            <Tab key={value} value={value} label={t(`tabs.${value}`)} />
+          ))}
+        </Tabs>
+      </Box>
+      <DialogContent sx={{ minHeight: { xs: '60vh', sm: '70vh', md: '76vh' }, maxHeight: { xs: '85vh', sm: '85vh', md: '76vh' }, overflow: 'auto', p: { xs: 2, sm: 3 } }}>
+        {isComparison ? (
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 2 }}>
+              <ToggleButtonGroup
+                value={metric}
+                exclusive
+                onChange={(_, value) => value && setMetric(value)}
+                size="small"
+                sx={{ bgcolor: alpha(theme.palette.background.paper, 0.5) }}
+              >
+                <ToggleButton value="spend">{t('compare.metric.spend')}</ToggleButton>
+                <ToggleButton value="income">{t('compare.metric.income')}</ToggleButton>
+              </ToggleButtonGroup>
+              {metric === 'spend' && (
+                <MuiTooltip title={t('compare.scope.hint')} placement="bottom-end">
+                  <ToggleButtonGroup
+                    value={scope}
+                    exclusive
+                    onChange={(_, value) => value && setScope(value)}
+                    size="small"
+                    sx={{ bgcolor: alpha(theme.palette.background.paper, 0.5) }}
+                  >
+                    <ToggleButton value="all">{t('compare.scope.all')}</ToggleButton>
+                    <ToggleButton value="everyday">{t('compare.scope.everyday')}</ToggleButton>
+                  </ToggleButtonGroup>
+                </MuiTooltip>
+              )}
+            </Box>
+            {comparison.loading && !comparison.data ? (
+              <Box sx={{ display: 'flex', justifyContent: 'center', py: 8 }}>
+                <CircularProgress />
+              </Box>
+            ) : comparison.error && !comparison.data ? (
+              <Alert severity="error">
+                {t('compare.loadFailed')}
+                <Button onClick={comparison.reload} size="small" sx={{ ml: 2 }}>
+                  {t('../../actions.retry', { defaultValue: 'Retry' })}
+                </Button>
+              </Alert>
+            ) : comparison.data ? (
+              <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, opacity: comparison.loading ? 0.6 : 1, transition: 'opacity 0.2s' }}>
+                <RhythmChecks
+                  checks={comparison.data.checks}
+                  onRepaired={() => {
+                    clearRhythmComparisonCache();
+                    void comparison.reload();
+                  }}
+                />
+                {comparison.data.granularity === 'day'
+                  ? <RhythmDayView data={comparison.data} />
+                  : <RhythmPeriodView data={comparison.data} />}
+              </Box>
+            ) : null}
+          </Box>
+        ) : (
+        <>
         <Box sx={{ mb: 3, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 2 }}>
           <ToggleButtonGroup
             value={timeRange}
@@ -516,95 +572,6 @@ const FinancialRhythmModal: React.FC<FinancialRhythmModalProps> = ({ open, onClo
               </Paper>
             </Grid>
 
-            {/* Evolution Curve */}
-            <Grid size={{ xs: 12 }}>
-              <Paper sx={{ p: 2, bgcolor: alpha(theme.palette.background.paper, 0.4), backdropFilter: 'blur(10px)', border: `1px solid ${alpha(theme.palette.divider, 0.1)}`, borderRadius: 2 }}>
-                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-                  <Box>
-                    <Typography variant="subtitle2" gutterBottom sx={{
-                      fontWeight: "bold"
-                    }}>
-                      {t('evolution.title')}
-                    </Typography>
-                    <Typography
-                      variant="caption"
-                      sx={{
-                        color: "text.secondary",
-                        display: "block"
-                      }}>
-                      {t('evolution.subtitle')}
-                    </Typography>
-                  </Box>
-                  <ToggleButtonGroup
-                    value={evolutionGranularity}
-                    exclusive
-                    onChange={(_, value) => value && setEvolutionGranularity(value)}
-                    size="small"
-                    sx={{ bgcolor: alpha(theme.palette.background.paper, 0.5) }}
-                  >
-                    <ToggleButton value="daily">{t('evolution.daily')}</ToggleButton>
-                    <ToggleButton value="weekly">{t('evolution.weekly')}</ToggleButton>
-                    <ToggleButton value="monthly">{t('evolution.monthly')}</ToggleButton>
-                  </ToggleButtonGroup>
-                </Box>
-
-                <ResponsiveContainer width="100%" height={300} minHeight={300}>
-                  <ComposedChart data={getEvolutionData()} margin={{ top: 5, right: 5, bottom: 5, left: 5 }}>
-                    <defs>
-                      <linearGradient id="evolutionGradient" x1="0" y1="0" x2="1" y2="0">
-                        <stop offset="0%" stopColor={theme.palette.error.main} stopOpacity={0.8} />
-                        <stop offset="50%" stopColor={theme.palette.warning.main} stopOpacity={0.8} />
-                        <stop offset="100%" stopColor={theme.palette.success.main} stopOpacity={0.8} />
-                      </linearGradient>
-                      <linearGradient id="evolutionFill" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="0%" stopColor={theme.palette.warning.main} stopOpacity={0.2} />
-                        <stop offset="100%" stopColor={theme.palette.warning.main} stopOpacity={0} />
-                      </linearGradient>
-                    </defs>
-                    <CartesianGrid strokeDasharray="3 3" stroke={alpha(theme.palette.divider, 0.1)} vertical={false} />
-                    <XAxis dataKey="label" stroke={theme.palette.text.secondary} style={{ fontSize: '0.75rem' }} tickLine={false} axisLine={false} />
-                    <YAxis
-                      stroke={theme.palette.text.secondary}
-                      tickFormatter={viewMode === 'amount' ? formatCurrencyValue : (v) => v.toString()}
-                      style={{ fontSize: '0.75rem' }}
-                      tickLine={false}
-                      axisLine={false}
-                    />
-                    <Tooltip content={<CustomTooltip />} />
-                    <Area
-                      type="monotone"
-                      dataKey="value"
-                      stroke="url(#evolutionGradient)"
-                      fill="url(#evolutionFill)"
-                      strokeWidth={3}
-                      name={viewMode === 'amount' ? t('evolution.spending') : t('evolution.transactions')}
-                    />
-                  </ComposedChart>
-                </ResponsiveContainer>
-
-                {/* Color Legend */}
-                <Box sx={{ display: 'flex', justifyContent: 'center', gap: 3, mt: 2 }}>
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, bgcolor: alpha(theme.palette.background.paper, 0.5), px: 1.5, py: 0.5, borderRadius: 4 }}>
-                    <Box sx={{ width: 12, height: 12, bgcolor: theme.palette.error.main, borderRadius: '50%' }} />
-                    <Typography variant="caption" sx={{
-                      color: "text.secondary"
-                    }}>{t('evolution.oldest')}</Typography>
-                  </Box>
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, bgcolor: alpha(theme.palette.background.paper, 0.5), px: 1.5, py: 0.5, borderRadius: 4 }}>
-                    <Box sx={{ width: 12, height: 12, bgcolor: theme.palette.warning.main, borderRadius: '50%' }} />
-                    <Typography variant="caption" sx={{
-                      color: "text.secondary"
-                    }}>{t('evolution.recent')}</Typography>
-                  </Box>
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, bgcolor: alpha(theme.palette.background.paper, 0.5), px: 1.5, py: 0.5, borderRadius: 4 }}>
-                    <Box sx={{ width: 12, height: 12, bgcolor: theme.palette.success.main, borderRadius: '50%' }} />
-                    <Typography variant="caption" sx={{
-                      color: "text.secondary"
-                    }}>{t('evolution.latest')}</Typography>
-                  </Box>
-                </Box>
-              </Paper>
-            </Grid>
           </Grid>
         ) : (
           <Typography align="center" sx={{
@@ -612,6 +579,8 @@ const FinancialRhythmModal: React.FC<FinancialRhythmModalProps> = ({ open, onClo
           }}>
             {t('noData')}
           </Typography>
+        )}
+        </>
         )}
       </DialogContent>
     </Dialog>

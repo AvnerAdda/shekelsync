@@ -13,6 +13,7 @@ const categoryDetailsService = require('../services/analytics/category-details.j
 const transactionsByDateService = require('../services/analytics/transactions-by-date.js');
 const investmentsAnalyticsService = require('../services/analytics/investments.js');
 const temporalService = require('../services/analytics/temporal.js');
+const rhythmComparisonService = require('../services/analytics/rhythm-comparison.js');
 const behavioralService = require('../services/analytics/behavioral.js');
 const extendedForecastService = require('../services/analytics/extended-forecast.js');
 const timeValueService = require('../services/analytics/time-value.js');
@@ -163,6 +164,28 @@ function createAnalyticsRouter() {
         error: 'Failed to fetch temporal analytics',
         message: error?.message || 'Internal server error',
       });
+    }
+  });
+
+  router.get('/rhythm-comparison', async (req, res) => {
+    try {
+      const result = await rhythmComparisonService.getRhythmComparison(req.query || {});
+      res.json(result);
+    } catch (error) {
+      console.error('Rhythm comparison error:', error);
+      res.status(error?.status || 500).json({
+        error: 'Failed to compare spending rhythm',
+        message: error?.message || 'Internal server error',
+      });
+    }
+  });
+
+  router.post('/rhythm-comparison/repair-types', async (_req, res) => {
+    try {
+      res.json(await rhythmComparisonService.repairCategoryTypes());
+    } catch (error) {
+      console.error('Rhythm type repair error:', error);
+      res.status(500).json({ error: 'Failed to repair transaction types' });
     }
   });
 

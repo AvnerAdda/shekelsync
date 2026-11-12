@@ -289,6 +289,85 @@
       "minutes": "~{{count}} min",
       "returnsOn": "Revient le {{date}}"
     },
+    "items": {
+      "deposit": {
+        "salary": {
+          "title": "Le salaire de {{name}} n'est pas arrivé",
+          "description": "Il arrive d'habitude vers le {{date}} (environ {{amount}}). Vos données bancaires vont jusqu'au {{coveredThrough}} et il n'y figure pas.",
+          "descriptionNoAmount": "Il arrive d'habitude vers le {{date}}. Vos données bancaires vont jusqu'au {{coveredThrough}} et il n'y figure pas."
+        },
+        "income": {
+          "title": "Revenu attendu non reçu : {{name}}",
+          "description": "Attendu vers le {{date}} (environ {{amount}}). Les données du compte vont jusqu'au {{coveredThrough}} et il n'y figure pas.",
+          "descriptionNoAmount": "Attendu vers le {{date}}. Les données du compte vont jusqu'au {{coveredThrough}} et il n'y figure pas."
+        },
+        "investment": {
+          "title": "Versement régulier non effectué : {{name}}",
+          "description": "Attendu vers le {{date}} (environ {{amount}}). Les données du compte vont jusqu'au {{coveredThrough}} et il n'y figure pas.",
+          "descriptionNoAmount": "Attendu vers le {{date}}. Les données du compte vont jusqu'au {{coveredThrough}} et il n'y figure pas."
+        }
+      },
+      "subscription": {
+        "missedCharge": {
+          "title": "Prélèvement attendu introuvable : {{name}}",
+          "description": "Prélevé d'habitude vers le {{date}} ({{amount}}). S'il a été résilié, marquez-le comme terminé.",
+          "descriptionNoAmount": "Prélevé d'habitude vers le {{date}}. S'il a été résilié, marquez-le comme terminé."
+        },
+        "priceIncrease": {
+          "title": "{{name}} a augmenté",
+          "description": "De {{previous}} à {{current}} (+{{percent}} %)."
+        },
+        "duplicate": {
+          "title": "Double prélèvement possible : {{name}}",
+          "description": "{{amount}} prélevé plusieurs fois le {{date}} sur la même carte."
+        },
+        "upcomingRenewal": {
+          "title": "{{name}} se renouvelle bientôt",
+          "description": "Prochain prélèvement prévu le {{date}} ({{amount}}).",
+          "descriptionNoAmount": "Prochain prélèvement prévu le {{date}}."
+        },
+        "cancelledStillCharging": {
+          "title": "{{name}} prélevé après résiliation",
+          "description": "Un prélèvement est passé le {{date}}."
+        }
+      },
+      "budget": {
+        "exceeded": {
+          "title": "Budget dépassé : {{category}}",
+          "description": "{{spent}} sur {{budget}} ce mois-ci ({{percent}} %)."
+        },
+        "warning": {
+          "title": "Budget presque atteint : {{category}}",
+          "description": "{{spent}} sur {{budget}} ce mois-ci ({{percent}} %)."
+        },
+        "projected": {
+          "title": "Dépassement de budget prévu : {{category}}",
+          "description": "{{projected}} prévus ce mois-ci pour un budget de {{budget}}."
+        }
+      },
+      "staleSync": {
+        "title": "Comptes à synchroniser",
+        "description": "{{accounts}} comptes ne sont pas synchronisés depuis plus de 48 heures. Des opérations récentes peuvent manquer.",
+        "descriptionOne": "{{account}} n'est pas synchronisé depuis {{days}} jours. Des opérations récentes peuvent manquer."
+      },
+      "uncategorized": {
+        "title": "Transactions sans catégorie",
+        "description": "{{transactions}} transactions ({{amount}}) sans catégorie, absentes des rapports."
+      },
+      "cashFlow": {
+        "title": "L'argent pourrait manquer ce mois-ci",
+        "description": "Au rythme actuel, ce qui reste durera environ {{days}} jours."
+      },
+      "unusualSpending": {
+        "title": "Achat inhabituel chez {{merchant}}",
+        "description": "{{amount}} en {{category}}, bien au-dessus de vos dépenses habituelles.",
+        "descriptionNoCategory": "{{amount}}, bien au-dessus de l'habitude."
+      },
+      "largeTransaction": {
+        "title": "Achat important chez {{merchant}}",
+        "description": "{{amount}} le {{date}}."
+      }
+    },
     "filters": {
       "label": "Filtrer les éléments de la revue",
       "all": "Tout · {{count}}",
@@ -626,7 +705,39 @@
       "appearance": "Apparence",
       "sync": "Synchronisation",
       "privacySecurity": "Confidentialité et sécurité",
-      "system": "Système"
+      "system": "Système",
+      "about": "À propos"
+    },
+    "about": {
+      "title": "À propos de ShekelSync",
+      "version": "Version {{version}}",
+      "description": "ShekelSync est une application de finances personnelles pour les comptes bancaires et cartes de crédit israéliens. Elle synchronise vos transactions, catégorise vos dépenses et les transforme en analyses pour mieux gérer votre argent.",
+      "featuresTitle": "Ce qu'elle fait",
+      "features": {
+        "sync": "Synchronisation automatique avec les banques et cartes israéliennes",
+        "categorize": "Catégorisation intelligente de chaque transaction",
+        "insights": "Score de santé financière et analyses de dépenses personnalisées",
+        "forecast": "Prévisions de trésorerie, budgets et suivi des investissements",
+        "assistant": "Assistant IA optionnel pour vos questions financières"
+      },
+      "madeWith": "Fait avec ❤️ en Israël",
+      "sourceCode": "Code source",
+      "contact": {
+        "title": "Me contacter",
+        "description": "Une question, une idée ou un partenariat en tête ? Contactez-moi directement.",
+        "action": "Prendre contact"
+      },
+      "feedback": {
+        "title": "Commentaires",
+        "description": "Dites-moi ce qui fonctionne, ce qui ne va pas et ce que vous aimeriez voir ensuite.",
+        "action": "Donner mon avis",
+        "bug": "Signaler un bug"
+      },
+      "coffee": {
+        "title": "Offrez-moi un café",
+        "description": "ShekelSync est développé sur mon temps libre. S'il vous aide, un café permet de continuer.",
+        "action": "Offrez-moi un café"
+      }
     },
     "language": {
       "title": "Langue et région",
@@ -752,6 +863,66 @@
       "description": "Activez le masquage des montants pour cacher les chiffres financiers dans toute l'application. Utile en partage d'écran ou en public.",
       "maskOn": "Tous les montants sont actuellement remplacés par des astérisques.",
       "maskOff": "Les montants s'afficheront en clair jusqu'à l'activation du masquage."
+    },
+    "payroll": {
+      "title": "Emploi et épargne salariale",
+      "intro": "La pension, les indemnités de licenciement et la keren hishtalmut sont prélevées sur la fiche de paie et n'arrivent donc jamais sur votre compte bancaire. Saisissez le salaire brut de chaque personne et choisissez quel virement est son salaire : chaque mois où ce salaire arrive, les cotisations prévues sont ajoutées au compte lié jusqu'à la saisie de son prochain relevé réel.",
+      "estimateNote": "Ce sont des estimations. Un relevé réel fait toujours foi : dès que vous en saisissez un, il remplace les estimations jusqu'à sa date.",
+      "loadError": "Impossible de charger les paramètres de salaire.",
+      "members": {
+        "self": "Vous",
+        "spouse": "Conjoint(e)"
+      },
+      "kinds": {
+        "pension": "Pension",
+        "severance": "Indemnités (pitzuim)",
+        "keren_hishtalmut": "Keren hishtalmut"
+      },
+      "card": {
+        "notSetUp": "Pas encore configuré.",
+        "setUp": "Configurer",
+        "edit": "Modifier",
+        "remove": "Supprimer",
+        "gross": "{{amount}} brut / mois",
+        "monthlyTotal": "≈ {{total}}/mois d'épargne long terme ({{employer}} payés par l'employeur)",
+        "noSalaryLink": "Aucun virement de salaire lié : rien ne s'accumule.",
+        "noAccount": "aucun compte",
+        "paused": "En pause",
+        "withdrawableFrom": "Keren hishtalmut disponible à partir du {{date}}",
+        "withdrawableSince": "Keren hishtalmut disponible depuis le {{date}}",
+        "removeBody": "Le lien au salaire et les réglages pension, indemnités et keren hishtalmut sont supprimés. Vos comptes d'investissement et relevés sont conservés."
+      },
+      "dialog": {
+        "title": "Salaire et épargne salariale : {{name}}",
+        "employer": "Employeur",
+        "gross": "Salaire mensuel brut",
+        "grossHelper": "Selon la fiche de paie. La banque ne voit que le virement net.",
+        "deposit": "Virement du salaire",
+        "depositHelper": "Chaque mois où ce virement arrive, les cotisations s'accumulent.",
+        "depositNone": "Aucun (rien ne s'accumule)",
+        "depositMonths": "{{count}} mois",
+        "depositClaimed": "déjà lié à {{member}}",
+        "depositCurrent": "Règle actuelle : « {{pattern}} »",
+        "candidatesEmpty": "Aucun virement récurrent trouvé sur les 6 derniers mois.",
+        "candidatesError": "Impossible de charger les virements récents.",
+        "plansTitle": "Cotisations",
+        "account": "Compte",
+        "accountNone": "Aucun compte",
+        "employeePct": "% salarié",
+        "employerPct": "% employeur",
+        "salaryCap": "Plafond de salaire (₪)",
+        "salaryCapHelper": "Plafond exonéré d'impôt : ₪15 712 en 2026",
+        "startDate": "Accumuler à partir du",
+        "openedDate": "Ouverture du fonds",
+        "openedDateHelper": "Retrait sans impôt à partir du {{date}}, 6 ans après l'ouverture. Laissez vide pour utiliser la date de début d'accumulation.",
+        "planMonthly": "≈ {{total}}/mois",
+        "preview": "Chaque mois : ≈ {{total}} ({{employee}} du salaire, {{employer}} de l'employeur)",
+        "noAccountWarning": "Choisissez un compte pour chaque cotisation active afin qu'elle puisse s'accumuler.",
+        "cancel": "Annuler",
+        "save": "Enregistrer",
+        "saving": "Enregistrement…",
+        "saveError": "Échec de l'enregistrement : {{message}}"
+      }
     },
     "dataExport": {
       "title": "Export de données",
@@ -1542,6 +1713,159 @@
     },
     "modals": {
       "rhythm": {
+        "tabs": {
+          "month": "Mois",
+          "week": "Semaine",
+          "day": "Jour",
+          "habits": "Habitudes"
+        },
+        "compare": {
+          "metric": {
+            "spend": "Dépenses",
+            "income": "Revenus"
+          },
+          "scope": {
+            "all": "Tout",
+            "everyday": "Courant",
+            "hint": "Courant exclut les paiements récurrents (prêt immobilier, abonnements, paiements échelonnés) pour faire ressortir vos dépenses habituelles."
+          },
+          "loadFailed": "Impossible de charger la comparaison.",
+          "notEnoughHistory": "Pas encore assez d'historique synchronisé pour comparer.",
+          "uncategorized": "Sans catégorie",
+          "series": {
+            "current": {
+              "month": "Ce mois-ci",
+              "week": "Cette semaine"
+            },
+            "previous": {
+              "month": "Le mois dernier",
+              "week": "La semaine dernière"
+            },
+            "median": "Habituel",
+            "medianOf": {
+              "month_one": "Habituel (sur {{count}} mois)",
+              "month_other": "Habituel (milieu de {{count}} mois)",
+              "week_one": "Habituel (sur {{count}} semaine)",
+              "week_other": "Habituel (milieu de {{count}} semaines)"
+            },
+            "band": "Plage habituelle"
+          },
+          "axis": {
+            "dayN": "Jour {{day}}",
+            "today": "Aujourd'hui"
+          },
+          "chart": {
+            "title": {
+              "month": "{{metric}} au fil du mois",
+              "week": "{{metric}} au fil de la semaine"
+            },
+            "subtitle": {
+              "month_one": "Cumul par jour du mois, comparé à votre dernier mois complet",
+              "month_other": "Cumul par jour du mois, comparé à vos {{count}} derniers mois complets",
+              "week_one": "Cumul depuis dimanche, comparé à la semaine dernière",
+              "week_other": "Cumul depuis dimanche, comparé à vos {{count}} dernières semaines"
+            }
+          },
+          "drivers": {
+            "title": "Ce qui change",
+            "subtitle": {
+              "month": "Catégories les plus éloignées de l'habituel au jour {{day}}",
+              "week": "Catégories les plus éloignées de l'habituel jusqu'à {{day}}"
+            },
+            "none": "Toutes les catégories sont proches de l'habituel.",
+            "compare": "{{current}} jusqu'ici · habituellement {{typical}}"
+          },
+          "totals": {
+            "title": {
+              "month": "Mois par mois",
+              "week": "Semaine par semaine"
+            },
+            "subtitle": "Totaux complets ; la période en cours affiche sa projection",
+            "soFar": "{{amount}} jusqu'ici",
+            "projected": "En route vers {{amount}}",
+            "legend": "Barre en pointillés : période en cours, projetée jusqu'à sa fin"
+          },
+          "newMerchants": {
+            "title": {
+              "month": "Nouveau ce mois-ci",
+              "week": "Nouveau cette semaine"
+            },
+            "subtitle": "Commerçants sans paiement les mois précédents"
+          },
+          "position": {
+            "month": "Jour {{day}} sur {{length}}",
+            "week": "De dimanche à {{day}}",
+            "day": "7 derniers jours"
+          },
+          "soFar": {
+            "spend": "dépensés jusqu'ici",
+            "income": "reçus jusqu'ici"
+          },
+          "status": {
+            "above": "{{percent}} % au-dessus de l'habituel ({{amount}})",
+            "below": "{{percent}} % en dessous de l'habituel ({{amount}})",
+            "within": "Dans votre plage habituelle",
+            "insufficient": "Pas assez d'historique pour comparer"
+          },
+          "usual": {
+            "month": "Habituellement {{median}} à ce stade (plage {{low}} – {{high}})",
+            "week": "Habituellement {{median}} à ce stade (plage {{low}} – {{high}})",
+            "day": "7 jours habituels : {{median}} (plage {{low}} – {{high}})"
+          },
+          "projection": {
+            "month": "En route vers {{projected}} ce mois-ci · un mois habituel : {{typical}}",
+            "week": "En route vers {{projected}} cette semaine · une semaine habituelle : {{typical}}"
+          },
+          "day": {
+            "unusualCount_one": "{{count}} jour inhabituel ces 6 dernières semaines",
+            "unusualCount_other": "{{count}} jours inhabituels ces 6 dernières semaines",
+            "chartTitle": "{{metric}} par jour",
+            "chartSubtitle": "6 dernières semaines · chaque jour est comparé au même jour de la semaine sur les 8 semaines précédentes",
+            "usualFor": "Habituel pour un {{weekday}} : {{median}} (plage {{low}} – {{high}})",
+            "unusual": "Jour inhabituel",
+            "legendNormal": "Jour",
+            "legendUnusual": "Jour inhabituel",
+            "pickDay": "Choisissez un jour",
+            "clickHint": "Cliquez sur une barre pour voir les transactions du jour",
+            "nothing": "Rien ce jour-là.",
+            "unusualTitle": "Jours inhabituels",
+            "unusualSubtitle": "Au moins le double du haut de la plage habituelle pour ce jour de la semaine",
+            "noUnusual": "Aucun jour inhabituel ces 6 dernières semaines.",
+            "usually": "habituellement {{amount}}"
+          },
+          "checks": {
+            "title_one": "{{count}} vérification des données",
+            "title_other": "{{count}} vérifications des données",
+            "subtitle": "Problèmes qui rendent ces chiffres moins fiables",
+            "uncategorized": "Sans catégorie",
+            "types": {
+              "income": "revenu",
+              "investment": "investissement",
+              "expense": "dépense"
+            },
+            "typeMismatch": {
+              "title_one": "{{count}} transaction est enregistrée comme dépense mais classée dans une catégorie de revenu ou d'investissement",
+              "title_other": "{{count}} transactions sont enregistrées comme dépenses mais classées dans des catégories de revenu ou d'investissement",
+              "body": "Les écrans qui lisent le type enregistré les comptent comme dépenses. La correction donne à chacune le type de sa catégorie.",
+              "item": "{{date}} · {{name}} · {{amount}} → {{category}} ({{categoryType}})",
+              "fix": "Corriger",
+              "failed": "La correction a échoué. Réessayez."
+            },
+            "stale": {
+              "title_one": "{{account}} synchronisé pour la dernière fois le {{date}} (il y a {{count}} jour)",
+              "title_other": "{{account}} synchronisé pour la dernière fois le {{date}} (il y a {{count}} jours)",
+              "titleFailed_one": "{{account}} synchronisé pour la dernière fois le {{date}} (il y a {{count}} jour) et la dernière synchronisation a échoué",
+              "titleFailed_other": "{{account}} synchronisé pour la dernière fois le {{date}} (il y a {{count}} jours) et la dernière synchronisation a échoué",
+              "never": "{{account}} n'a jamais été synchronisé",
+              "body": "Les transactions récentes de ce compte manquent, la période en cours peut donc paraître plus basse qu'en réalité."
+            },
+            "drift": {
+              "title": "{{merchant}} a été classé dans {{category}}",
+              "body_one": "Le {{date}} ({{amount}}). Habituellement : {{usual}} ({{count}} paiement précédent). Vérifiez que c'est correct.",
+              "body_other": "Le {{date}} ({{amount}}). Habituellement : {{usual}} ({{count}} paiements précédents). Vérifiez que c'est correct."
+            }
+          }
+        },
         "title": "Votre rythme financier - Analyse détaillée",
         "timeRange": {
           "3months": "3 mois",
@@ -1848,7 +2172,8 @@
       "metrics": {
         "savings": {
           "label": "Épargne",
-          "tooltip": "Mesure votre taux d'épargne en pourcentage du revenu. Un score élevé indique une meilleure discipline financière et une sécurité accrue."
+          "tooltip": "Mesure votre taux d'épargne en pourcentage du revenu. Un score élevé indique une meilleure discipline financière et une sécurité accrue.",
+          "payrollIncluded": "dont {{amount}} via le salaire"
         },
         "diversity": {
           "label": "Diversification",
@@ -3443,6 +3768,10 @@
       }
     },
     "performanceCard": {
+      "estimatedContributions": "Inclut ≈ {{amount}} de cotisations salariales estimées depuis le {{date}}",
+      "estimatedContributionsHint": "Estimé à partir de votre salaire dans Paramètres → Profil. Remplacé à la saisie du prochain relevé.",
+      "withdrawableFrom": "Retrait sans impôt à partir du {{date}}",
+      "withdrawableSince": "Retrait sans impôt possible depuis le {{date}}",
       "high": "Haut",
       "low": "Bas",
       "value": "Valeur",

@@ -196,6 +196,15 @@ function applyContributionRollforward(
       return;
     }
 
+    // Estimates only extend a real statement. Without one, a few months of
+    // accruals would masquerade as the whole balance.
+    if (Number(transaction?.is_estimated) === 1) {
+      const account = accountsById.get(accountId);
+      if (!normalizeDateOnly(account[dateField]) || toNumber(account[currentValueField]) === null) {
+        return;
+      }
+    }
+
     const effectiveDate = toIsoDateInTimeZone(
       transaction.transaction_datetime || transaction.date,
       timeZone,
@@ -238,6 +247,9 @@ function applyContributionRollforward(
 
     let appliedCount = 0;
     let adjustmentTotal = 0;
+    let estimatedCount = 0;
+    let estimatedTotal = 0;
+    let estimatedThroughDate = null;
 
     transactions.forEach((transaction) => {
       // Every contribution after the original snapshot belongs in the balance,
@@ -248,20 +260,38 @@ function applyContributionRollforward(
 
       currentValue += transaction.contributionAmount;
       costBasis += transaction.contributionAmount;
+
+      if (Number(transaction.is_estimated) === 1) {
+        // Estimated payroll contributions grow the balance but are not a
+        // valuation: keep the statement date so staleness prompts still fire.
+        estimatedTotal += transaction.contributionAmount;
+        estimatedCount += 1;
+        estimatedThroughDate = transaction.effectiveDate;
+        return;
+      }
+
       lastAppliedDate = transaction.effectiveDate;
       adjustmentTotal += transaction.contributionAmount;
       appliedCount += 1;
     });
 
-    if (appliedCount === 0) {
+    if (appliedCount === 0 && estimatedCount === 0) {
       return;
     }
 
     account[currentValueField] = currentValue;
     account[costBasisField] = costBasis;
     account[dateField] = lastAppliedDate;
-    account.linked_contribution_adjustment = adjustmentTotal;
-    account.linked_contribution_count = appliedCount;
+    if (appliedCount > 0) {
+      account.linked_contribution_adjustment = adjustmentTotal;
+      account.linked_contribution_count = appliedCount;
+    }
+    if (estimatedCount > 0) {
+      account.estimated_contribution_adjustment = estimatedTotal;
+      account.estimated_contribution_count = estimatedCount;
+      account.estimated_contribution_since = snapshotDate;
+      account.estimated_contribution_through = estimatedThroughDate;
+    }
   });
 
   return accounts;
@@ -299,10 +329,12 @@ function appendContributionHistory(
       return;
     }
 
-    groupedAdjustments.set(
-      effectiveDate,
-      (groupedAdjustments.get(effectiveDate) || 0) + contributionAmount,
-    );
+    const group = groupedAdjustments.get(effectiveDate) || { total: 0, estimated: 0 };
+    group.total += contributionAmount;
+    if (Number(transaction.is_estimated) === 1) {
+      group.estimated += contributionAmount;
+    }
+    groupedAdjustments.set(effectiveDate, group);
   });
 
   if (groupedAdjustments.size === 0) {
@@ -312,10 +344,11 @@ function appendContributionHistory(
   const augmented = [...points].sort((left, right) => left.date.localeCompare(right.date));
   let lastPoint = { ...augmented[augmented.length - 1] };
   let lastDate = normalizeDateOnly(lastPoint.date);
+  let estimatedSoFar = 0;
 
   Array.from(groupedAdjustments.entries())
     .sort((left, right) => left[0].localeCompare(right[0]))
-    .forEach(([effectiveDate, contributionAmount]) => {
+    .forEach(([effectiveDate, { total: contributionAmount, estimated }]) => {
       if (lastDate && effectiveDate <= lastDate) {
         return;
       }
@@ -323,6 +356,7 @@ function appendContributionHistory(
       const currentValue = (toNumber(lastPoint.currentValue) || 0) + contributionAmount;
       const costBasis = (toNumber(lastPoint.costBasis) || 0) + contributionAmount;
       const gainLoss = currentValue - costBasis;
+      estimatedSoFar += estimated;
 
       lastPoint = {
         ...lastPoint,
@@ -332,6 +366,13 @@ function appendContributionHistory(
         gainLoss,
         roi: costBasis > 0 ? (gainLoss / costBasis) * 100 : 0,
       };
+      if (estimatedSoFar > 0) {
+        lastPoint.estimatedContributionTotal = estimatedSoFar;
+        if (estimated > 0) {
+          // An estimated payroll contribution is not a valuation.
+          lastPoint.isActualValuation = false;
+        }
+      }
       lastDate = effectiveDate;
       augmented.push(lastPoint);
     });

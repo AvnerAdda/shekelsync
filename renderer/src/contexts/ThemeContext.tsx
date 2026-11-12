@@ -5,6 +5,7 @@ import rtlPlugin from 'stylis-plugin-rtl';
 import { ThemeProvider } from '@mui/material/styles';
 import { createTheme as createMuiTheme } from '@mui/material/styles';
 import CssBaseline from '@mui/material/CssBaseline';
+import { HEALTH_SCORE_THRESHOLDS } from '@renderer/features/analysis/utils/health-score-level';
 
 type ThemeMode = 'light' | 'dark' | 'system';
 type FontSize = 'small' | 'medium' | 'large';
@@ -20,12 +21,12 @@ interface ThemeContextType {
 }
 
 function getPrimaryPalette(score: number | null, isDark: boolean) {
-  if (score === null || score >= 80) {
+  if (score === null || score >= HEALTH_SCORE_THRESHOLDS.excellent) {
     return isDark
       ? { main: '#86D19A', light: '#B6E5C2', dark: '#5DAF75', contrastText: '#102218' }
       : { main: '#2F6B4F', light: '#5A9274', dark: '#204B38', contrastText: '#FFFFFF' };
   }
-  if (score >= 60) {
+  if (score >= HEALTH_SCORE_THRESHOLDS.good) {
     return isDark
       ? { main: '#FCD34D', light: '#FDE68A', dark: '#F59E0B', contrastText: '#1C1100' }
       : { main: '#B45309', light: '#D97706', dark: '#92400E', contrastText: '#FFFFFF' };

@@ -25,6 +25,7 @@ import type {
 } from '../types';
 import MoneyReviewItemActions from './MoneyReviewItemActions';
 import { buildMoneyReviewTimeScopeLabel } from '../time-scope';
+import { useMoneyReviewItemText } from '../item-text';
 
 const GROUP_ICONS: Record<MoneyReviewGroup, React.ReactNode> = {
   data: <DataObjectIcon fontSize="small" />,
@@ -71,6 +72,7 @@ const MoneyReviewCard: React.FC<MoneyReviewCardProps> = ({
   const theme = useTheme();
   const { t, i18n } = useTranslation('translation', { keyPrefix: 'moneyReview' });
   const { formatCurrency } = useFinancePrivacy();
+  const itemText = useMoneyReviewItemText()(item);
   const timeScopeLabel = buildMoneyReviewTimeScopeLabel(item, i18n?.language || 'en');
   const isCompleted = ['resolved', 'dismissed'].includes(item.status);
   const isSnoozed = item.status === 'snoozed';
@@ -176,7 +178,7 @@ const MoneyReviewCard: React.FC<MoneyReviewCardProps> = ({
                     {String(position).padStart(2, '0')}
                   </Typography>
                   <Typography component="h3" variant="subtitle1" sx={{ fontWeight: 800, lineHeight: 1.35 }}>
-                    {item.title}
+                    {itemText.title}
                   </Typography>
                   <Chip
                     size="small"
@@ -197,7 +199,7 @@ const MoneyReviewCard: React.FC<MoneyReviewCardProps> = ({
                 </Stack>
 
                 <Typography color="text.secondary" sx={{ mt: 0.75, lineHeight: 1.55 }}>
-                  {item.description}
+                  {itemText.description}
                 </Typography>
 
                 <Stack direction="row" spacing={1.5} useFlexGap sx={{ mt: 1.5, alignItems: 'center', flexWrap: 'wrap' }}>

@@ -41,6 +41,7 @@ import type { CorrectionTarget } from '@renderer/features/financial-truth/types'
 import { useFinancialTruth } from '@renderer/features/financial-truth/useFinancialTruth';
 import { buildMoneyReviewTimeScopeLabel } from '../time-scope';
 import { buildMoneyReviewCorrectionTarget } from '../correction-target';
+import { useMoneyReviewItemText } from '../item-text';
 
 const GROUP_ICONS: Record<MoneyReviewGroup, React.ReactNode> = {
   data: <DataObjectIcon />,
@@ -81,6 +82,7 @@ const MoneyReviewItemDetailDialog: React.FC<MoneyReviewItemDetailDialogProps> = 
   const fullScreen = useMediaQuery(theme.breakpoints.down('sm'));
   const { t, i18n } = useTranslation('translation', { keyPrefix: 'moneyReview' });
   const { t: tRoot } = useTranslation('translation');
+  const getItemText = useMoneyReviewItemText();
   const { formatCurrency } = useFinancePrivacy();
   const insight = useMemo(() => item ? buildMoneyReviewInsight(item) : null, [item]);
   const timeScopeLabel = item
@@ -89,8 +91,11 @@ const MoneyReviewItemDetailDialog: React.FC<MoneyReviewItemDetailDialogProps> = 
   const [correctionTarget, setCorrectionTarget] = useState<CorrectionTarget | null>(null);
   const truth = useFinancialTruth();
   const availableCorrectionTarget = useMemo(
-    () => item ? buildMoneyReviewCorrectionTarget(item) : null,
-    [item],
+    () => {
+      const target = item ? buildMoneyReviewCorrectionTarget(item) : null;
+      return target && item ? { ...target, title: getItemText(item).title } : target;
+    },
+    [getItemText, item],
   );
   const returnCorrectionId = item?.metadata?.source === 'financial_truth' ? Number(item.metadata?.correctionId) : null;
 
@@ -192,7 +197,7 @@ const MoneyReviewItemDetailDialog: React.FC<MoneyReviewItemDetailDialogProps> = 
                   )}
                 </Stack>
                 <Typography id="money-review-item-title" component="h2" variant="h5" sx={{ mt: 0.75, fontWeight: 850, lineHeight: 1.25 }}>
-                  {item.title}
+                  {getItemText(item).title}
                 </Typography>
               </Box>
             </Stack>
@@ -207,7 +212,7 @@ const MoneyReviewItemDetailDialog: React.FC<MoneyReviewItemDetailDialogProps> = 
 
           <DialogContent sx={{ px: { xs: 2, sm: 3 }, pb: 2.5 }}>
             <Typography color="text.secondary" sx={{ lineHeight: 1.6, maxWidth: 720 }}>
-              {item.description}
+              {getItemText(item).description}
             </Typography>
 
             <Paper

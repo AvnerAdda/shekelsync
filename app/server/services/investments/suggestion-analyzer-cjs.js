@@ -96,7 +96,7 @@ function getAccountTypeLabel(accountType) {
   const labels = {
     pension: 'קרן פנסיה',
     provident: 'קרן השתלמות',
-    study_fund: 'קופת גמל לחינוך',
+    study_fund: 'קופת גמל',
     brokerage: 'חשבון ברוקר',
     crypto: 'מטבעות דיגיטליים',
     savings: 'חשבון חיסכון',

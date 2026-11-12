@@ -576,29 +576,43 @@ const TransactionHistorySection: React.FC<TransactionHistorySectionProps> = ({
 
     // Historical data up to today
     const actualHistoricalData = baseHistoricalData.filter((item: any) => item.date <= actualEndDate);
-    // Leave historical series undefined for the no-data gap.
+    const forecastByDate = new Map<string, any>(
+      forecastData.dailyForecasts.map((d: any) => [d.date, d])
+    );
+    const forecastFields = (d: any) => ({
+      forecastIncome: d.income || 0,
+      forecastExpenses: d.expenses || 0,
+      forecastInvestments: getForecastInvestments(d),
+      chartBreakdown: d.chartBreakdown,
+      originalForecastIncome: d.income || 0,
+      originalForecastExpenses: d.expenses || 0,
+      originalForecastInvestments: getForecastInvestments(d),
+      ...getForecastTierFields(d),
+    });
+    // Gap days have no actuals (undefined hides their bars) but keep the
+    // prediction the server made from the last day with data.
     const historicalData = actualHistoricalData.map((item: any) => {
-      const isInGapPeriod = gapPeriodInfo.hasGap && gapPeriodInfo.gapStartDate && item.date > gapPeriodInfo.gapStartDate;
-      
+      const isInGapPeriod = Boolean(gapPeriodInfo.hasGap && gapPeriodInfo.gapStartDate && item.date > gapPeriodInfo.gapStartDate);
+      const gapForecast = isInGapPeriod ? forecastByDate.get(item.date) : undefined;
+
       return {
         ...item,
-        // Undefined values prevent historical bars from rendering in the gap.
         income: isInGapPeriod ? undefined : (item.income || 0),
         expenses: isInGapPeriod ? undefined : (item.expenses || 0),
         investments: isInGapPeriod ? undefined : (item.investments || 0),
         forecastIncome: undefined,
         forecastExpenses: undefined,
         forecastInvestments: undefined,
+        ...(gapForecast ? forecastFields(gapForecast) : {}),
+        hasGapForecast: Boolean(gapForecast),
         isForecast: false,
         isInGap: isInGapPeriod,
-        // Store original values for log scale and tooltips
         originalIncome: item.income || 0,
         originalExpenses: item.expenses || 0,
         originalInvestments: item.investments || 0,
       };
     });
 
-    // Forecast entries - future dates after today
     const forecastEntries = forecastData.dailyForecasts
       .filter((d: any) => d.date > actualEndDate && d.date <= chartEndDate)
       .map((d: any) => ({
@@ -606,54 +620,41 @@ const TransactionHistorySection: React.FC<TransactionHistorySectionProps> = ({
         income: undefined,
         expenses: undefined,
         investments: undefined,
-        forecastIncome: d.income || 0,
-        forecastExpenses: d.expenses || 0,
-        forecastInvestments: getForecastInvestments(d),
-        chartBreakdown: d.chartBreakdown,
+        ...forecastFields(d),
         isForecast: true,
         isInGap: false,
-        // Store original values for tooltips
-        originalForecastIncome: d.income || 0,
-        originalForecastExpenses: d.expenses || 0,
-        originalForecastInvestments: getForecastInvestments(d),
-        ...getForecastTierFields(d),
       }));
 
     const combinedData = [...historicalData, ...forecastEntries];
 
     // Sub-shekel amounts stay at zero on the log axis; tooltips retain exact values.
     if (yAxisScale === 'log') {
-      return combinedData.map(item => {
-        const toLog = (val: number | undefined) => Math.log10(Math.max(1, val || 0));
-
-        if (item.isForecast) {
-          // Forecast items - transform forecast values
-          const forecastIncome = toLog(item.forecastIncome);
-          const forecastExpenses = toLog(item.forecastExpenses);
-          const forecastInvestments = item.forecastInvestments === undefined
-            ? undefined
-            : Math.sign(item.forecastInvestments) * toLog(Math.abs(item.forecastInvestments));
-          return {
-            ...item,
-            forecastIncome,
-            forecastExpenses,
-            forecastInvestments,
-            ...getLogForecastTierFields(item, 'Income', forecastIncome),
-            ...getLogForecastTierFields(item, 'Expenses', forecastExpenses),
-            ...getLogForecastTierFields(item, 'Investments', forecastInvestments),
-            originalForecastIncome: item.originalForecastIncome,
-            originalForecastExpenses: item.originalForecastExpenses,
-          };
-        } else {
-          // Historical items - transform via parent function for consistency
-          const logItem = getLogScaleData([item])[0];
-          return {
-            ...logItem,
-            originalIncome: item.originalIncome,
-            originalExpenses: item.originalExpenses,
-            originalInvestments: item.originalInvestments,
-          };
-        }
+      const toLog = (val: number | undefined) => Math.log10(Math.max(1, val || 0));
+      const logForecastFields = (item: any) => {
+        const forecastIncome = toLog(item.forecastIncome);
+        const forecastExpenses = toLog(item.forecastExpenses);
+        const forecastInvestments = item.forecastInvestments === undefined
+          ? undefined
+          : Math.sign(item.forecastInvestments) * toLog(Math.abs(item.forecastInvestments));
+        return {
+          forecastIncome,
+          forecastExpenses,
+          forecastInvestments,
+          ...getLogForecastTierFields(item, 'Income', forecastIncome),
+          ...getLogForecastTierFields(item, 'Expenses', forecastExpenses),
+          ...getLogForecastTierFields(item, 'Investments', forecastInvestments),
+        };
+      };
+      return combinedData.map((item: any) => {
+        if (item.isForecast) return { ...item, ...logForecastFields(item) };
+        const logItem = getLogScaleData([item])[0];
+        return {
+          ...logItem,
+          originalIncome: item.originalIncome,
+          originalExpenses: item.originalExpenses,
+          originalInvestments: item.originalInvestments,
+          ...(item.hasGapForecast ? logForecastFields(item) : {}),
+        };
       });
     }
 
@@ -741,7 +742,7 @@ const TransactionHistorySection: React.FC<TransactionHistorySectionProps> = ({
   };
   const renderForecastTierDetails = (row: any, flow: BarFlow) => {
     const { key } = FORECAST_FLOWS.find(item => item.flow === flow)!;
-    if (!row.isForecast || splitBars || row[tierDataKey(key, 'sure')] === undefined) return null;
+    if (!(row.isForecast || row.hasGapForecast) || splitBars || row[tierDataKey(key, 'sure')] === undefined) return null;
     const amount = (tier: ConfidenceTier) => row[originalTierDataKey(key, tier)] ?? row[tierDataKey(key, tier)];
     const tiers = CONFIDENCE_TIERS.filter(tier => Math.abs(amount(tier)) >= 0.005);
     if (tiers.length === 0) return null;
@@ -811,105 +812,109 @@ const TransactionHistorySection: React.FC<TransactionHistorySectionProps> = ({
       }));
     }
 
-    const lastHistorical = actualHistoricalData[actualHistoricalData.length - 1];
-    const lastHistoricalDate = lastHistorical.date;
-    const startingCumulative = lastHistorical.cumulative;
-    const startingAfterInvesting = lastHistorical.historicalAfterInvesting;
-    const startingInvested = lastHistorical.historicalInvestedCumulative;
-    
-    // Get scenario daily data
+    // The projection starts from the last day with data. Days after it have no
+    // actuals, so they take the server's prediction (made as of that day).
+    const anchorDate = gapPeriodInfo.hasGap && gapPeriodInfo.gapStartDate
+      ? gapPeriodInfo.gapStartDate
+      : actualHistoricalData[actualHistoricalData.length - 1].date;
+    const observedData = actualHistoricalData.filter((item: any) => item.date <= anchorDate);
+    const anchor = observedData[observedData.length - 1] ?? actualHistoricalData[actualHistoricalData.length - 1];
+    const startingCumulative = anchor.cumulative;
+    const startingAfterInvesting = anchor.historicalAfterInvesting;
+    const startingInvested = anchor.historicalInvestedCumulative;
+
     const scenarioByDate = (daily: any[] | undefined) => new Map<string, any>((daily || [])
       .map((day: any) => [day.date, day]));
     const p10ByDate = scenarioByDate(forecastData.scenarios?.p10?.daily);
     const p50ByDate = scenarioByDate(forecastData.scenarios?.p50?.daily);
     const p90ByDate = scenarioByDate(forecastData.scenarios?.p90?.daily);
+    const forecastByDate = scenarioByDate(forecastData.dailyForecasts);
     const intervalsByDate = new Map<string, any>((forecastData.predictionIntervals?.daily || [])
       .map((day: any) => [day.date, day]));
     const hasIntervals = intervalsByDate.size > 0;
-    
-    // Historical data - mark gap period items for tooltip
-    const historicalData = actualHistoricalData.map((item: any, idx: number) => {
-      const isInGapPeriod = gapPeriodInfo.hasGap && gapPeriodInfo.gapStartDate && item.date > gapPeriodInfo.gapStartDate;
-      
-      return {
-        ...item,
-        historicalCumulative: item.cumulative,
-        forecastCumulative: undefined,
-        forecastAfterInvesting: undefined,
-        forecastInvestedCumulative: undefined,
-        p10Cumulative: undefined,
-        p50Cumulative: undefined,
-        p90Cumulative: undefined,
-        isInGap: isInGapPeriod,
-        isForecast: false,
-      };
-    });
-    
-    // Add bridge point values to last historical item for forecast lines
-    if (historicalData.length > 0) {
-      historicalData[historicalData.length - 1] = {
-        ...historicalData[historicalData.length - 1],
-        forecastCumulative: startingCumulative,
-        forecastAfterInvesting: startingAfterInvesting,
-        forecastInvestedCumulative: startingInvested,
-        p10Cumulative: startingCumulative,
-        p50Cumulative: startingCumulative,
-        p90Cumulative: startingCumulative,
-        forecastRange: hasIntervals ? [startingCumulative, startingCumulative] : undefined,
-      };
-    }
-    
-    // Build forecast entries with scenario cumulative values
+    const boundsFor = (date: string) => {
+      const interval = intervalsByDate.get(date);
+      return useOperatingBasis ? interval?.cumulativeOperatingCashFlow : interval?.cumulativeCashFlow;
+    };
+    // Interval sums run from the forecast's first day; drop any part on or before the anchor.
+    const anchorBounds = boundsFor(anchorDate);
+
+    const historicalData = observedData.map((item: any) => ({
+      ...item,
+      historicalCumulative: item.cumulative,
+      forecastCumulative: undefined,
+      forecastAfterInvesting: undefined,
+      forecastInvestedCumulative: undefined,
+      p10Cumulative: undefined,
+      p50Cumulative: undefined,
+      p90Cumulative: undefined,
+      isInGap: false,
+      isForecast: false,
+    }));
+    // Bridge point: both lines meet at the anchor.
+    historicalData[historicalData.length - 1] = {
+      ...historicalData[historicalData.length - 1],
+      forecastCumulative: startingCumulative,
+      forecastAfterInvesting: startingAfterInvesting,
+      forecastInvestedCumulative: startingInvested,
+      p10Cumulative: startingCumulative,
+      p50Cumulative: startingCumulative,
+      p90Cumulative: startingCumulative,
+      forecastRange: hasIntervals ? [startingCumulative, startingCumulative] : undefined,
+    };
+
+    const projectionDates = [...new Set([
+      ...actualHistoricalData.filter((item: any) => item.date > anchorDate).map((item: any) => item.date),
+      ...forecastData.dailyForecasts.map((d: any) => d.date)
+        .filter((date: string) => date > anchorDate && date <= chartEndDate),
+    ])].sort();
+
     let expectedCumulative = startingCumulative;
     let afterInvesting: number | undefined = startingAfterInvesting;
     let investedCumulative: number | undefined = startingInvested;
     let p10Cumulative = startingCumulative;
     let p50Cumulative = startingCumulative;
     let p90Cumulative = startingCumulative;
-    
-    const forecastEntries = forecastData.dailyForecasts
-      .filter((d: any) => d.date > lastHistoricalDate && d.date <= chartEndDate)
-      .map((d: any, idx: number) => {
-        const expectedCashFlow = getCashFlowForForecast(d, useOperatingBasis);
-        expectedCumulative += expectedCashFlow;
-        const investments = getForecastInvestments(d);
-        // Both forecast lines share the historical anchor. Missing investment
-        // data breaks the cumulative projection; later days cannot fill that gap.
-        afterInvesting = afterInvesting !== undefined && investments !== undefined
-          ? afterInvesting + expectedCashFlow - investments
-          : undefined;
-        investedCumulative = investedCumulative !== undefined && investments !== undefined
-          ? investedCumulative + investments
-          : undefined;
 
-        const p10Day = p10ByDate.get(d.date);
-        const p50Day = p50ByDate.get(d.date);
-        const p90Day = p90ByDate.get(d.date);
+    const forecastEntries = projectionDates.map((date: string) => {
+      const d = forecastByDate.get(date);
+      const expectedCashFlow = d ? getCashFlowForForecast(d, useOperatingBasis) : 0;
+      expectedCumulative += expectedCashFlow;
+      const investments = d ? getForecastInvestments(d) : 0;
+      // Missing investment data breaks the after-investing projection; later days cannot fill that gap.
+      afterInvesting = afterInvesting !== undefined && investments !== undefined
+        ? afterInvesting + expectedCashFlow - investments
+        : undefined;
+      investedCumulative = investedCumulative !== undefined && investments !== undefined
+        ? investedCumulative + investments
+        : undefined;
 
-        p10Cumulative += getCashFlowForForecast(p10Day || d, useOperatingBasis);
-        p50Cumulative += getCashFlowForForecast(p50Day || d, useOperatingBasis);
-        p90Cumulative += getCashFlowForForecast(p90Day || d, useOperatingBasis);
-        const interval = intervalsByDate.get(d.date);
-        const bounds = useOperatingBasis ? interval?.cumulativeOperatingCashFlow : interval?.cumulativeCashFlow;
-        const lower = bounds ? startingCumulative + bounds.p10 : undefined;
-        const median = bounds ? startingCumulative + bounds.p50 : undefined;
-        const upper = bounds ? startingCumulative + bounds.p90 : undefined;
+      if (d) {
+        p10Cumulative += getCashFlowForForecast(p10ByDate.get(date) || d, useOperatingBasis);
+        p50Cumulative += getCashFlowForForecast(p50ByDate.get(date) || d, useOperatingBasis);
+        p90Cumulative += getCashFlowForForecast(p90ByDate.get(date) || d, useOperatingBasis);
+      }
+      const bounds = boundsFor(date);
+      const offset = (key: 'p10' | 'p50' | 'p90') => startingCumulative + bounds[key] - (anchorBounds?.[key] ?? 0);
+      const lower = bounds ? offset('p10') : undefined;
+      const median = bounds ? offset('p50') : undefined;
+      const upper = bounds ? offset('p90') : undefined;
 
-        return {
-          date: d.date,
-          historicalCumulative: undefined,
-          cumulative: expectedCumulative,
-          forecastCumulative: expectedCumulative,
-          forecastAfterInvesting: afterInvesting,
-          forecastInvestedCumulative: investedCumulative,
-          p10Cumulative: lower ?? p10Cumulative,
-          p50Cumulative: median ?? p50Cumulative,
-          p90Cumulative: upper ?? p90Cumulative,
-          forecastRange: lower !== undefined && upper !== undefined ? [lower, upper] : undefined,
-          isForecast: true,
-          isInGap: false,
-        };
-      });
+      return {
+        date,
+        historicalCumulative: undefined,
+        cumulative: expectedCumulative,
+        forecastCumulative: expectedCumulative,
+        forecastAfterInvesting: afterInvesting,
+        forecastInvestedCumulative: investedCumulative,
+        p10Cumulative: lower ?? p10Cumulative,
+        p50Cumulative: median ?? p50Cumulative,
+        p90Cumulative: upper ?? p90Cumulative,
+        forecastRange: lower !== undefined && upper !== undefined ? [lower, upper] : undefined,
+        isForecast: true,
+        isInGap: date <= todayStr,
+      };
+    });
 
     return [...historicalData, ...forecastEntries];
   }, [getNetPositionData, forecastData, aggregationPeriod, gapPeriodInfo, rangeEndsToday, useOperatingBasis, projectionEndDate]);
@@ -1386,9 +1391,10 @@ const TransactionHistorySection: React.FC<TransactionHistorySectionProps> = ({
             content={({ active, payload }) => {
               if (!active || !payload || payload.length === 0) return null;
               const data = payload[0].payload;
-              const isForecast = data.isForecast;
-              const isInGap = data.isInGap;
-              if (isForecast && !showForecast) return null;
+              if (data.isForecast && !showForecast) return null;
+              const isForecast = data.isForecast || (data.hasGapForecast && showForecast);
+              // A gap day with a prediction reads as a forecast; without one it is just missing.
+              const isInGap = data.isInGap && !isForecast;
 
               // Use the matching historical/forecast fields and preserve legitimate zero values.
               const formatAmount = isForecast
@@ -1422,7 +1428,7 @@ const TransactionHistorySection: React.FC<TransactionHistorySectionProps> = ({
                     }}>
                       {format(parseLocalDate(data.date), 'MMM dd, yyyy')}
                     </Typography>
-                    {isInGap && <Chip label={t('legend.noData')} size="small" color="default" />}
+                    {data.isInGap && <Chip label={t('legend.noData')} size="small" color="default" />}
                     {isForecast && <Chip label="Forecast" size="small" color="warning" />}
                   </Box>
                   <Typography variant="body2" color={isInGap ? 'text.secondary' : 'success.main'}>
@@ -2119,9 +2125,12 @@ const TransactionHistorySection: React.FC<TransactionHistorySectionProps> = ({
         today.setHours(0, 0, 0, 0);
         const hoveredDateObj = parseLocalDate(hoveredDate);
         hoveredDateObj.setHours(0, 0, 0, 0);
-        const isForecastDate = !transactionPeriod && hoveredDateObj > today;
+        const todayDateStr = format(today, 'yyyy-MM-dd');
+        const isGapDate = !transactionPeriod && gapPeriodInfo.hasGap && gapPeriodInfo.gapStartDate
+          && hoveredDate > gapPeriodInfo.gapStartDate && hoveredDate <= todayDateStr;
+        const isForecastDate = !transactionPeriod && (hoveredDateObj > today || isGapDate);
 
-        // Find forecast data for this date if it's a future date
+        // Find forecast data for this date if it's a future or gap date
         let forecastDayData = null;
         if (isForecastDate && forecastData?.dailyForecasts) {
           forecastDayData = forecastData.dailyForecasts.find((d: any) => d.date === hoveredDate);

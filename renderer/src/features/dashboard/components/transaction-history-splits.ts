@@ -27,6 +27,8 @@ export interface SplitBarDetail extends SplitBarSeries {
 const flows: BarFlow[] = ['income', 'expenses', 'investments'];
 const number = (value: unknown) => typeof value === 'number' && Number.isFinite(value) ? value : 0;
 const nonzero = (value: number) => Math.abs(value) > 1e-8;
+// A day without imported data can still carry the prediction made for it.
+const isForecastRow = (row: Record<string, any>) => Boolean(row.isForecast || row.hasGapForecast);
 
 /** Build three independent stacks. Amounts stay in currency for tooltip display. */
 export function buildSplitBarData(
@@ -38,11 +40,12 @@ export function buildSplitBarData(
   const groupsByFlow = new Map<BarFlow, Map<string, string>>(flows.map(flow => [flow, new Map()]));
   const groupedRows = rows.map(row => {
     const groups = new Map<BarFlow, Map<string, { label: string; amount: number }>>();
-    if (row.isInGap || (row.isForecast && !options.showForecast)) return groups;
+    const forecastRow = isForecastRow(row);
+    if ((row.isInGap && !row.hasGapForecast) || (forecastRow && !options.showForecast)) return groups;
 
     for (const flow of flows) {
       const suffix = flow[0].toUpperCase() + flow.slice(1);
-      const total = row.isForecast
+      const total = forecastRow
         ? row[`originalForecast${suffix}`] ?? row[`forecast${suffix}`]
         : row[`original${suffix}`] ?? row[flow];
       if (total == null) continue;
@@ -56,7 +59,7 @@ export function buildSplitBarData(
           ? `category:${item.categoryId}`
           : name ? `name:${name}` : 'unknown';
         let amount = number(item[flow]);
-        if (!row.isForecast) {
+        if (!forecastRow) {
           if (flow === 'income' && options.includeCapitalReturns) amount += number(item.capitalReturns);
           if (flow === 'expenses') {
             amount = options.includeCardRepayments
@@ -90,7 +93,7 @@ export function buildSplitBarData(
     entries.forEach(([key, label], colorIndex) => {
       for (const isForecast of [false, true]) {
         if (isForecast && !options.showForecast) continue;
-        if (isForecast && !rows.some(row => row.isForecast)) continue;
+        if (isForecast && !rows.some(isForecastRow)) continue;
         const item = { dataKey: `split_${flow}_${colorIndex}${isForecast ? '_forecast' : ''}`,
           flow, label, isForecast, colorIndex };
         series.push(item);
@@ -105,7 +108,7 @@ export function buildSplitBarData(
       const positive = [...values.values()].reduce((sum, value) => sum + Math.max(0, value.amount), 0);
       const negative = [...values.values()].reduce((sum, value) => sum + Math.max(0, -value.amount), 0);
       for (const [key, value] of values) {
-        const item = lookup.get(JSON.stringify([flow, key, Boolean(row.isForecast)]))!;
+        const item = lookup.get(JSON.stringify([flow, key, isForecastRow(row)]))!;
         const total = value.amount < 0 ? negative : positive;
         // Log the stack total once, then retain each segment's share of that total.
         // Logging every segment independently would inflate the bar height.

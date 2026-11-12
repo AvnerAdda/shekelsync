@@ -1,5 +1,6 @@
 const database = require('../database.js');
 const { BANK_CATEGORY_NAME } = require('../../../lib/category-constants.js');
+const { fetchHouseholdPayrollContributions } = require('../payroll/accruals.js');
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -180,7 +181,14 @@ function computeEntropyScore(expenseTransactions) {
   };
 }
 
-function computeEnhancedScores({ months, monthlyCashFlow, expenses, currentBalance, dateRange }) {
+function computeEnhancedScores({
+  months,
+  monthlyCashFlow,
+  expenses,
+  currentBalance,
+  dateRange,
+  payrollSavings = 0,
+}) {
   const notes = [];
   const hasIncome = monthlyCashFlow.some((m) => m.income > 0);
   const hasExpenses = monthlyCashFlow.some((m) => m.expense > 0);
@@ -190,8 +198,13 @@ function computeEnhancedScores({ months, monthlyCashFlow, expenses, currentBalan
   const monthsEquivalent = Math.max(1, dayCount / 30);
   const avgMonthlyIncome = periodIncome / monthsEquivalent;
 
-  // Savings: time-window savings rate, banded mapping.
-  const savingsRate = periodIncome > 0 ? (periodIncome - periodExpenses) / periodIncome : 0;
+  // Savings: time-window savings rate, banded mapping. Payroll savings
+  // (pension, severance, keren hishtalmut) never reach the bank: they are
+  // both income and savings on top of the net salary the bank sees. They only
+  // count when bank income exists, so a missing scrape cannot inflate the rate.
+  const payroll = periodIncome > 0 && Number(payrollSavings) > 0 ? Number(payrollSavings) : 0;
+  const savingsBase = periodIncome + payroll;
+  const savingsRate = savingsBase > 0 ? (periodIncome + payroll - periodExpenses) / savingsBase : 0;
   const savingsScore = clamp(
     scaleBanded(savingsRate, [
       [-0.5, 0],
@@ -334,6 +347,8 @@ function computeEnhancedScores({ months, monthlyCashFlow, expenses, currentBalan
     meta: {
       periodIncome,
       periodExpenses,
+      payrollSavings: Math.round(payroll),
+      savingsRate: Number(savingsRate.toFixed(4)),
       currentBalance,
       avgDailyBurn: Math.round(avgDailyBurn),
       runwayDays: Math.round(runwayDays),
@@ -356,6 +371,7 @@ async function computeEnhancedHealthScore({ months, startDate, endDate, currentB
     fetchExpenseTransactions(runner, startIso, endIso),
     currentBalance === undefined ? fetchBalanceTotals(runner) : null,
   ]);
+  const payrollRows = await fetchPayrollSavingsRows(runner, startIso, endIso);
 
   const effectiveBalance =
     currentBalance !== undefined
@@ -368,7 +384,26 @@ async function computeEnhancedHealthScore({ months, startDate, endDate, currentB
     expenses,
     currentBalance: effectiveBalance,
     dateRange: { startDate: new Date(startIso), endDate: new Date(endIso) },
+    payrollSavings: sumPayroll(sliceDateRange(payrollRows, startIso, endIso)),
   });
+}
+
+/**
+ * Estimated payroll contributions for the window, keyed like the cash-flow
+ * rows (raw transaction date strings) so windows slice them the same way.
+ */
+async function fetchPayrollSavingsRows(runner, startIso, endIso) {
+  const rows = await fetchHouseholdPayrollContributions(
+    { query: runner },
+    { startDate: String(startIso).slice(0, 10), endDate: String(endIso).slice(0, 10) },
+  );
+  return rows
+    .map((row) => ({ dateIso: String(row.date), total: row.total }))
+    .sort((left, right) => (left.dateIso < right.dateIso ? -1 : left.dateIso > right.dateIso ? 1 : 0));
+}
+
+function sumPayroll(rows) {
+  return rows.reduce((sum, row) => sum + (Number(row.total) || 0), 0);
 }
 
 function sliceDateRange(rows, startIso, endIso) {
@@ -399,6 +434,7 @@ async function prepareEnhancedHealthScoreHistory({ startDate, endDate, client })
     fetchMonthlyCashFlow(runner, startIso, endIso, true),
     fetchExpenseTransactions(runner, startIso, endIso),
   ]);
+  const payrollRows = await fetchPayrollSavingsRows(runner, startIso, endIso);
 
   // This snapshot belongs to one history request; no cross-request cache can
   // become stale after transactions or categorization change.
@@ -431,6 +467,7 @@ async function prepareEnhancedHealthScoreHistory({ startDate, endDate, client })
       expenses: sliceDateRange(expenses, windowStartIso, windowEndIso),
       currentBalance,
       dateRange: { startDate: new Date(windowStartIso), endDate: new Date(windowEndIso) },
+      payrollSavings: sumPayroll(sliceDateRange(payrollRows, windowStartIso, windowEndIso)),
     });
   };
 }

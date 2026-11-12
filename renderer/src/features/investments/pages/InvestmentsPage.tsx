@@ -558,8 +558,11 @@ const InvestmentsPageContent: React.FC = () => {
       setSelectedPikadonAccount(account);
     } else if (account.account_type === 'real_estate') {
       setSelectedRealEstateAccount(account);
+    } else if (account.account_type !== 'bank_balance') {
+      // Pension, funds, brokerage...: enter a new statement for this account.
+      openAccountsManagement({ tab: 'investments', valuationAccountId: account.id });
     }
-  }, []);
+  }, [openAccountsManagement]);
 
   const handleRealEstatePropertyEdit = useCallback((accountId: number) => {
     const account = portfolioData?.accounts?.find((item) => item.id === accountId);

@@ -133,6 +133,12 @@ async function setupAPIServer(mainWindow, options = {}) {
     lazyRouter(() => require(resolveAppPath('server', 'routes', 'profile.js')).createProfileRouter()),
   );
 
+  // Household employment + payroll contributions (pension, severance, keren hishtalmut)
+  app.use(
+    '/api/payroll',
+    lazyRouter(() => require(resolveAppPath('server', 'routes', 'payroll.js')).createPayrollRouter()),
+  );
+
   // Analytics API routes (migrated) – lazy load
   app.use(
     '/api/analytics',

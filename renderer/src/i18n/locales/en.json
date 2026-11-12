@@ -289,6 +289,85 @@
       "minutes": "~{{count}} min",
       "returnsOn": "Returns {{date}}"
     },
+    "items": {
+      "deposit": {
+        "salary": {
+          "title": "Salary from {{name}} hasn't arrived",
+          "description": "It usually lands around {{date}} (about {{amount}}). Your bank data runs through {{coveredThrough}} and it isn't there.",
+          "descriptionNoAmount": "It usually lands around {{date}}. Your bank data runs through {{coveredThrough}} and it isn't there."
+        },
+        "income": {
+          "title": "Expected income hasn't arrived: {{name}}",
+          "description": "Expected around {{date}} (about {{amount}}). Your account data runs through {{coveredThrough}} and it isn't there.",
+          "descriptionNoAmount": "Expected around {{date}}. Your account data runs through {{coveredThrough}} and it isn't there."
+        },
+        "investment": {
+          "title": "Regular deposit didn't go through: {{name}}",
+          "description": "Expected around {{date}} (about {{amount}}). Your account data runs through {{coveredThrough}} and it isn't there.",
+          "descriptionNoAmount": "Expected around {{date}}. Your account data runs through {{coveredThrough}} and it isn't there."
+        }
+      },
+      "subscription": {
+        "missedCharge": {
+          "title": "Expected charge not found: {{name}}",
+          "description": "Usually charged around {{date}} ({{amount}}). If it was cancelled, mark it as ended.",
+          "descriptionNoAmount": "Usually charged around {{date}}. If it was cancelled, mark it as ended."
+        },
+        "priceIncrease": {
+          "title": "{{name}} got more expensive",
+          "description": "From {{previous}} to {{current}} (+{{percent}}%)."
+        },
+        "duplicate": {
+          "title": "Possible double charge: {{name}}",
+          "description": "{{amount}} was charged more than once on {{date}} on the same card."
+        },
+        "upcomingRenewal": {
+          "title": "{{name}} renews soon",
+          "description": "Next charge expected on {{date}} ({{amount}}).",
+          "descriptionNoAmount": "Next charge expected on {{date}}."
+        },
+        "cancelledStillCharging": {
+          "title": "{{name}} charged after cancellation",
+          "description": "A charge came through on {{date}}."
+        }
+      },
+      "budget": {
+        "exceeded": {
+          "title": "{{category}} is over budget",
+          "description": "{{spent}} of {{budget}} this month ({{percent}}%)."
+        },
+        "warning": {
+          "title": "{{category}} is close to its budget",
+          "description": "{{spent}} of {{budget}} this month ({{percent}}%)."
+        },
+        "projected": {
+          "title": "{{category}} is on track to go over budget",
+          "description": "Projected {{projected}} this month against a {{budget}} budget."
+        }
+      },
+      "staleSync": {
+        "title": "Accounts need a sync",
+        "description": "{{accounts}} accounts haven't synced in over 48 hours. Recent charges and deposits may be missing.",
+        "descriptionOne": "{{account}} hasn't synced in {{days}} days. Recent charges and deposits may be missing."
+      },
+      "uncategorized": {
+        "title": "Transactions need a category",
+        "description": "{{transactions}} transactions ({{amount}}) have no category, so reports leave them out."
+      },
+      "cashFlow": {
+        "title": "Money may run short this month",
+        "description": "At your current pace, what's left lasts about {{days}} days."
+      },
+      "unusualSpending": {
+        "title": "Unusual purchase at {{merchant}}",
+        "description": "{{amount}} in {{category}}, well above what you usually spend there.",
+        "descriptionNoCategory": "{{amount}}, well above what you usually spend."
+      },
+      "largeTransaction": {
+        "title": "Large purchase at {{merchant}}",
+        "description": "{{amount}} on {{date}}."
+      }
+    },
     "filters": {
       "label": "Filter review items",
       "all": "All · {{count}}",
@@ -631,7 +710,39 @@
       "appearance": "Appearance",
       "sync": "Sync",
       "privacySecurity": "Privacy & Security",
-      "system": "System"
+      "system": "System",
+      "about": "About"
+    },
+    "about": {
+      "title": "About ShekelSync",
+      "version": "Version {{version}}",
+      "description": "ShekelSync is a personal finance app for Israeli bank accounts and credit cards. It syncs your transactions, categorizes your spending and turns it into insights that help you manage your money better.",
+      "featuresTitle": "What it does",
+      "features": {
+        "sync": "Automatic sync with Israeli banks and credit cards",
+        "categorize": "Smart categorization of every transaction",
+        "insights": "Financial Health Score and personal spending insights",
+        "forecast": "Cash-flow forecasts, budgets and investment tracking",
+        "assistant": "Optional AI assistant for questions about your finances"
+      },
+      "madeWith": "Made with ❤️ in Israel",
+      "sourceCode": "Source code",
+      "contact": {
+        "title": "Contact me",
+        "description": "Have a question, an idea or a partnership in mind? Reach out to me directly.",
+        "action": "Get in touch"
+      },
+      "feedback": {
+        "title": "Feedback",
+        "description": "Tell me what works, what doesn't and what you would like to see next.",
+        "action": "Share feedback",
+        "bug": "Report a bug"
+      },
+      "coffee": {
+        "title": "Buy me a coffee",
+        "description": "ShekelSync is built in my free time. If it helps you, a coffee keeps development going.",
+        "action": "Buy me a coffee"
+      }
     },
     "language": {
       "title": "Language & locale",
@@ -922,6 +1033,66 @@
         "saveError": "Failed to save profile. Please try again.",
         "loadError": "Failed to load profile. Please try again.",
         "sessionExpired": "Session expired. Please sign in again."
+      }
+    },
+    "payroll": {
+      "title": "Employment & payroll savings",
+      "intro": "Pension, severance and keren hishtalmut are deducted from the payslip, so they never reach your bank. Enter each person's gross salary and pick which deposit is their salary: every month that salary arrives, the expected contributions are added to the linked account until you enter its next real statement.",
+      "estimateNote": "These are estimates. A real statement always wins: once you enter one, it replaces the estimates up to its date.",
+      "loadError": "Could not load payroll settings.",
+      "members": {
+        "self": "You",
+        "spouse": "Spouse"
+      },
+      "kinds": {
+        "pension": "Pension",
+        "severance": "Severance (pitzuim)",
+        "keren_hishtalmut": "Keren hishtalmut"
+      },
+      "card": {
+        "notSetUp": "Not set up yet.",
+        "setUp": "Set up",
+        "edit": "Edit",
+        "remove": "Remove",
+        "gross": "{{amount}} gross / month",
+        "monthlyTotal": "≈ {{total}}/month into long-term savings ({{employer}} paid by the employer)",
+        "noSalaryLink": "No salary deposit linked, so nothing will accrue.",
+        "noAccount": "no account",
+        "paused": "Paused",
+        "withdrawableFrom": "Keren hishtalmut withdrawable from {{date}}",
+        "withdrawableSince": "Keren hishtalmut withdrawable since {{date}}",
+        "removeBody": "The salary link and the pension, severance and keren hishtalmut settings are deleted. Your investment accounts and statements are kept."
+      },
+      "dialog": {
+        "title": "Salary & payroll savings: {{name}}",
+        "employer": "Employer",
+        "gross": "Gross monthly salary",
+        "grossHelper": "From the payslip (bruto). The bank only sees the net deposit.",
+        "deposit": "Salary deposit",
+        "depositHelper": "Each month this deposit arrives, contributions accrue.",
+        "depositNone": "None (nothing accrues)",
+        "depositMonths": "{{count}} months",
+        "depositClaimed": "already linked to {{member}}",
+        "depositCurrent": "Current rule: “{{pattern}}”",
+        "candidatesEmpty": "No recurring deposits found in the last 6 months.",
+        "candidatesError": "Could not load recent deposits.",
+        "plansTitle": "Contributions",
+        "account": "Account",
+        "accountNone": "No account",
+        "employeePct": "Employee %",
+        "employerPct": "Employer %",
+        "salaryCap": "Salary cap (₪)",
+        "salaryCapHelper": "Tax-exempt ceiling: ₪15,712 in 2026",
+        "startDate": "Accrue from",
+        "openedDate": "Fund opened",
+        "openedDateHelper": "Withdrawable tax-free from {{date}}, 6 years after opening. Leave empty to use the accrual start date.",
+        "planMonthly": "≈ {{total}}/month",
+        "preview": "Every month: ≈ {{total}} ({{employee}} from the salary, {{employer}} from the employer)",
+        "noAccountWarning": "Pick an account for each active contribution so it has somewhere to accrue.",
+        "cancel": "Cancel",
+        "save": "Save",
+        "saving": "Saving…",
+        "saveError": "Could not save: {{message}}"
       }
     },
     "dataExport": {
@@ -1547,6 +1718,159 @@
     },
     "modals": {
       "rhythm": {
+        "tabs": {
+          "month": "Month",
+          "week": "Week",
+          "day": "Day",
+          "habits": "Habits"
+        },
+        "compare": {
+          "metric": {
+            "spend": "Spending",
+            "income": "Income"
+          },
+          "scope": {
+            "all": "All",
+            "everyday": "Everyday",
+            "hint": "Everyday leaves out recurring payments (mortgage, subscriptions, installments) so changes in your regular spending stand out."
+          },
+          "loadFailed": "Couldn't load the comparison.",
+          "notEnoughHistory": "Not enough synced history yet to compare with.",
+          "uncategorized": "Uncategorized",
+          "series": {
+            "current": {
+              "month": "This month",
+              "week": "This week"
+            },
+            "previous": {
+              "month": "Last month",
+              "week": "Last week"
+            },
+            "median": "Usual",
+            "medianOf": {
+              "month_one": "Usual (from {{count}} month)",
+              "month_other": "Usual (middle of {{count}} months)",
+              "week_one": "Usual (from {{count}} week)",
+              "week_other": "Usual (middle of {{count}} weeks)"
+            },
+            "band": "Usual range"
+          },
+          "axis": {
+            "dayN": "Day {{day}}",
+            "today": "Today"
+          },
+          "chart": {
+            "title": {
+              "month": "{{metric}} through the month",
+              "week": "{{metric}} through the week"
+            },
+            "subtitle": {
+              "month_one": "Running total by day of month, against your last full month",
+              "month_other": "Running total by day of month, against your last {{count}} full months",
+              "week_one": "Running total from Sunday, against your last week",
+              "week_other": "Running total from Sunday, against your last {{count}} weeks"
+            }
+          },
+          "drivers": {
+            "title": "What's different",
+            "subtitle": {
+              "month": "Categories furthest from usual by day {{day}}",
+              "week": "Categories furthest from usual by {{day}}"
+            },
+            "none": "Every category is close to usual.",
+            "compare": "{{current}} so far · usually {{typical}}"
+          },
+          "totals": {
+            "title": {
+              "month": "Month by month",
+              "week": "Week by week"
+            },
+            "subtitle": "Full totals; the current period shows its projection",
+            "soFar": "{{amount}} so far",
+            "projected": "On pace for {{amount}}",
+            "legend": "Dashed bar: current period, projected to its end"
+          },
+          "newMerchants": {
+            "title": {
+              "month": "New this month",
+              "week": "New this week"
+            },
+            "subtitle": "Merchants with no payments in the previous months"
+          },
+          "position": {
+            "month": "Day {{day}} of {{length}}",
+            "week": "Sunday to {{day}}",
+            "day": "Last 7 days"
+          },
+          "soFar": {
+            "spend": "spent so far",
+            "income": "received so far"
+          },
+          "status": {
+            "above": "{{percent}}% above usual ({{amount}})",
+            "below": "{{percent}}% below usual ({{amount}})",
+            "within": "Within your usual range",
+            "insufficient": "Not enough history to compare"
+          },
+          "usual": {
+            "month": "Usually {{median}} by now (range {{low}} – {{high}})",
+            "week": "Usually {{median}} by now (range {{low}} – {{high}})",
+            "day": "A usual 7 days: {{median}} (range {{low}} – {{high}})"
+          },
+          "projection": {
+            "month": "On pace for {{projected}} this month · a usual month is {{typical}}",
+            "week": "On pace for {{projected}} this week · a usual week is {{typical}}"
+          },
+          "day": {
+            "unusualCount_one": "{{count}} unusual day in the last 6 weeks",
+            "unusualCount_other": "{{count}} unusual days in the last 6 weeks",
+            "chartTitle": "{{metric}} per day",
+            "chartSubtitle": "Last 6 weeks · each day is compared with the same weekday in the 8 weeks before",
+            "usualFor": "Usual for a {{weekday}}: {{median}} (range {{low}} – {{high}})",
+            "unusual": "Unusual day",
+            "legendNormal": "Day",
+            "legendUnusual": "Unusual day",
+            "pickDay": "Pick a day",
+            "clickHint": "Click a bar to see that day's transactions",
+            "nothing": "Nothing on this day.",
+            "unusualTitle": "Unusual days",
+            "unusualSubtitle": "At least double the high end of that weekday's usual range",
+            "noUnusual": "No unusual days in the last 6 weeks.",
+            "usually": "usually {{amount}}"
+          },
+          "checks": {
+            "title_one": "{{count}} data check",
+            "title_other": "{{count}} data checks",
+            "subtitle": "Problems that make these numbers less reliable",
+            "uncategorized": "Uncategorized",
+            "types": {
+              "income": "income",
+              "investment": "investment",
+              "expense": "expense"
+            },
+            "typeMismatch": {
+              "title_one": "{{count}} transaction is stored as an expense but filed under an income or investment category",
+              "title_other": "{{count}} transactions are stored as expenses but filed under income or investment categories",
+              "body": "Screens that read the stored type count these as spending. Fixing sets each one to its category's type.",
+              "item": "{{date}} · {{name}} · {{amount}} → {{category}} ({{categoryType}})",
+              "fix": "Fix now",
+              "failed": "Couldn't fix them. Try again."
+            },
+            "stale": {
+              "title_one": "{{account}} last synced on {{date}} ({{count}} day ago)",
+              "title_other": "{{account}} last synced on {{date}} ({{count}} days ago)",
+              "titleFailed_one": "{{account}} last synced on {{date}} ({{count}} day ago) and the latest sync failed",
+              "titleFailed_other": "{{account}} last synced on {{date}} ({{count}} days ago) and the latest sync failed",
+              "never": "{{account}} has never synced",
+              "body": "Recent transactions on this account are missing, so the current period can look lower than it is."
+            },
+            "drift": {
+              "title": "{{merchant}} was filed under {{category}}",
+              "body_one": "On {{date}} ({{amount}}). It's usually {{usual}} ({{count}} earlier payment). Check whether this is right.",
+              "body_other": "On {{date}} ({{amount}}). It's usually {{usual}} ({{count}} earlier payments). Check whether this is right."
+            }
+          }
+        },
         "title": "Your Financial Rhythm - Detailed Analysis",
         "timeRange": {
           "3months": "3 Months",
@@ -1853,7 +2177,8 @@
       "metrics": {
         "savings": {
           "label": "Savings",
-          "tooltip": "Measures your savings rate as a percentage of income. Higher scores indicate better financial discipline and future security."
+          "tooltip": "Measures your savings rate as a percentage of income. Higher scores indicate better financial discipline and future security.",
+          "payrollIncluded": "incl. {{amount}} via payroll"
         },
         "diversity": {
           "label": "Diversity",
@@ -3448,6 +3773,10 @@
       }
     },
     "performanceCard": {
+      "estimatedContributions": "Includes ≈ {{amount}} estimated payroll contributions since {{date}}",
+      "estimatedContributionsHint": "Estimated from your salary in Settings → Profile. Replaced when you enter the next statement.",
+      "withdrawableFrom": "Withdrawable tax-free from {{date}}",
+      "withdrawableSince": "Withdrawable tax-free since {{date}}",
       "high": "High",
       "low": "Low",
       "value": "Value",

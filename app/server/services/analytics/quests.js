@@ -603,6 +603,11 @@ function isExcludedCategoryName(name, nameEn) {
     return true;
   }
 
+  // Municipal tax (arnona) is a fixed bill: spending less on it is not a habit change.
+  if (/(ארנונה|מיסים עירוניים|מס עירוני)/.test(primary) || /\b(municipal tax(es)?|property tax(es)?|arnona)\b/.test(combinedLower)) {
+    return true;
+  }
+
   if (/(credit\s*card\s*(payment|repayment)|card\s*repayment|cc\s*payment)/.test(combinedLower)) {
     return true;
   }
@@ -740,6 +745,7 @@ async function generateWeekendQuests(context, slotsAvailable, client) {
         FROM transactions
         WHERE date >= date('now', '-28 days')
           AND price < 0
+          AND category_type = 'expense'
           AND CAST(strftime('%w', date) AS INTEGER) IN (0, 5, 6)
         GROUP BY strftime('%Y-%W', date)
       )
@@ -846,6 +852,42 @@ function determineQuestDifficulty(reductionPct, confidence = 0.7) {
 /**
  * Get count of active/accepted quests
  */
+// Quest types that ask the user to spend less in a category.
+const SPENDING_REDUCTION_QUEST_TYPES = [
+  'quest_reduce_spending',
+  'quest_budget_adherence',
+  'quest_set_budget',
+  'quest_reduce_fixed_cost',
+];
+
+/**
+ * Remove open "spend less" quests whose category is not spending (salary,
+ * income, investments). Older generator versions treated any category as
+ * spending.
+ */
+async function retireNonExpenseSpendingQuests(client) {
+  const placeholders = SPENDING_REDUCTION_QUEST_TYPES.map((_, index) => `$${index + 1}`).join(', ');
+  try {
+    await client.query(`
+    UPDATE smart_action_items
+    SET user_status = 'dismissed',
+      dismissed_at = datetime('now'),
+      completion_result = 'invalid_category',
+      updated_at = datetime('now')
+    WHERE action_type IN (${placeholders})
+      AND user_status IN ('active', 'accepted', 'snoozed')
+      AND trigger_category_id IN (
+        SELECT id FROM category_definitions WHERE category_type IS NOT NULL AND category_type <> 'expense'
+      )
+  `, SPENDING_REDUCTION_QUEST_TYPES);
+  } catch (error) {
+    // Best-effort cleanup; it must never block generating or listing quests.
+    if (process.env.NODE_ENV !== 'test') {
+      console.warn('[Quests] Could not retire non-spending quests:', error?.message || error);
+    }
+  }
+}
+
 async function getActiveQuestCount(client) {
   const result = await client.query(`
     SELECT COUNT(*) as count
@@ -867,6 +909,8 @@ async function generateQuests(params = {}) {
   let client;
   try {
     client = await database.getClient();
+
+    await retireNonExpenseSpendingQuests(client);
 
     // Check current active quest count
     const activeCount = await getActiveQuestCount(client);
@@ -895,6 +939,15 @@ async function generateQuests(params = {}) {
       JOIN category_definitions cd ON scm.category_definition_id = cd.id
       WHERE cd.is_active = 1
     `);
+    // Spending challenges only make sense for spending: salary, other income
+    // and investment transfers must never be "reduced".
+    const categoryTypesResult = await client.query('SELECT id, category_type FROM category_definitions');
+    const categoryTypeById = new Map((categoryTypesResult.rows || [])
+      .map((row) => [Number(row.id), row.category_type]));
+    const isExpenseCategory = (pattern, resolvedCategoryId) => {
+      const categoryType = categoryTypeById.get(Number(resolvedCategoryId)) || pattern.categoryType;
+      return categoryType === 'expense';
+    };
     const variabilityMap = new Map();
     const categoryIdByName = new Map();
     const addCategoryLookup = (name, categoryId) => {
@@ -964,7 +1017,7 @@ async function generateQuests(params = {}) {
           return false;
         }
         const mapping = variabilityMap.get(resolvedCategoryId);
-        const isExpense = pattern.categoryType === 'expense' || Boolean(resolvedCategoryId);
+        const isExpense = isExpenseCategory(pattern, resolvedCategoryId);
         const isActionable = !pattern.isFixedRecurring && !pattern.isFixedAmount;
         const monthsOfHistory = coerceNumber(pattern.monthsOfHistory);
         const avgOccurrencesPerWeek = resolveAvgOccurrencesPerWeek(pattern);
@@ -1130,7 +1183,7 @@ async function generateQuests(params = {}) {
         if (!Number.isFinite(resolvedCategoryId)) {
           return false;
         }
-        const isExpense = pattern.categoryType === 'expense' || Boolean(resolvedCategoryId);
+        const isExpense = isExpenseCategory(pattern, resolvedCategoryId);
         const categoryName = pattern.categoryName;
         const categoryNameEn = pattern.categoryNameEn;
         const isExcluded = isExcludedCategoryName(categoryName, categoryNameEn);
@@ -1209,7 +1262,7 @@ async function generateQuests(params = {}) {
           return false;
         }
         const mapping = variabilityMap.get(resolvedCategoryId);
-        const isExpense = pattern.categoryType === 'expense' || Boolean(resolvedCategoryId);
+        const isExpense = isExpenseCategory(pattern, resolvedCategoryId);
         const isFixed = pattern.isFixedRecurring || pattern.isFixedAmount || mapping?.variabilityType === 'fixed';
         const monthlySpend = estimateMonthlySpend(pattern);
         const meaningful = monthlySpend >= MIN_FIXED_MONTHLY;
@@ -2033,6 +2086,7 @@ async function checkQuestDeadlines() {
 }
 
 module.exports = {
+  retireNonExpenseSpendingQuests,
   generateQuests,
   acceptQuest,
   declineQuest,

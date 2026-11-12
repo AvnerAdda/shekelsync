@@ -10,8 +10,12 @@ const {
 } = require('../institutions.js');
 const {
   applyContributionRollforward,
-  fetchLinkedInvestmentTransactions,
 } = require('./linked-transaction-rollforward.js');
+const {
+  applyCostBasisCarry,
+  fetchInvestmentContributionRows,
+  fetchPayrollCostBasisCarry,
+} = require('./contribution-sources.js');
 const {
   fetchAccountHoldingSnapshots,
 } = require('./account-snapshots.js');
@@ -157,7 +161,7 @@ async function listAccounts(params = {}) {
   );
 
   if (accounts.length > 0) {
-    const linkedTransactions = await fetchLinkedInvestmentTransactions(
+    const linkedTransactions = await fetchInvestmentContributionRows(
       database,
       accounts.map((account) => account.id),
     );
@@ -165,6 +169,7 @@ async function listAccounts(params = {}) {
       dateField: 'last_update_date',
       excludePikadonTransactions: true,
     });
+    applyCostBasisCarry(accounts, await fetchPayrollCostBasisCarry(database, linkedTransactions));
 
     accounts.forEach((account) => {
       if (account.current_value !== null && account.current_value !== undefined) {

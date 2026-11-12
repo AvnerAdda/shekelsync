@@ -23,7 +23,7 @@ describe('useDashboardInsights', () => {
 
   it('loads each shared dashboard insight once', async () => {
     mockGet.mockImplementation((endpoint: string) => {
-      if (endpoint === '/api/forecast/daily?days=90') {
+      if (endpoint === '/api/forecast/daily?days=90&fromLastData=1') {
         return Promise.resolve({ ok: true, data: { dailyForecasts: [], budgetOutlook: [] } });
       }
       if (endpoint === MTD_HEALTH_ENDPOINT) {
@@ -45,7 +45,7 @@ describe('useDashboardInsights', () => {
     expect(result.current.forecastData).toEqual({ dailyForecasts: [], budgetOutlook: [] });
     expect(result.current.healthSnapshot?.overallHealthScore).toBe(72);
     expect(mockGet).toHaveBeenCalledTimes(2);
-    expect(mockGet).toHaveBeenCalledWith('/api/forecast/daily?days=90');
+    expect(mockGet).toHaveBeenCalledWith('/api/forecast/daily?days=90&fromLastData=1');
     expect(mockGet).toHaveBeenCalledWith(MTD_HEALTH_ENDPOINT);
   });
 
@@ -54,13 +54,13 @@ describe('useDashboardInsights', () => {
     const { result } = renderHook(() => useDashboardInsights(MTD_RANGE));
     await waitFor(() => expect(result.current.forecastLoading).toBe(false));
     act(() => result.current.refresh());
-    await waitFor(() => expect(mockGet).toHaveBeenCalledWith('/api/forecast/daily?days=90&noCache=1'));
+    await waitFor(() => expect(mockGet).toHaveBeenCalledWith('/api/forecast/daily?days=90&fromLastData=1&noCache=1'));
     await waitFor(() => expect(result.current.forecastLoading).toBe(false));
   });
 
   it('surfaces forecast failures without discarding health data', async () => {
     mockGet.mockImplementation((endpoint: string) => {
-      if (endpoint === '/api/forecast/daily?days=90') {
+      if (endpoint === '/api/forecast/daily?days=90&fromLastData=1') {
         return Promise.resolve({
           ok: false,
           status: 429,

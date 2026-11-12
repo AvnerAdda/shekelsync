@@ -26,7 +26,10 @@ beforeAll(async () => {
 beforeEach(() => {
   queryMock.mockReset();
   balanceSheetService.__setDatabase({
-    query: (...args: any[]) => queryMock(...args),
+    // Payroll accrual lookups (no plans configured) bypass the ordered mocks.
+    query: (...args: any[]) => (/payroll_contribution_plans/.test(String(args[0]))
+      ? Promise.resolve({ rows: [] })
+      : queryMock(...args)),
   });
 });
 

@@ -9,6 +9,8 @@ const {
   normalizeInvestmentCategory,
 } = require('./categories.js');
 const fxService = require('./fx.js');
+const { applyContributionRollforward } = require('./linked-transaction-rollforward.js');
+const { fetchPayrollAccrualRows } = require('../payroll/accruals.js');
 const { credentialIdMatchSql } = require('./credential-link.js');
 const {
   getCreditCardRepaymentCategoryCondition,
@@ -297,10 +299,18 @@ async function getInvestmentBalanceSheet(query = {}) {
   const overlapSources = hasBankBalanceAccounts && savingsAccountIds.length > 0
     ? await fetchActivePikadonOverlapSources(database, savingsAccountIds)
     : [];
-  const adjustedAccounts = applyBankBalanceOverlapAdjustments(
+  const overlapAdjustedAccounts = applyBankBalanceOverlapAdjustments(
     accountsResult.rows || [],
     overlapSources,
   );
+  // Net worth includes estimated payroll contributions (pension, severance,
+  // keren hishtalmut) since each account's last statement. They are ILS-only,
+  // so they are added to the native value before any FX conversion.
+  const payrollRows = await fetchPayrollAccrualRows(
+    database,
+    overlapAdjustedAccounts.map((row) => row.id),
+  );
+  const adjustedAccounts = applyContributionRollforward(overlapAdjustedAccounts, payrollRows);
 
   let manualLiabilities = [];
   if (includeManualLiabilities) {

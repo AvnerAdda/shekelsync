@@ -1,10 +1,19 @@
 const database = require('../database.js');
 const { createTtlCache } = require('../../../lib/server/ttl-cache.js');
+const { dialect } = require('../../../lib/sql-dialect.js');
+const { getCreditCardRepaymentCategoryCondition } = require('../accounts/repayment-category.js');
 
 const temporalCache = createTtlCache({ maxEntries: 10, defaultTtlMs: 60 * 1000 });
 const STATUS_FILTER_SQL = "t.status IN ('completed', 'pending')";
 const EFFECTIVE_DATETIME_SQL = "COALESCE(t.transaction_datetime, t.date)";
 const LOCAL_EFFECTIVE_DATETIME_SQL = `datetime(${EFFECTIVE_DATETIME_SQL}, 'localtime')`;
+// Card bills paid from the bank repeat the card's own purchases, and pikadon moves are
+// savings, so neither is spending. Every query needs cd joined for the category check.
+const COUNTED_SPENDING_SQL = `
+        AND NOT ${getCreditCardRepaymentCategoryCondition('cd')}
+        AND ${dialect.excludePikadon('t')}
+        AND NOT EXISTS (SELECT 1 FROM transaction_pairing_exclusions tpe
+          WHERE tpe.transaction_identifier = t.identifier AND tpe.transaction_vendor = t.vendor)`;
 const HAS_PRECISE_TIME_SQL = `strftime('%M', ${LOCAL_EFFECTIVE_DATETIME_SQL}) != '00'`;
 let databaseAdapter = database;
 
@@ -93,7 +102,7 @@ async function getTemporalAnalytics(params = {}) {
     FROM transactions t
     LEFT JOIN category_definitions cd ON t.category_definition_id = cd.id
     WHERE ${STATUS_FILTER_SQL}
-      AND t.category_type = 'expense'
+      AND t.category_type = 'expense'${COUNTED_SPENDING_SQL}
       AND ${EFFECTIVE_DATETIME_SQL} >= $1
       AND ${EFFECTIVE_DATETIME_SQL} <= $2
       AND t.price < 0
@@ -116,8 +125,9 @@ async function getTemporalAnalytics(params = {}) {
         strftime('%H', ${LOCAL_EFFECTIVE_DATETIME_SQL}) as hour,
         COUNT(*) as count
       FROM transactions t
+      LEFT JOIN category_definitions cd ON t.category_definition_id = cd.id
       WHERE ${STATUS_FILTER_SQL}
-        AND t.category_type = 'expense'
+        AND t.category_type = 'expense'${COUNTED_SPENDING_SQL}
         AND t.price < 0
         AND ${HAS_PRECISE_TIME_SQL}
         AND ${EFFECTIVE_DATETIME_SQL} >= $1
@@ -133,8 +143,9 @@ async function getTemporalAnalytics(params = {}) {
         strftime('%w', ${LOCAL_EFFECTIVE_DATETIME_SQL}) as day_of_week,
         COUNT(*) as count
       FROM transactions t
+      LEFT JOIN category_definitions cd ON t.category_definition_id = cd.id
       WHERE ${STATUS_FILTER_SQL}
-        AND t.category_type = 'expense'
+        AND t.category_type = 'expense'${COUNTED_SPENDING_SQL}
         AND t.price < 0
         AND ${EFFECTIVE_DATETIME_SQL} >= $1
         AND ${EFFECTIVE_DATETIME_SQL} <= $2
@@ -150,8 +161,9 @@ async function getTemporalAnalytics(params = {}) {
         SUM(ABS(t.price)) as total_amount,
         COUNT(*) as transaction_count
       FROM transactions t
+      LEFT JOIN category_definitions cd ON t.category_definition_id = cd.id
       WHERE ${STATUS_FILTER_SQL}
-        AND t.category_type = 'expense'
+        AND t.category_type = 'expense'${COUNTED_SPENDING_SQL}
         AND t.price < 0
         AND ${EFFECTIVE_DATETIME_SQL} >= $1
         AND ${EFFECTIVE_DATETIME_SQL} <= $2
@@ -168,8 +180,9 @@ async function getTemporalAnalytics(params = {}) {
         SUM(ABS(t.price)) as total_amount,
         COUNT(*) as transaction_count
       FROM transactions t
+      LEFT JOIN category_definitions cd ON t.category_definition_id = cd.id
       WHERE ${STATUS_FILTER_SQL}
-        AND t.category_type = 'expense'
+        AND t.category_type = 'expense'${COUNTED_SPENDING_SQL}
         AND t.price < 0
         AND ${EFFECTIVE_DATETIME_SQL} >= $1
         AND ${EFFECTIVE_DATETIME_SQL} <= $2
@@ -186,8 +199,9 @@ async function getTemporalAnalytics(params = {}) {
         SUM(ABS(t.price)) as total_amount,
         COUNT(*) as transaction_count
       FROM transactions t
+      LEFT JOIN category_definitions cd ON t.category_definition_id = cd.id
       WHERE ${STATUS_FILTER_SQL}
-        AND t.category_type = 'expense'
+        AND t.category_type = 'expense'${COUNTED_SPENDING_SQL}
         AND t.price < 0
         AND ${EFFECTIVE_DATETIME_SQL} >= $1
         AND ${EFFECTIVE_DATETIME_SQL} <= $2

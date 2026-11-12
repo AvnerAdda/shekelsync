@@ -59,7 +59,12 @@ interface UseMoneyReviewOptions {
   enabled?: boolean;
   initialResponse?: MoneyReviewResponse | null;
   onExternalAction?: () => void;
-  onReviewChanged?: () => void;
+  /**
+   * Called after a lifecycle change. `updatedItem` is the server's copy of a
+   * single changed item; it is omitted when the change can affect other items
+   * (quests), in which case the caller should reload.
+   */
+  onReviewChanged?: (updatedItem?: MoneyReviewItem) => void;
 }
 
 export function useMoneyReview({
@@ -139,7 +144,7 @@ export function useMoneyReview({
         ? `messages.snoozed.${snoozePreset}`
         : `messages.${status}`;
       showNotification(t(messageKey), status === 'dismissed' ? 'info' : 'success');
-      onReviewChanged?.();
+      onReviewChanged?.(result.data.item);
       return true;
     } catch (updateError) {
       showNotification(updateError instanceof Error ? updateError.message : t('errors.update'), 'error');
@@ -148,6 +153,10 @@ export function useMoneyReview({
       setUpdatingId(null);
     }
   }, [onReviewChanged, showNotification, t]);
+
+  const applyItemUpdate = useCallback((updatedItem: MoneyReviewItem) => {
+    setResponse((current) => replaceItem(current, updatedItem));
+  }, []);
 
   const performPrimaryAction = useCallback(async (
     item: MoneyReviewItem,
@@ -263,6 +272,7 @@ export function useMoneyReview({
     updatingId,
     loadReview,
     updateStatus,
+    applyItemUpdate,
     performPrimaryAction,
   };
 }

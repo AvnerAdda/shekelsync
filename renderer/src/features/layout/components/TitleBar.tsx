@@ -72,6 +72,7 @@ import SecurityDetailsModal from '@renderer/features/security/components/Securit
 import { useSecurity } from '@renderer/features/security/contexts/SecurityContext';
 import {
   DONATION_OPEN_MODAL_EVENT,
+  FEEDBACK_URL,
   DonationModal,
   useDonationStatus,
 } from '@renderer/features/support';
@@ -102,7 +103,7 @@ const TitleBar: React.FC<TitleBarProps> = ({ sessionDisplayName, authLoading }) 
   const { locale, setLocale } = useLocaleSettings();
 
   const openFeedbackPage = useCallback(() => {
-    window.open('https://github.com/AvnerAdda/shekelsync/discussions', '_blank', 'noopener,noreferrer');
+    window.open(FEEDBACK_URL, '_blank', 'noopener,noreferrer');
   }, []);
 
   // Update manager

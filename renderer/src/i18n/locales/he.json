@@ -289,6 +289,85 @@
       "minutes": "כ־{{count}} דק׳",
       "returnsOn": "חוזר ב־{{date}}"
     },
+    "items": {
+      "deposit": {
+        "salary": {
+          "title": "המשכורת מ־{{name}} עוד לא נכנסה",
+          "description": "בדרך כלל היא נכנסת בסביבות {{date}} (כ־{{amount}}). נתוני הבנק מעודכנים עד {{coveredThrough}} והיא לא מופיעה.",
+          "descriptionNoAmount": "בדרך כלל היא נכנסת בסביבות {{date}}. נתוני הבנק מעודכנים עד {{coveredThrough}} והיא לא מופיעה."
+        },
+        "income": {
+          "title": "הכנסה צפויה לא התקבלה: {{name}}",
+          "description": "היא הייתה צפויה בסביבות {{date}} (כ־{{amount}}). נתוני החשבון מעודכנים עד {{coveredThrough}} והיא לא מופיעה.",
+          "descriptionNoAmount": "היא הייתה צפויה בסביבות {{date}}. נתוני החשבון מעודכנים עד {{coveredThrough}} והיא לא מופיעה."
+        },
+        "investment": {
+          "title": "הפקדה קבועה לא בוצעה: {{name}}",
+          "description": "היא הייתה צפויה בסביבות {{date}} (כ־{{amount}}). נתוני החשבון מעודכנים עד {{coveredThrough}} והיא לא מופיעה.",
+          "descriptionNoAmount": "היא הייתה צפויה בסביבות {{date}}. נתוני החשבון מעודכנים עד {{coveredThrough}} והיא לא מופיעה."
+        }
+      },
+      "subscription": {
+        "missedCharge": {
+          "title": "חיוב צפוי לא נמצא: {{name}}",
+          "description": "בדרך כלל מחויב בסביבות {{date}} ({{amount}}). אם השירות בוטל, אפשר לסמן אותו כהסתיים.",
+          "descriptionNoAmount": "בדרך כלל מחויב בסביבות {{date}}. אם השירות בוטל, אפשר לסמן אותו כהסתיים."
+        },
+        "priceIncrease": {
+          "title": "{{name}} התייקר",
+          "description": "מ־{{previous}} ל־{{current}} (+{{percent}}%)."
+        },
+        "duplicate": {
+          "title": "ייתכן חיוב כפול: {{name}}",
+          "description": "{{amount}} חויב יותר מפעם אחת ב־{{date}} באותו כרטיס."
+        },
+        "upcomingRenewal": {
+          "title": "{{name}} מתחדש בקרוב",
+          "description": "החיוב הבא צפוי ב־{{date}} ({{amount}}).",
+          "descriptionNoAmount": "החיוב הבא צפוי ב־{{date}}."
+        },
+        "cancelledStillCharging": {
+          "title": "{{name}} חייב אחרי ביטול",
+          "description": "נרשם חיוב ב־{{date}}."
+        }
+      },
+      "budget": {
+        "exceeded": {
+          "title": "חריגה מהתקציב: {{category}}",
+          "description": "{{spent}} מתוך {{budget}} החודש ({{percent}}%)."
+        },
+        "warning": {
+          "title": "מתקרבים לתקציב: {{category}}",
+          "description": "{{spent}} מתוך {{budget}} החודש ({{percent}}%)."
+        },
+        "projected": {
+          "title": "צפויה חריגה מהתקציב: {{category}}",
+          "description": "צפי של {{projected}} החודש מול תקציב של {{budget}}."
+        }
+      },
+      "staleSync": {
+        "title": "חשבונות ממתינים לסנכרון",
+        "description": "{{accounts}} חשבונות לא סונכרנו יותר מ־48 שעות. ייתכן שחסרים חיובים והפקדות אחרונים.",
+        "descriptionOne": "{{account}} לא סונכרן כבר {{days}} ימים. ייתכן שחסרים חיובים והפקדות אחרונים."
+      },
+      "uncategorized": {
+        "title": "עסקאות ללא קטגוריה",
+        "description": "{{transactions}} עסקאות ({{amount}}) ללא קטגוריה, ולכן הן לא נכללות בדוחות."
+      },
+      "cashFlow": {
+        "title": "הכסף החודש עלול לא להספיק",
+        "description": "בקצב הנוכחי, מה שנשאר יספיק לכ־{{days}} ימים."
+      },
+      "unusualSpending": {
+        "title": "רכישה חריגה ב־{{merchant}}",
+        "description": "{{amount}} בקטגוריית {{category}}, הרבה מעל מה שאתם מוציאים שם בדרך כלל.",
+        "descriptionNoCategory": "{{amount}}, הרבה מעל הרגיל."
+      },
+      "largeTransaction": {
+        "title": "רכישה גדולה ב־{{merchant}}",
+        "description": "{{amount}} ב־{{date}}."
+      }
+    },
     "filters": {
       "label": "סינון פריטי הסקירה",
       "all": "הכול · {{count}}",
@@ -632,7 +711,39 @@
       "appearance": "מראה",
       "sync": "סנכרון",
       "privacySecurity": "פרטיות ואבטחה",
-      "system": "מערכת"
+      "system": "מערכת",
+      "about": "אודות"
+    },
+    "about": {
+      "title": "אודות ShekelSync",
+      "version": "גרסה {{version}}",
+      "description": "ShekelSync היא אפליקציה לניהול כספים אישי עבור חשבונות בנק וכרטיסי אשראי בישראל. היא מסנכרנת את התנועות שלך, מסווגת את ההוצאות והופכת אותן לתובנות שעוזרות לך לנהל את הכסף טוב יותר.",
+      "featuresTitle": "מה היא עושה",
+      "features": {
+        "sync": "סנכרון אוטומטי עם בנקים וכרטיסי אשראי בישראל",
+        "categorize": "סיווג חכם של כל תנועה",
+        "insights": "ציון בריאות פיננסית ותובנות הוצאה אישיות",
+        "forecast": "תחזית תזרים, תקציבים ומעקב השקעות",
+        "assistant": "עוזר AI אופציונלי לשאלות על הכספים שלך"
+      },
+      "madeWith": "נבנה באהבה ❤️ בישראל",
+      "sourceCode": "קוד מקור",
+      "contact": {
+        "title": "צור קשר",
+        "description": "יש לך שאלה, רעיון או הצעה לשיתוף פעולה? אפשר לפנות אליי ישירות.",
+        "action": "יצירת קשר"
+      },
+      "feedback": {
+        "title": "משוב",
+        "description": "ספר לי מה עובד, מה לא ומה היית רוצה לראות בהמשך.",
+        "action": "שליחת משוב",
+        "bug": "דיווח על באג"
+      },
+      "coffee": {
+        "title": "קנה לי קפה",
+        "description": "ShekelSync נבנית בזמני הפנוי. אם היא עוזרת לך, קפה עוזר להמשיך לפתח.",
+        "action": "קנה לי קפה"
+      }
     },
     "language": {
       "title": "שפה ואזור",
@@ -758,6 +869,66 @@
       "description": "הדליקו הסתרת סכומים כדי להסתיר נתונים כספיים בכל האפליקציה. שימושי בשיתוף מסך או במקומות ציבוריים.",
       "maskOn": "כל הסכומים מוצגים ככוכביות.",
       "maskOff": "סכומים יוצגו במלואם עד שתפעילו הסתרה."
+    },
+    "payroll": {
+      "title": "תעסוקה וחיסכון דרך המשכורת",
+      "intro": "פנסיה, פיצויים וקרן השתלמות מנוכים מהתלוש, ולכן לא מגיעים לבנק. הזינו את השכר ברוטו של כל אחד ובחרו איזו הפקדה היא המשכורת שלו: בכל חודש שהמשכורת נכנסת, ההפקדות הצפויות מתווספות לחשבון המקושר עד שתזינו את הדוח האמיתי הבא שלו.",
+      "estimateNote": "אלו הערכות. דוח אמיתי תמיד קובע: ברגע שתזינו אחד, הוא מחליף את ההערכות עד לתאריך שלו.",
+      "loadError": "לא ניתן לטעון את הגדרות המשכורת.",
+      "members": {
+        "self": "אני",
+        "spouse": "בן/בת הזוג"
+      },
+      "kinds": {
+        "pension": "פנסיה",
+        "severance": "פיצויים",
+        "keren_hishtalmut": "קרן השתלמות"
+      },
+      "card": {
+        "notSetUp": "עדיין לא הוגדר.",
+        "setUp": "הגדרה",
+        "edit": "עריכה",
+        "remove": "הסרה",
+        "gross": "{{amount}} ברוטו לחודש",
+        "monthlyTotal": "≈ {{total}} לחודש לחיסכון ארוך טווח ({{employer}} מהמעסיק)",
+        "noSalaryLink": "לא קושרה הפקדת משכורת, ולכן שום דבר לא נצבר.",
+        "noAccount": "אין חשבון",
+        "paused": "מושהה",
+        "withdrawableFrom": "קרן ההשתלמות נזילה מ-{{date}}",
+        "withdrawableSince": "קרן ההשתלמות נזילה מאז {{date}}",
+        "removeBody": "קישור המשכורת והגדרות הפנסיה, הפיצויים וקרן ההשתלמות יימחקו. חשבונות ההשקעה והדוחות שלכם נשמרים."
+      },
+      "dialog": {
+        "title": "משכורת וחיסכון: {{name}}",
+        "employer": "מעסיק",
+        "gross": "שכר ברוטו חודשי",
+        "grossHelper": "מתוך התלוש. הבנק רואה רק את ההפקדה נטו.",
+        "deposit": "הפקדת המשכורת",
+        "depositHelper": "בכל חודש שההפקדה הזו נכנסת, ההפקדות לחיסכון נצברות.",
+        "depositNone": "ללא (שום דבר לא נצבר)",
+        "depositMonths": "{{count}} חודשים",
+        "depositClaimed": "כבר מקושר ל{{member}}",
+        "depositCurrent": "הכלל הנוכחי: „{{pattern}}”",
+        "candidatesEmpty": "לא נמצאו הפקדות חוזרות ב-6 החודשים האחרונים.",
+        "candidatesError": "לא ניתן לטעון הפקדות אחרונות.",
+        "plansTitle": "הפקדות",
+        "account": "חשבון",
+        "accountNone": "ללא חשבון",
+        "employeePct": "% עובד",
+        "employerPct": "% מעסיק",
+        "salaryCap": "תקרת שכר (₪)",
+        "salaryCapHelper": "תקרה פטורה ממס: ₪15,712 ב-2026",
+        "startDate": "צבירה החל מ",
+        "openedDate": "תאריך פתיחת הקרן",
+        "openedDateHelper": "ניתן למשוך ללא מס מ-{{date}}, 6 שנים לאחר הפתיחה. השאירו ריק כדי להשתמש בתאריך תחילת הצבירה.",
+        "planMonthly": "≈ {{total}} לחודש",
+        "preview": "בכל חודש: ≈ {{total}} ({{employee}} מהשכר, {{employer}} מהמעסיק)",
+        "noAccountWarning": "בחרו חשבון לכל הפקדה פעילה כדי שיהיה לאן לצבור.",
+        "cancel": "ביטול",
+        "save": "שמירה",
+        "saving": "שומר…",
+        "saveError": "השמירה נכשלה: {{message}}"
+      }
     },
     "dataExport": {
       "title": "ייצוא נתונים",
@@ -1549,6 +1720,159 @@
     },
     "modals": {
       "rhythm": {
+        "tabs": {
+          "month": "חודש",
+          "week": "שבוע",
+          "day": "יום",
+          "habits": "הרגלים"
+        },
+        "compare": {
+          "metric": {
+            "spend": "הוצאות",
+            "income": "הכנסות"
+          },
+          "scope": {
+            "all": "הכול",
+            "everyday": "יומיומי",
+            "hint": "יומיומי מסתיר תשלומים קבועים (משכנתא, מנויים, תשלומים) כדי ששינויים בהוצאות השוטפות יבלטו."
+          },
+          "loadFailed": "לא הצלחנו לטעון את ההשוואה.",
+          "notEnoughHistory": "עדיין אין מספיק היסטוריה מסונכרנת להשוואה.",
+          "uncategorized": "ללא קטגוריה",
+          "series": {
+            "current": {
+              "month": "החודש",
+              "week": "השבוע"
+            },
+            "previous": {
+              "month": "החודש הקודם",
+              "week": "השבוע הקודם"
+            },
+            "median": "הרגיל",
+            "medianOf": {
+              "month_one": "הרגיל (מחודש {{count}})",
+              "month_other": "הרגיל (אמצע של {{count}} חודשים)",
+              "week_one": "הרגיל (משבוע {{count}})",
+              "week_other": "הרגיל (אמצע של {{count}} שבועות)"
+            },
+            "band": "הטווח הרגיל"
+          },
+          "axis": {
+            "dayN": "יום {{day}}",
+            "today": "היום"
+          },
+          "chart": {
+            "title": {
+              "month": "{{metric}} לאורך החודש",
+              "week": "{{metric}} לאורך השבוע"
+            },
+            "subtitle": {
+              "month_one": "סכום מצטבר לפי יום בחודש, מול החודש המלא האחרון",
+              "month_other": "סכום מצטבר לפי יום בחודש, מול {{count}} החודשים המלאים האחרונים",
+              "week_one": "סכום מצטבר מיום ראשון, מול השבוע הקודם",
+              "week_other": "סכום מצטבר מיום ראשון, מול {{count}} השבועות האחרונים"
+            }
+          },
+          "drivers": {
+            "title": "מה שונה",
+            "subtitle": {
+              "month": "הקטגוריות הרחוקות ביותר מהרגיל עד יום {{day}}",
+              "week": "הקטגוריות הרחוקות ביותר מהרגיל עד {{day}}"
+            },
+            "none": "כל הקטגוריות קרובות לרגיל.",
+            "compare": "{{current}} עד עכשיו · בדרך כלל {{typical}}"
+          },
+          "totals": {
+            "title": {
+              "month": "חודש אחר חודש",
+              "week": "שבוע אחר שבוע"
+            },
+            "subtitle": "סכומים מלאים; התקופה הנוכחית מוצגת לפי התחזית",
+            "soFar": "{{amount}} עד עכשיו",
+            "projected": "בקצב של {{amount}}",
+            "legend": "עמודה מקווקוות: התקופה הנוכחית, בתחזית עד סופה"
+          },
+          "newMerchants": {
+            "title": {
+              "month": "חדש החודש",
+              "week": "חדש השבוע"
+            },
+            "subtitle": "בתי עסק בלי תשלומים בחודשים הקודמים"
+          },
+          "position": {
+            "month": "יום {{day}} מתוך {{length}}",
+            "week": "מיום ראשון עד {{day}}",
+            "day": "7 הימים האחרונים"
+          },
+          "soFar": {
+            "spend": "הוצאת עד עכשיו",
+            "income": "נכנס עד עכשיו"
+          },
+          "status": {
+            "above": "{{percent}}% מעל הרגיל ({{amount}})",
+            "below": "{{percent}}% מתחת לרגיל ({{amount}})",
+            "within": "בתוך הטווח הרגיל שלך",
+            "insufficient": "אין מספיק היסטוריה להשוואה"
+          },
+          "usual": {
+            "month": "בדרך כלל {{median}} עד עכשיו (טווח {{low}} – {{high}})",
+            "week": "בדרך כלל {{median}} עד עכשיו (טווח {{low}} – {{high}})",
+            "day": "7 ימים רגילים: {{median}} (טווח {{low}} – {{high}})"
+          },
+          "projection": {
+            "month": "בקצב של {{projected}} החודש · חודש רגיל הוא {{typical}}",
+            "week": "בקצב של {{projected}} השבוע · שבוע רגיל הוא {{typical}}"
+          },
+          "day": {
+            "unusualCount_one": "יום חריג אחד ב־6 השבועות האחרונים",
+            "unusualCount_other": "{{count}} ימים חריגים ב־6 השבועות האחרונים",
+            "chartTitle": "{{metric}} ליום",
+            "chartSubtitle": "6 השבועות האחרונים · כל יום מושווה לאותו יום בשבוע ב־8 השבועות שלפניו",
+            "usualFor": "רגיל ל{{weekday}}: {{median}} (טווח {{low}} – {{high}})",
+            "unusual": "יום חריג",
+            "legendNormal": "יום",
+            "legendUnusual": "יום חריג",
+            "pickDay": "בחר יום",
+            "clickHint": "לחץ על עמודה כדי לראות את התנועות של אותו יום",
+            "nothing": "אין תנועות ביום הזה.",
+            "unusualTitle": "ימים חריגים",
+            "unusualSubtitle": "לפחות פי שניים מהקצה העליון של הטווח הרגיל לאותו יום בשבוע",
+            "noUnusual": "אין ימים חריגים ב־6 השבועות האחרונים.",
+            "usually": "בדרך כלל {{amount}}"
+          },
+          "checks": {
+            "title_one": "בדיקת נתונים אחת",
+            "title_other": "{{count}} בדיקות נתונים",
+            "subtitle": "בעיות שפוגעות באמינות המספרים האלה",
+            "uncategorized": "ללא קטגוריה",
+            "types": {
+              "income": "הכנסה",
+              "investment": "השקעה",
+              "expense": "הוצאה"
+            },
+            "typeMismatch": {
+              "title_one": "תנועה אחת שמורה כהוצאה אבל משויכת לקטגוריית הכנסה או השקעה",
+              "title_other": "{{count}} תנועות שמורות כהוצאות אבל משויכות לקטגוריות הכנסה או השקעה",
+              "body": "מסכים שקוראים את הסוג השמור סופרים אותן כהוצאה. התיקון מעדכן כל תנועה לסוג של הקטגוריה שלה.",
+              "item": "{{date}} · {{name}} · {{amount}} ← {{category}} ({{categoryType}})",
+              "fix": "תקן עכשיו",
+              "failed": "התיקון נכשל. נסה שוב."
+            },
+            "stale": {
+              "title_one": "{{account}} סונכרן לאחרונה ב־{{date}} (לפני יום)",
+              "title_other": "{{account}} סונכרן לאחרונה ב־{{date}} (לפני {{count}} ימים)",
+              "titleFailed_one": "{{account}} סונכרן לאחרונה ב־{{date}} (לפני יום) והסנכרון האחרון נכשל",
+              "titleFailed_other": "{{account}} סונכרן לאחרונה ב־{{date}} (לפני {{count}} ימים) והסנכרון האחרון נכשל",
+              "never": "{{account}} עוד לא סונכרן",
+              "body": "תנועות אחרונות בחשבון הזה חסרות, ולכן התקופה הנוכחית עלולה להיראות נמוכה מהמציאות."
+            },
+            "drift": {
+              "title": "{{merchant}} שויך ל{{category}}",
+              "body_one": "ב־{{date}} ({{amount}}). בדרך כלל הוא {{usual}} (תשלום קודם אחד). כדאי לבדוק שזה נכון.",
+              "body_other": "ב־{{date}} ({{amount}}). בדרך כלל הוא {{usual}} ({{count}} תשלומים קודמים). כדאי לבדוק שזה נכון."
+            }
+          }
+        },
         "title": "הקצב הפיננסי שלך - ניתוח מפורט",
         "timeRange": {
           "3months": "3 חודשים",
@@ -1855,7 +2179,8 @@
       "metrics": {
         "savings": {
           "label": "חיסכון",
-          "tooltip": "מודד את שיעור החיסכון ביחס להכנסה. ציון גבוה מצביע על משמעת פיננסית וביטחון עתידי טוב יותר."
+          "tooltip": "מודד את שיעור החיסכון ביחס להכנסה. ציון גבוה מצביע על משמעת פיננסית וביטחון עתידי טוב יותר.",
+          "payrollIncluded": "כולל {{amount}} דרך המשכורת"
         },
         "diversity": {
           "label": "גיוון",
@@ -3450,6 +3775,10 @@
       }
     },
     "performanceCard": {
+      "estimatedContributions": "כולל ≈ {{amount}} הפקדות משכורת משוערות מאז {{date}}",
+      "estimatedContributionsHint": "הערכה לפי המשכורת שהוגדרה בהגדרות ← פרופיל. מוחלף כשתזינו את הדוח הבא.",
+      "withdrawableFrom": "ניתן למשוך ללא מס מ-{{date}}",
+      "withdrawableSince": "ניתן למשוך ללא מס מאז {{date}}",
       "high": "גבוה",
       "low": "נמוך",
       "value": "שווי",
