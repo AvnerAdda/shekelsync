@@ -50,8 +50,11 @@ const response = {
       {
         identifier: 'expense-1',
         vendor: 'corner-cafe',
+        institution_name_he: 'כרטיס לדוגמה',
+        institution_name_en: 'Example Card',
         name: 'Corner Café',
-        category_name: 'Dining',
+        category_name: 'מסעדות',
+        category_name_en: 'Dining',
         category_type: 'expense',
         price: -48,
         date: '2026-08-31T10:00:00.000Z',
@@ -120,6 +123,17 @@ describe('ActivityPage', () => {
     });
 
     window.removeEventListener('openTransactionDetail', onOpen);
+  });
+
+  it('shows readable bank/card and category names, falling back to the vendor code', async () => {
+    render(<ActivityPage />);
+
+    expect(await screen.findByText('Example Card')).toBeInTheDocument();
+    expect(screen.queryByText('corner-cafe')).not.toBeInTheDocument();
+    expect(screen.getByText('Dining')).toBeInTheDocument();
+    expect(screen.queryByText('מסעדות')).not.toBeInTheDocument();
+    // No institution match: keep showing the stored vendor code.
+    expect(screen.getByText('acme-payroll')).toBeInTheDocument();
   });
 
   it('filters the visible ledger and sends text searches to the existing API', async () => {

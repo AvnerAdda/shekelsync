@@ -31,6 +31,10 @@ import LoadingState from '@renderer/components/LoadingState';
 import { resolveOnboardingGate } from '@renderer/features/layout/components/onboarding-gate';
 import { apiClient } from '@renderer/lib/api-client';
 import LockedPagePlaceholder from '@renderer/shared/empty-state/LockedPagePlaceholder';
+import {
+  resolveTransactionCategoryLabel,
+  resolveTransactionSourceLabel,
+} from '@renderer/shared/utils/transaction-labels';
 
 type ActivityFilter = 'all' | 'income' | 'expense' | 'investment';
 
@@ -39,7 +43,13 @@ interface ActivityTransaction {
   vendor: string;
   name?: string | null;
   category_name?: string | null;
+  category_name_en?: string | null;
+  category_name_fr?: string | null;
   parent_name?: string | null;
+  parent_name_en?: string | null;
+  parent_name_fr?: string | null;
+  institution_name_he?: string | null;
+  institution_name_en?: string | null;
   category_type?: string | null;
   memo?: string | null;
   price: number;
@@ -350,7 +360,8 @@ const ActivityPage: React.FC = () => {
                         ? <TrendingUpRoundedIcon />
                         : <ArrowDownwardRoundedIcon />;
                     const title = transaction.name || transaction.memo || transaction.vendor;
-                    const category = transaction.category_name || transaction.parent_name;
+                    const category = resolveTransactionCategoryLabel(transaction, i18n.language);
+                    const source = resolveTransactionSourceLabel(transaction, i18n.language);
 
                     return (
                       <ListItem key={`${transaction.identifier}|${transaction.vendor}`} disablePadding sx={{ '& .MuiListItemButton-root': { pr: 10 } }} secondaryAction={<TransactionActions transaction={transaction} />}>
@@ -381,7 +392,7 @@ const ActivityPage: React.FC = () => {
                             </Typography>
                             <Stack direction="row" spacing={0.75} sx={{ alignItems: 'center', minWidth: 0 }}>
                               <Typography variant="caption" color="text.secondary" noWrap>
-                                {transaction.vendor}
+                                {source}
                               </Typography>
                               {category && (
                                 <Typography
