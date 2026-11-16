@@ -186,6 +186,8 @@ describe('cash-flow outlook', () => {
     const rows = () => JSON.parse(screen.getByTestId('chart').getAttribute('data-chart-data')!);
     expect(rows().at(-1)).toMatchObject({ expectedCumulative: 1020, plannedCumulative: 920, reservedFloor: 600 });
     expect(rows()[0]).toMatchObject({ plannedCumulative: 1000, reservedFloor: 500 });
+    expect(rows().at(-1).plannedRange).toEqual([840, 990]);
+    expect(screen.getAllByTestId('range').map(range => range.getAttribute('data-key'))).toEqual(['forecastRange', 'plannedRange']);
     expect(screen.getAllByTestId('line').map(line => line.getAttribute('data-key'))).toEqual(
       expect.arrayContaining(['plannedCumulative', 'reservedFloor']));
     expect(screen.getByText('ILS -100 vs expected')).toBeVisible();
@@ -223,6 +225,7 @@ describe('cash-flow outlook', () => {
     expect(screen.getByText(/Add savings goals or What if\? scenarios/)).toBeVisible();
     expect(screen.queryByRole('button', { name: /^Plans/ })).not.toBeInTheDocument();
     expect(screen.getAllByTestId('line').map(line => line.getAttribute('data-key'))).not.toContain('plannedCumulative');
+    expect(screen.getAllByTestId('range').map(range => range.getAttribute('data-key'))).not.toContain('plannedRange');
     expect(screen.getByTestId('plans-available')).toHaveTextContent('ILS 400');
   });
 

@@ -164,6 +164,7 @@ const PersonalizedFutureModal: React.FC<PersonalizedFutureModalProps> = ({ open,
   const plansActive = data?.hasCurrentBalance !== false && hasActivePlans(overlay, planSelection);
   const planned = applyPlanOverlay(chartData, plansActive ? overlay : null, startingBalance);
   const plotData = plansActive ? planned.rows : chartData;
+  const hasPlannedRange = plansActive && planned.rows.some((day: any) => day.historicalCumulative === null && day.plannedRange);
   const showFloor = plansActive && planned.rows.some((day: any) => finite(day.reservedFloor) && day.reservedFloor > 0);
   const knownScenarioIds = new Set((overlay?.scenarios || []).map(scenario => scenario.id));
   const selectedScenarios = planSelection.scenarioIds.filter(id => knownScenarioIds.has(id));
@@ -283,6 +284,7 @@ const PersonalizedFutureModal: React.FC<PersonalizedFutureModalProps> = ({ open,
                   <Legend wrapperStyle={{ fontSize: '0.875rem' }} />
                   <ReferenceLine y={0} stroke={theme.palette.text.secondary} strokeDasharray="3 3" />
                   {hasRange && <Area type="linear" dataKey="forecastRange" stroke="none" fill={theme.palette.primary.main} fillOpacity={0.13} name={t('netPosition.range')} isAnimationActive={false} />}
+                  {hasPlannedRange && <Area type="linear" dataKey="plannedRange" stroke="none" fill={theme.palette.warning.main} fillOpacity={0.18} name={t('plans.range')} isAnimationActive={false} />}
                   <Line type="linear" dataKey="historicalCumulative" stroke={theme.palette.text.secondary} strokeWidth={2} name={t('netPosition.historical')} dot={false} isAnimationActive={false} />
                   <Line type="linear" dataKey={hasExpected ? 'expectedCumulative' : 'p50Cumulative'} stroke={theme.palette.primary.main} strokeWidth={2.5} strokeDasharray="5 4" name={t('scenarios.normal')} dot={false} isAnimationActive={false} />
                   {plansActive && <Line type="linear" dataKey="plannedCumulative" stroke={theme.palette.secondary.main} strokeWidth={2.5} strokeDasharray="2 3" name={t('plans.line')} dot={false} connectNulls isAnimationActive={false} />}
