@@ -17,6 +17,8 @@ html, html body {
 
 /* Clip every layer, including dialogs and menus portaled outside #root. */
 body {
+  /* Equal-width digits keep amounts aligned in lists and stop values jittering when they update. */
+  font-variant-numeric: tabular-nums;
   border-radius: var(--app-window-radius);
   clip-path: inset(0 round var(--app-window-radius));
 }
