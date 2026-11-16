@@ -114,6 +114,9 @@ export function useMortgagePreview(draft: MortgageDraft | null, delayMs = 350) {
         setError(null);
       } catch (previewError) {
         if (requestId !== requestIdRef.current) return;
+        // Drop the last good schedule: showing it next to an invalid draft
+        // makes stale figures look like results for what is on screen.
+        setData(null);
         setError(previewError instanceof Error ? previewError.message : 'Preview failed');
       } finally {
         if (requestId === requestIdRef.current) setLoading(false);
