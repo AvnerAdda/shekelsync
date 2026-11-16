@@ -355,6 +355,29 @@ describe('AppLayout', () => {
     });
   });
 
+  it('scrolls the main area to the top when the page changes, but not for tab or section links', async () => {
+    const router = renderAppLayout(['/']);
+    const main = screen.getByTestId('app-main-scroll');
+    const scrollTo = vi.fn();
+    main.scrollTo = scrollTo as unknown as typeof main.scrollTo;
+
+    await act(async () => {
+      await router.navigate('/activity');
+    });
+    expect(scrollTo).toHaveBeenCalledTimes(1);
+    expect(scrollTo).toHaveBeenCalledWith({ top: 0, left: 0 });
+
+    await act(async () => {
+      await router.navigate('/activity?tab=history');
+    });
+    expect(scrollTo).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      await router.navigate('/settings#privacy');
+    });
+    expect(scrollTo).toHaveBeenCalledTimes(1);
+  });
+
   it('toggles amount masking with Cmd/Ctrl+Shift+H', () => {
     toggleMaskAmounts.mockReset();
     renderAppLayout();

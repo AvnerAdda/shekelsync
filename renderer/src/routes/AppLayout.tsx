@@ -1,7 +1,7 @@
 import TransactionDeleteDialog from '@renderer/shared/modals/TransactionDeleteDialog';
 import TransactionCategoryEditor from '@renderer/shared/modals/TransactionCategoryEditor';
 import { Outlet, useLocation, useNavigate } from 'react-router-dom';
-import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import {
   Box,
   Button,
@@ -236,6 +236,7 @@ const AppLayoutContent: React.FC<AppLayoutContentProps> = ({ authLoading, sessio
   const [donationReminderOpen, setDonationReminderOpen] = useState(false);
   const [donationReminderBusy, setDonationReminderBusy] = useState(false);
   const pendingDataRefreshRef = useRef(false);
+  const mainScrollRef = useRef<HTMLElement | null>(null);
   const { status: donationStatus, loading: donationStatusLoading, markReminderShown } = useDonationStatus();
   const releaseNotes = useReleaseNotes({
     suppressed: authLoading || donationStatusLoading || donationReminderOpen || searchOpen || transactionDetailOpen,
@@ -243,6 +244,16 @@ const AppLayoutContent: React.FC<AppLayoutContentProps> = ({ authLoading, sessio
 
   useEffect(() => {
     setCurrentPage(pathToPage(location.pathname));
+  }, [location.pathname]);
+
+  // Pages share one scroll container, so start each newly opened page at the top.
+  // Tab/query changes keep their position, and #section links do their own scrolling.
+  useLayoutEffect(() => {
+    if (location.hash) {
+      return;
+    }
+    mainScrollRef.current?.scrollTo?.({ top: 0, left: 0 });
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- reset only when the page changes, not on hash edits
   }, [location.pathname]);
 
   useEffect(() => {
@@ -505,6 +516,8 @@ const AppLayoutContent: React.FC<AppLayoutContentProps> = ({ authLoading, sessio
 
         <Box
           component="main"
+          ref={mainScrollRef}
+          data-testid="app-main-scroll"
           sx={{
             flexGrow: 1,
             minWidth: 0,
