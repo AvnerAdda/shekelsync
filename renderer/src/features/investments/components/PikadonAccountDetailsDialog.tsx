@@ -19,6 +19,7 @@ import {
   Typography,
 } from '@mui/material';
 import { apiClient } from '@/lib/api-client';
+import { useFinancePrivacy } from '@app/contexts/FinancePrivacyContext';
 import { useNotification } from '@renderer/features/notifications/NotificationContext';
 import type {
   InvestmentAccountSummary,
@@ -36,16 +37,15 @@ interface PikadonAccountDetailsDialogProps {
   onClose: () => void;
 }
 
-function formatCurrency(value?: number | null): string {
-  return `ILS ${(value || 0).toLocaleString()}`;
-}
-
 export default function PikadonAccountDetailsDialog({
   open,
   account,
   onClose,
 }: PikadonAccountDetailsDialogProps) {
   const { showNotification } = useNotification();
+  const { formatCurrency: formatPrivateCurrency } = useFinancePrivacy();
+  const formatCurrency = (value?: number | null) =>
+    formatPrivateCurrency(value || 0, { currencySymbol: 'ILS ', maximumFractionDigits: 2 });
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);

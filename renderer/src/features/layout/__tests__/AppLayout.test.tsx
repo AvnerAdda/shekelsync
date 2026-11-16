@@ -7,6 +7,7 @@ import AppLayout from '@renderer/routes/AppLayout';
 const mockGet = vi.fn();
 const showNotification = vi.fn();
 const refreshSession = vi.fn();
+const toggleMaskAmounts = vi.fn();
 
 let latestSearchProps: any = null;
 let latestSidebarProps: any = null;
@@ -81,6 +82,10 @@ vi.mock('@renderer/features/usage-analytics', () => ({
 
 vi.mock('@app/contexts/AuthContext', () => ({
   useAuth: () => mockAuthState,
+}));
+
+vi.mock('@app/contexts/FinancePrivacyContext', () => ({
+  useFinancePrivacy: () => ({ toggleMaskAmounts }),
 }));
 
 vi.mock('@renderer/features/notifications/NotificationContext', () => ({
@@ -348,6 +353,17 @@ describe('AppLayout', () => {
     await waitFor(() => {
       expect(screen.getByTestId('location')).toHaveTextContent(expectedPath);
     });
+  });
+
+  it('toggles amount masking with Cmd/Ctrl+Shift+H', () => {
+    toggleMaskAmounts.mockReset();
+    renderAppLayout();
+
+    fireEvent.keyDown(window, { key: 'H', code: 'KeyH', metaKey: true, shiftKey: true });
+    expect(toggleMaskAmounts).toHaveBeenCalledTimes(1);
+
+    fireEvent.keyDown(window, { key: 'h', code: 'KeyH', ctrlKey: true });
+    expect(toggleMaskAmounts).toHaveBeenCalledTimes(1);
   });
 
   it('loads and opens the global transaction detail modal from events', async () => {

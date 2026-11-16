@@ -40,6 +40,7 @@ import {
 } from './investment-account-suggestions-helpers';
 import { linkSuggestionTransactionsBatch } from './investment-account-link-batch';
 import { useTranslation } from 'react-i18next';
+import { useFinancePrivacy } from '@app/contexts/FinancePrivacyContext';
 
 interface Transaction {
   transactionIdentifier: string;
@@ -121,6 +122,7 @@ export default function InvestmentAccountSuggestionsCard({
 }: InvestmentAccountSuggestionsCardProps) {
   const { showNotification } = useNotification();
   const { t } = useTranslation('translation', { keyPrefix: 'accountsModal.realEstateMerge' });
+  const { formatCurrency } = useFinancePrivacy();
 
   const getSuggestionKey = useCallback(
     (suggestion: GroupedSuggestion) => getInvestmentSuggestionKey(suggestion),
@@ -400,7 +402,7 @@ export default function InvestmentAccountSuggestionsCard({
                             display: 'block',
                             fontSize: '0.7rem'
                           }}>
-                          {suggestion.transactionCount} txns • ₪{suggestion.totalAmount.toLocaleString()}
+                          {suggestion.transactionCount} txns • {formatCurrency(suggestion.totalAmount, { maximumFractionDigits: 2 })}
                           {suggestion.suggestedInstitution && ` • ${suggestion.suggestedInstitution}`}
                         </Typography>
                         {hasMatches && suggestion.suggestedAccountType === 'real_estate' && (
@@ -490,7 +492,7 @@ export default function InvestmentAccountSuggestionsCard({
                               <ListItem key={txnIndex} sx={{ py: 0.5 }}>
                                 <ListItemText
                                   primary={txn.transactionName}
-                                  secondary={`${new Date(txn.transactionDate).toLocaleDateString('he-IL')} • ₪${Math.abs(txn.transactionAmount).toLocaleString()}`}
+                                  secondary={`${new Date(txn.transactionDate).toLocaleDateString('he-IL')} • ${formatCurrency(txn.transactionAmount, { absolute: true, maximumFractionDigits: 2 })}`}
                                   slotProps={{
                                     primary: {
                                       variant: 'caption',
@@ -567,7 +569,7 @@ export default function InvestmentAccountSuggestionsCard({
                     <Typography variant="caption" sx={{
                       color: "text.secondary"
                     }}>
-                      {account.currency} {account.current_value.toLocaleString()}
+                      {formatCurrency(account.current_value, { currencySymbol: `${account.currency} `, maximumFractionDigits: 2 })}
                     </Typography>
                     {!account.current_value_explicit && (
                       <Typography variant="caption" sx={{ color: 'text.secondary', fontSize: '0.6rem', fontStyle: 'italic', ml: 0.5 }}>

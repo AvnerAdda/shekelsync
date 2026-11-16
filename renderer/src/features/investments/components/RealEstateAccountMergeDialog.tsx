@@ -5,6 +5,7 @@ import {
 } from '@mui/material';
 import { useTranslation } from 'react-i18next';
 import { apiClient } from '@/lib/api-client';
+import { useFinancePrivacy } from '@app/contexts/FinancePrivacyContext';
 
 interface MergeAccount {
   id?: number;
@@ -36,7 +37,10 @@ export default function RealEstateAccountMergeDialog({ account, accounts, onClos
   const selected = candidates.filter((row) => selectedIds.includes(row.id!));
   const sourceIds = selectedIds.filter((id) => id !== targetId);
   const total = selected.reduce((sum, row) => sum + (row.current_value ?? 0), 0);
-  const formatValue = (value: number) => `${account.currency} ${value.toLocaleString(i18n.language, { maximumFractionDigits: 2 })}`;
+  const { maskAmounts, formatCurrency } = useFinancePrivacy();
+  const formatValue = (value: number) => (maskAmounts
+    ? formatCurrency(value, { currencySymbol: `${account.currency} ` })
+    : `${account.currency} ${value.toLocaleString(i18n.language, { maximumFractionDigits: 2 })}`);
   const label = (row: MergeAccount) => `${row.account_name} (#${row.id}) — ${row.current_value == null ? t('notSet') : formatValue(row.current_value)}${row.last_update_date ? ` · ${new Date(row.last_update_date).toLocaleDateString(i18n.language)}` : ''}`;
 
   const merge = async () => {

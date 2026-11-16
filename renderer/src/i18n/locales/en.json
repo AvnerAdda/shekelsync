@@ -4567,6 +4567,8 @@
       "openMenu": "Open menu",
       "lightMode": "Switch to Light Mode",
       "darkMode": "Switch to Dark Mode",
+      "hideAmounts": "Hide amounts",
+      "showAmounts": "Show amounts",
       "changeLanguage": "Change Language",
       "minimizeWindow": "Minimize window",
       "maximizeWindow": "Maximize window",

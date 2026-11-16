@@ -21,6 +21,7 @@ import { DonationReminderDialog, useDonationStatus } from '@renderer/features/su
 import { UsageAnalyticsConsentDialog, trackScreenView } from '@renderer/features/usage-analytics';
 import { useReleaseNotes } from '@renderer/features/release-notes/useReleaseNotes';
 import { useAuth } from '@app/contexts/AuthContext';
+import { useFinancePrivacy } from '@app/contexts/FinancePrivacyContext';
 import TransactionDetailModal, {
   type TransactionForModal,
 } from '@renderer/shared/modals/TransactionDetailModal';
@@ -226,6 +227,7 @@ const AppLayoutContent: React.FC<AppLayoutContentProps> = ({ authLoading, sessio
   const theme = useTheme();
   const { showNotification } = useNotification();
   const { t } = useTranslation('translation');
+  const { toggleMaskAmounts } = useFinancePrivacy();
   const [currentPage, setCurrentPage] = useState<string>(() => pathToPage(location.pathname));
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchInitialFilters, setSearchInitialFilters] = useState<TransactionSearchFilters | null>(null);
@@ -307,7 +309,14 @@ const AppLayoutContent: React.FC<AppLayoutContentProps> = ({ authLoading, sessio
         event.preventDefault();
         setSearchOpen(true);
       }
-      
+
+      // Cmd/Ctrl + Shift + H: Hide or show amounts (quick privacy while screen sharing)
+      if (isModifierPressed(event) && event.shiftKey && isLetterShortcut(event, 'h')) {
+        event.preventDefault();
+        toggleMaskAmounts();
+        return;
+      }
+
       // Cmd/Ctrl + 1-6: Navigate between primary pages
       if (isModifierPressed(event)) {
         const codeDigit = event.code.startsWith('Digit') ? event.code.slice('Digit'.length) : '';
@@ -333,7 +342,7 @@ const AppLayoutContent: React.FC<AppLayoutContentProps> = ({ authLoading, sessio
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [navigate, handleDataRefresh]);
+  }, [navigate, handleDataRefresh, toggleMaskAmounts]);
 
   const handlePageChange = useCallback(
     (page: string) => {

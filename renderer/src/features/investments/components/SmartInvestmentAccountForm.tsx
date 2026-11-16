@@ -25,6 +25,7 @@ import {
 import { useNotification } from '@renderer/features/notifications/NotificationContext';
 import InstitutionBadge, { InstitutionMetadata, getInstitutionLabel } from '@renderer/shared/components/InstitutionBadge';
 import { apiClient } from '@/lib/api-client';
+import { useFinancePrivacy } from '@app/contexts/FinancePrivacyContext';
 import type {
   PendingPikadonSetup,
   PikadonDetailsInput,
@@ -95,6 +96,7 @@ export default function SmartInvestmentAccountForm({
   onSuccess
 }: SmartInvestmentAccountFormProps) {
   const { showNotification } = useNotification();
+  const { formatCurrency } = useFinancePrivacy();
   const [activeStep, setActiveStep] = useState(0);
   const [loading, setLoading] = useState(false);
   const [institutions, setInstitutions] = useState<InstitutionMetadata[]>([]);
@@ -400,7 +402,7 @@ useEffect(() => {
               <Alert severity="info" sx={{ mb: 3 }}>
                 <Typography variant="body2" gutterBottom>
                   <strong>Detected automatically:</strong> {suggestion.transactionCount} transactions totaling{' '}
-                  ₪{suggestion.totalAmount.toLocaleString()}
+                  {formatCurrency(suggestion.totalAmount, { maximumFractionDigits: 2 })}
                 </Typography>
                 <Typography variant="caption">
                   Confidence level: {Math.round(suggestion.avgConfidence * 100)}%

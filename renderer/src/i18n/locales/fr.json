@@ -4562,6 +4562,8 @@
       "openMenu": "Ouvrir le menu",
       "lightMode": "Passer en mode clair",
       "darkMode": "Passer en mode sombre",
+      "hideAmounts": "Masquer les montants",
+      "showAmounts": "Afficher les montants",
       "changeLanguage": "Changer de langue",
       "minimizeWindow": "Minimiser la fenêtre",
       "maximizeWindow": "Agrandir la fenêtre",
