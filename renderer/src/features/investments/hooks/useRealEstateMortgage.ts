@@ -98,6 +98,7 @@ export function useMortgagePreview(draft: MortgageDraft | null, delayMs = 350) {
     if (!serialized) {
       setData(null);
       setError(null);
+      setLoading(false);
       return undefined;
     }
     const requestId = ++requestIdRef.current;
@@ -122,7 +123,11 @@ export function useMortgagePreview(draft: MortgageDraft | null, delayMs = 350) {
         if (requestId === requestIdRef.current) setLoading(false);
       }
     }, delayMs);
-    return () => clearTimeout(timer);
+    return () => {
+      clearTimeout(timer);
+      // Retire in-flight work even if the next draft is incomplete or closed.
+      requestIdRef.current += 1;
+    };
   }, [serialized, delayMs]);
 
   return { data, error, loading, computable: Boolean(serialized) };
