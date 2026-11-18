@@ -1372,7 +1372,7 @@
       "cumulative": "מצטבר",
       "historicalData": "היסטורי",
       "forecastData": "תחזית",
-      "next30Days": "תחזית ל-30 יום",
+      "nextMonth": "תחזית לחודש",
       "basedOnPatterns": "מבוסס על דפוסי הוצאות היסטוריים",
       "breakdownExplanation": "כל סכום להלן נכלל בסכום הכולל בתרשים. מועדי התשלום משוערים; ההוצאות השוטפות מוצגות כממוצע יומי.",
       "contribution": "נכלל בתחזית",

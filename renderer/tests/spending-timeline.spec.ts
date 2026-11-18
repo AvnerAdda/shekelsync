@@ -1,3 +1,4 @@
+import { addDays, format, subMonths } from 'date-fns';
 import { test, expect } from '@playwright/test';
 import { goHome } from './helpers/renderer-app';
 import en from '../src/i18n/locales/en.json' with { type: 'json' };
@@ -23,9 +24,10 @@ test('home rolling allocation follows dashboard dates and switches between spend
   await expect(page.getByTestId('target-line-essential')).toHaveCount(0);
   await expect(chart.getByText('125%', { exact: true })).toBeVisible();
 
-  await page.getByRole('button', { name: '30D', exact: true }).click();
-  await expect.poll(() => state.timelineRequests.at(-1)?.searchParams.get('startDate')).toBe(dateAfter(-29));
-  await expect(page.getByLabel(labels.timeline.inspectDate)).toHaveAttribute('min', dateAfter(-29));
+  const monthStart = format(addDays(subMonths(new Date(), 1), 1), 'yyyy-MM-dd');
+  await page.getByRole('button', { name: '1M', exact: true }).click();
+  await expect.poll(() => state.timelineRequests.at(-1)?.searchParams.get('startDate')).toBe(monthStart);
+  await expect(page.getByLabel(labels.timeline.inspectDate)).toHaveAttribute('min', monthStart);
   await expect(page.getByLabel(labels.timeline.inspectDate)).toHaveAttribute('max', dateAfter(0));
   await expect(split).not.toBeChecked();
   await split.check();

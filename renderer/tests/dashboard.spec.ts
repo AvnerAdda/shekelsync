@@ -78,7 +78,7 @@ test('first dashboard chart overlays rolling daily averages on the main scale an
     },
   });
   await goHome(page);
-  await page.getByRole('button', { name: '30D', exact: true }).click();
+  await page.getByRole('button', { name: '1M', exact: true }).click();
   const chart = page.locator('.recharts-wrapper').filter({ hasText: 'Income · 30-day daily average' });
   await expect(chart).toBeVisible();
   await expect(chart.locator('.recharts-line-curve')).toHaveCount(3);
@@ -98,7 +98,7 @@ test('first dashboard chart overlays rolling daily averages on the main scale an
 });
 
 test('dashboard shows loading state then formatted summary values', async ({ page }) => {
-  // On the 30th, MTD and 30D are identical and cached breakdowns need no refetch.
+  // Keep MTD and the trailing month distinct so both ranges require fresh data.
   await page.clock.setFixedTime(new Date('2026-09-23T12:00:00+03:00'));
   const dashboardRequests: URL[] = [];
   const waterfallRequests: URL[] = [];
@@ -149,7 +149,7 @@ test('dashboard shows loading state then formatted summary values', async ({ pag
   dashboardRequests.length = 0;
   waterfallRequests.length = 0;
   breakdownRequests.length = 0;
-  await page.getByRole('button', { name: '30D' }).click();
+  await page.getByRole('button', { name: '1M' }).click();
 
   await expect.poll(() => dashboardRequests.length).toBeGreaterThan(0);
   await expect.poll(() => waterfallRequests.length).toBeGreaterThan(0);
@@ -164,9 +164,33 @@ test('dashboard shows loading state then formatted summary values', async ({ pag
   };
   const dashboardRange = latestRange(dashboardRequests);
 
+  expect(dashboardRange.startDate?.slice(0, 10)).toBe('2026-08-24');
+  expect(dashboardRange.endDate?.slice(0, 10)).toBe('2026-09-23');
+
   expect(latestRange(waterfallRequests)).toEqual(dashboardRange);
   expect(latestRange(breakdownRequests)).toEqual(dashboardRange);
   await expect(
-    page.locator('[data-dashboard-summary-card="finance"]').getByText('30D', { exact: true }),
+    page.locator('[data-dashboard-summary-card="finance"]').getByText('1M', { exact: true }),
   ).toBeVisible();
+});
+
+test('quick amount hiding persists across reloads and the keyboard shortcut restores amounts', async ({ page }) => {
+  await setupRendererTest(page, {
+    'GET /api/analytics/dashboard': async ({ route }) => {
+      await route.fulfill(jsonResponse(dashboardPayload));
+    },
+  });
+  await goHome(page);
+  const income = page.getByText('+₪12,000', { exact: true });
+  await expect(income.first()).toBeVisible();
+  await page.getByRole('button', { name: 'Hide amounts', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Show amounts', exact: true })).toHaveAttribute('aria-pressed', 'true');
+  await expect(income).toHaveCount(0);
+
+  await page.reload();
+  await expect(page.getByRole('button', { name: 'Show amounts', exact: true })).toHaveAttribute('aria-pressed', 'true');
+  await expect(income).toHaveCount(0);
+  await page.keyboard.press('Control+Shift+H');
+  await expect(page.getByRole('button', { name: 'Hide amounts', exact: true })).toHaveAttribute('aria-pressed', 'false');
+  await expect(income.first()).toBeVisible();
 });

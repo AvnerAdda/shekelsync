@@ -1342,7 +1342,7 @@ const TransactionHistorySection: React.FC<TransactionHistorySectionProps> = ({
                 mb: 1,
                 textAlign: 'center'
               }}>
-              {selectedPeriodLabel} + {t('forecast.next30Days', { defaultValue: '30 day forecast' })}
+              {selectedPeriodLabel} + {t('forecast.nextMonth', { defaultValue: 'One month forecast' })}
               {` — ${t('settings.showForecast')}: ${showForecast ? t('settings.on', { defaultValue: 'On' }) : t('settings.off', { defaultValue: 'Off' })}`}
             </Typography>
           )}

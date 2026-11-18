@@ -1365,7 +1365,7 @@
       "cumulative": "Cumulatif",
       "historicalData": "Historique",
       "forecastData": "Prévision",
-      "next30Days": "Prévision 30 jours",
+      "nextMonth": "Prévision sur un mois",
       "basedOnPatterns": "Basé sur les habitudes de dépenses historiques",
       "breakdownExplanation": "Chaque montant ci-dessous contribue au total du graphique. Les dates de paiement sont estimées ; les dépenses courantes sont présentées sous forme de moyenne quotidienne.",
       "contribution": "Inclus dans la prévision",
