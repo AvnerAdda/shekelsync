@@ -1,0 +1,31 @@
+{
+  "name": "@shekelsync/picomatch",
+  "description": "Local security fork of picomatch 4.0.7 for GHSA-fc5q-39xc-vjpf",
+  "version": "4.0.7-shekelsync.1",
+  "homepage": "https://github.com/micromatch/picomatch",
+  "author": "Jon Schlinkert (https://github.com/jonschlinkert)",
+  "funding": "https://github.com/sponsors/jonschlinkert",
+  "repository": "micromatch/picomatch",
+  "bugs": {
+    "url": "https://github.com/micromatch/picomatch/issues"
+  },
+  "license": "MIT",
+  "files": [
+    "index.js",
+    "posix.js",
+    "lib",
+    "UPSTREAM.json",
+    "SECURITY.md"
+  ],
+  "sideEffects": false,
+  "main": "index.js",
+  "engines": {
+    "node": ">=12"
+  },
+  "keywords": [
+    "glob",
+    "match",
+    "picomatch"
+  ],
+  "private": true
+}
