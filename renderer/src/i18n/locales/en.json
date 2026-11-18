@@ -65,7 +65,7 @@
   "dashboardPeriod": {
     "ariaLabel": "Dashboard period",
     "mtd": "MTD",
-    "last30": "30D",
+    "lastMonth": "1M",
     "custom": "Custom",
     "startDate": "Start date",
     "endDate": "End date",
@@ -1236,7 +1236,7 @@
     },
     "periodDays": {
       "mtdLong": "Month to date",
-      "last30Long": "Last 30 days",
+      "lastMonthLong": "Past month",
       "customLong": "{{start}} – {{end}}"
     },
     "overall": {
@@ -1296,7 +1296,7 @@
     },
     "periodDays": {
       "showingMtd": "Month to date",
-      "showingLast30": "Last 30 days",
+      "showingLastMonth": "Past month",
       "showingCustom": "{{start}} – {{end}}"
     },
     "settings": {
@@ -1342,7 +1342,7 @@
       },
       "horizon": {
         "eom": "EOM",
-        "30": "30D",
+        "1m": "1M",
         "custom": "Custom"
       },
       "until": "Projection until:",

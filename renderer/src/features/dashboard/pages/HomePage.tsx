@@ -538,8 +538,8 @@ const DashboardHomeContent: React.FC = () => {
     ? fallbackRangeLabel
     : periodPreset === 'mtd'
       ? tPeriod('mtd')
-      : periodPreset === '30d'
-        ? tPeriod('last30')
+      : periodPreset === '1m'
+        ? tPeriod('lastMonth')
         : selectedRangeLabel;
 
   // Determine effective data to display (use fallback when current period is empty)

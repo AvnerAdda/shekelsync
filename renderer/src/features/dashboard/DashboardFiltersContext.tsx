@@ -1,8 +1,9 @@
 import React, { createContext, useContext, useMemo, useState, useCallback } from 'react';
-import { subDays, addDays, endOfDay, startOfDay, startOfMonth } from 'date-fns';
+import { endOfDay, startOfMonth } from 'date-fns';
+import { monthsAhead, startOfTrailingMonths } from '@renderer/shared/utils/month-window';
 import { AggregationPeriod } from '@renderer/types/dashboard';
 
-export type DashboardPeriodPreset = 'mtd' | '30d' | 'custom';
+export type DashboardPeriodPreset = 'mtd' | '1m' | 'custom';
 
 interface DashboardFiltersContextValue {
   startDate: Date;
@@ -14,7 +15,7 @@ interface DashboardFiltersContextValue {
   setHoveredDate: (value: string | null) => void;
   periodPreset: DashboardPeriodPreset;
   setPeriodPreset: (preset: Exclude<DashboardPeriodPreset, 'custom'>) => void;
-  /** Forecast is always 30 days ahead from today */
+  /** Forecast always runs one calendar month ahead of today */
   forecastEndDate: Date;
 }
 
@@ -27,8 +28,7 @@ export const DashboardFiltersProvider: React.FC<{ children: React.ReactNode }> =
   const [aggregationPeriod, setAggregationPeriod] = useState<AggregationPeriod>('daily');
   const [hoveredDate, setHoveredDate] = useState<string | null>(null);
 
-  // Forecast always 30 days ahead from today
-  const forecastEndDate = useMemo(() => addDays(new Date(), 30), []);
+  const forecastEndDate = useMemo(() => monthsAhead(new Date()), []);
 
   const setDateRange = useCallback((start: Date, end: Date) => {
     setStartDate(start);
@@ -40,7 +40,7 @@ export const DashboardFiltersProvider: React.FC<{ children: React.ReactNode }> =
   const setPeriodPreset = useCallback((preset: Exclude<DashboardPeriodPreset, 'custom'>) => {
     const now = new Date();
     setPeriodPresetState(preset);
-    setStartDate(preset === 'mtd' ? startOfMonth(now) : startOfDay(subDays(now, 29)));
+    setStartDate(preset === 'mtd' ? startOfMonth(now) : startOfTrailingMonths(now));
     setEndDate(endOfDay(now));
     setHoveredDate(null);
   }, []);

@@ -9,7 +9,7 @@ vi.mock('react-i18next', () => ({
     t: (key: string) => ({
       ariaLabel: 'Dashboard period',
       mtd: 'MTD',
-      last30: '30D',
+      lastMonth: '1M',
       custom: 'Custom',
       startDate: 'Start date',
       endDate: 'End date',
@@ -34,7 +34,7 @@ describe('DashboardPeriodSelector', () => {
     vi.useRealTimers();
   });
 
-  it('keeps the segmented control and exposes MTD, 30D, and Custom', () => {
+  it('keeps the segmented control and exposes MTD, 1M, and Custom', () => {
     render(
       <DashboardFiltersProvider>
         <DashboardPeriodSelector />
@@ -43,14 +43,14 @@ describe('DashboardPeriodSelector', () => {
     );
 
     expect(screen.getByRole('button', { name: 'MTD' })).toHaveAttribute('aria-pressed', 'true');
-    expect(screen.getByRole('button', { name: '30D' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '1M' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Custom' })).toBeInTheDocument();
 
     act(() => {
-      fireEvent.click(screen.getByRole('button', { name: '30D' }));
+      fireEvent.click(screen.getByRole('button', { name: '1M' }));
     });
 
-    expect(screen.getByTestId('selected-preset')).toHaveTextContent('30d');
+    expect(screen.getByTestId('selected-preset')).toHaveTextContent('1m');
   });
 
   it('opens the custom date controls and applies the range', () => {

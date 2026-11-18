@@ -57,7 +57,7 @@ const DashboardPeriodSelector: React.FC<DashboardPeriodSelectorProps> = ({ sx })
         value={periodPreset}
         exclusive
         onChange={(event, newPeriod) => {
-          if (newPeriod === 'mtd' || newPeriod === '30d') {
+          if (newPeriod === 'mtd' || newPeriod === '1m') {
             setPeriodPreset(newPeriod);
           } else if (newPeriod === 'custom') {
             openCustomRange(event.currentTarget);
@@ -68,7 +68,7 @@ const DashboardPeriodSelector: React.FC<DashboardPeriodSelectorProps> = ({ sx })
         sx={sx}
       >
         <ToggleButton value="mtd">{t('mtd')}</ToggleButton>
-        <ToggleButton value="30d">{t('last30')}</ToggleButton>
+        <ToggleButton value="1m">{t('lastMonth')}</ToggleButton>
         <ToggleButton
           value="custom"
           onClick={(event) => {

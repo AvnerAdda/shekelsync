@@ -211,7 +211,7 @@ const BreakdownTabsSection: React.FC<BreakdownTabsSectionProps> = ({
   const effectiveEndDate = endDate;
   const selectedPeriodLabel = React.useMemo(() => {
     if (periodPreset === 'mtd') return t('periodDays.mtdLong');
-    if (periodPreset === '30d') return t('periodDays.last30Long');
+    if (periodPreset === '1m') return t('periodDays.lastMonthLong');
 
     const formatter = new Intl.DateTimeFormat(i18n.language || undefined, {
       month: 'short',

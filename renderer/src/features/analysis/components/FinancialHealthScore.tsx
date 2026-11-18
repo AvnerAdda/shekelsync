@@ -21,7 +21,8 @@ import ImpulseIcon from '@mui/icons-material/ShoppingCart';
 import RunwayIcon from '@mui/icons-material/Schedule';
 import HelpIcon from '@mui/icons-material/HelpOutlined';
 import RefreshIcon from '@mui/icons-material/Refresh';
-import { startOfMonth, subDays, format } from 'date-fns';
+import { startOfMonth, format } from 'date-fns';
+import { startOfTrailingMonths } from '@renderer/shared/utils/month-window';
 import { useFinancePrivacy } from '@app/contexts/FinancePrivacyContext';
 import { apiClient } from '@renderer/lib/api-client';
 import { useTranslation } from 'react-i18next';
@@ -65,8 +66,8 @@ const FinancialHealthScore: React.FC<FinancialHealthScoreProps> = ({ data, loadi
   const [internalError, setInternalError] = useState<string | null>(null);
   const [trendModalOpen, setTrendModalOpen] = useState(false);
 
-  type PeriodPreset = 'mtd' | '30d' | '60d';
-  const [periodPreset, setPeriodPreset] = useState<PeriodPreset>('60d');
+  type PeriodPreset = 'mtd' | '1m' | '2m';
+  const [periodPreset, setPeriodPreset] = useState<PeriodPreset>('2m');
 
   const getPeriodDates = useCallback((preset: PeriodPreset): { startDate: string; endDate: string } => {
     const now = new Date();
@@ -74,11 +75,11 @@ const FinancialHealthScore: React.FC<FinancialHealthScoreProps> = ({ data, loadi
     switch (preset) {
       case 'mtd':
         return { startDate: format(startOfMonth(now), 'yyyy-MM-dd'), endDate: end };
-      case '30d':
-        return { startDate: format(subDays(now, 29), 'yyyy-MM-dd'), endDate: end };
-      case '60d':
+      case '1m':
+        return { startDate: format(startOfTrailingMonths(now, 1), 'yyyy-MM-dd'), endDate: end };
+      case '2m':
       default:
-        return { startDate: format(subDays(now, 59), 'yyyy-MM-dd'), endDate: end };
+        return { startDate: format(startOfTrailingMonths(now, 2), 'yyyy-MM-dd'), endDate: end };
     }
   }, []);
 
@@ -223,8 +224,8 @@ const FinancialHealthScore: React.FC<FinancialHealthScoreProps> = ({ data, loadi
             disabled={effectiveLoading}
           >
             <ToggleButton value="mtd" sx={{ px: 1.5, fontSize: '0.75rem', textTransform: 'none' }}>MTD</ToggleButton>
-            <ToggleButton value="30d" sx={{ px: 1.5, fontSize: '0.75rem', textTransform: 'none' }}>30d</ToggleButton>
-            <ToggleButton value="60d" sx={{ px: 1.5, fontSize: '0.75rem', textTransform: 'none' }}>60d</ToggleButton>
+            <ToggleButton value="1m" sx={{ px: 1.5, fontSize: '0.75rem', textTransform: 'none' }}>1M</ToggleButton>
+            <ToggleButton value="2m" sx={{ px: 1.5, fontSize: '0.75rem', textTransform: 'none' }}>2M</ToggleButton>
           </ToggleButtonGroup>
           <Button
             variant="outlined"

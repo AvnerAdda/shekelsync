@@ -11,16 +11,20 @@ const anchor = (overrides: Partial<NetPositionPoint> = {}): NetPositionPoint => 
 });
 
 describe('net position projection helpers', () => {
-  it('defaults to end of month for month-to-date and 30 days otherwise', () => {
+  it('defaults to end of month for month-to-date and one month otherwise', () => {
     expect(getDefaultProjectionHorizon('mtd')).toBe('eom');
-    expect(getDefaultProjectionHorizon('30d')).toBe('30');
-    expect(getDefaultProjectionHorizon('custom')).toBe('30');
+    expect(getDefaultProjectionHorizon('1m')).toBe('1m');
+    expect(getDefaultProjectionHorizon('custom')).toBe('1m');
   });
 
-  it('resolves horizon end dates, falling back to 30 days on the last day of the month', () => {
+  it('resolves horizon end dates, falling back to one month on the last day of the month', () => {
     expect(resolveHorizonEndDate('eom', new Date(2026, 8, 3, 12))).toBe('2026-09-30');
     expect(resolveHorizonEndDate('eom', new Date(2026, 8, 30, 12))).toBe('2026-10-30');
-    expect(resolveHorizonEndDate('30', new Date(2026, 8, 3, 12))).toBe('2026-10-03');
+    expect(resolveHorizonEndDate('1m', new Date(2026, 8, 3, 12))).toBe('2026-10-03');
+    // A calendar month, not 30 days: 31 Oct runs to 30 Nov and 31 Jan to 28 Feb.
+    expect(resolveHorizonEndDate('1m', new Date(2026, 9, 15, 12))).toBe('2026-11-15');
+    expect(resolveHorizonEndDate('eom', new Date(2026, 9, 31, 12))).toBe('2026-11-30');
+    expect(resolveHorizonEndDate('1m', new Date(2027, 0, 31, 12))).toBe('2027-02-28');
   });
 
   it('clamps custom dates to the fetched forecast window', () => {
