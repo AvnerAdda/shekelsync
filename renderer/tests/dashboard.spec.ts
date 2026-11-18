@@ -164,8 +164,12 @@ test('dashboard shows loading state then formatted summary values', async ({ pag
   };
   const dashboardRange = latestRange(dashboardRequests);
 
-  expect(dashboardRange.startDate?.slice(0, 10)).toBe('2026-08-24');
-  expect(dashboardRange.endDate?.slice(0, 10)).toBe('2026-09-23');
+  // API timestamps are UTC; assert the selected calendar dates in the browser's zone.
+  const localDates = await page.evaluate(range => [range.startDate, range.endDate].map(value => {
+    const date = new Date(value!);
+    return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+  }), dashboardRange);
+  expect(localDates).toEqual(['2026-08-24', '2026-09-23']);
 
   expect(latestRange(waterfallRequests)).toEqual(dashboardRange);
   expect(latestRange(breakdownRequests)).toEqual(dashboardRange);
