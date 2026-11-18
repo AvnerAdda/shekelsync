@@ -60,7 +60,8 @@
     },
     "eslint-plugin-jsx-a11y": {
       "eslint": "$eslint"
-    }
+    },
+    "picomatch": "$picomatch"
   },
   "devDependencies": {
     "@electron/rebuild": "^4.2.0",
@@ -112,7 +113,8 @@
     "ts-node": "^10.9.2",
     "typescript": "npm:@typescript/typescript6@^6.0.2",
     "vitest": "^5.0.5",
-    "wait-on": "^9.1.0"
+    "wait-on": "^9.1.0",
+    "picomatch": "file:../vendor/picomatch"
   },
   "build": {
     "appId": "com.shekelsync.finance",
