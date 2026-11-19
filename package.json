@@ -12,10 +12,10 @@
     "test": "npm --prefix app run test:coverage && npm --prefix renderer run test:unit && npm --prefix renderer run test:e2e",
     "test:ci": "npm --prefix app run test:coverage && npm --prefix renderer run test:unit",
     "test:security": "npm --prefix app run test",
-    "test:dependency-security": "node scripts/verify-minimatch-security.cjs",
+    "test:dependency-security": "node scripts/verify-minimatch-security.cjs && node scripts/verify-picomatch-security.cjs && node --test scripts/__tests__/verify-picomatch-security.test.cjs",
     "test:security:coverage": "npm --prefix app run test:coverage",
     "test:security:watch": "npm --prefix app exec -- vitest watch",
-    "audit:security": "npm audit --omit=dev --audit-level=moderate && npm --prefix app audit --omit=dev --audit-level=moderate && npm --prefix renderer audit --omit=dev --audit-level=moderate && npm audit --audit-level=high && npm --prefix app audit --audit-level=high && npm --prefix renderer audit --audit-level=high && npm run test:security:coverage",
+    "audit:security": "npm run test:dependency-security && npm run audit:picomatch-upstream && npm audit --omit=dev --audit-level=moderate && npm --prefix app audit --omit=dev --audit-level=moderate && npm --prefix renderer audit --omit=dev --audit-level=moderate && npm audit --audit-level=high && npm --prefix app audit --audit-level=high && npm --prefix renderer audit --audit-level=high && npm run test:security:coverage",
     "icons:icns": "node scripts/generate-icns.js",
     "release:migrations:check": "node scripts/migrations/check_release_migrations.js",
     "release:migrations:check:allow": "node scripts/migrations/check_release_migrations.js --allow-changes",
@@ -25,15 +25,7 @@
     "hooks:install": "bash scripts/install-git-hooks.sh",
     "benchmark:check": "node scripts/benchmarks/assert-benchmarks.js",
     "performance:renderer": "npm --prefix renderer run build && npm --prefix renderer run performance:budget",
-    "migrate:license:email-only": "node scripts/migrations/upgrade_license_email_only.js"
-  },
-  "dependencies": {
-    "electron-is-dev": "^3.0.1",
-    "electron-reload": "^2.0.0-alpha.1",
-    "http-proxy-middleware": "^4.2.0"
-  },
-  "overrides": {
-    "follow-redirects": "^1.16.0",
-    "picomatch": "^4.0.7"
+    "migrate:license:email-only": "node scripts/migrations/upgrade_license_email_only.js",
+    "audit:picomatch-upstream": "node scripts/verify-picomatch-security.cjs --audit-upstream"
   }
 }

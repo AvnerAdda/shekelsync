@@ -66,7 +66,8 @@
     "terser": "^5.51.2",
     "typescript": "npm:@typescript/typescript6@^6.0.2",
     "vite": "^8.3.1",
-    "vitest": "^5.0.2"
+    "vitest": "^5.0.2",
+    "picomatch": "file:../vendor/picomatch"
   },
   "overrides": {
     "eslint-plugin-react": {
@@ -74,7 +75,8 @@
     },
     "eslint-plugin-jsx-a11y": {
       "eslint": "$eslint"
-    }
+    },
+    "picomatch": "$picomatch"
   },
   "engines": {
     "node": "^22.22.2 || ^24.15.0 || >=26.0.0"

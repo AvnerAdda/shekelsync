@@ -346,6 +346,28 @@ describe('buildMortgageSchedule — bank conventions', () => {
     expect(rows[0]).toMatchObject({ date: '2026-10-10', phase: 'amortizing' });
   });
 
+  it('keeps the first payment date when the draw is less than a month before it', () => {
+    // A track opened on 12 Feb with its first payment on 10 Mar: the bank
+    // charges 26 days of interest plus the regular principal on 10 Mar, with
+    // no separate interest-only charge and no shift to April.
+    const result = buildMortgageSchedule({
+      asOf: '2026-02-15',
+      options: { brokenPeriodInterest: 'separate' },
+      tracks: [fixedTrack({ rate: 3, termMonths: 240, firstPaymentDate: '2026-03-10', tranches: [{ drawDate: '2026-02-12', amount: 400000 }] })],
+    });
+    const rows = result.tracks[0].rows;
+    const r = 0.03 / 12;
+    const regular = annuityPayment(400000, r, 240);
+    expect(rows.find((row: any) => row.phase === 'broken_period')).toBeUndefined();
+    expect(rows[0].date).toBe('2026-03-10');
+    expect(rows[0].payment).toBeCloseTo(regular - 400000 * r + 400000 * 0.03 * (26 / 365), 2);
+    expect(rows[1].date).toBe('2026-04-10');
+    expect(rows).toHaveLength(240);
+    expect(rows.at(-1).date).toBe('2046-02-10');
+    expect(rows.at(-1).closingBalance).toBe(0);
+    expect(result.warnings.map((w: any) => w.code)).not.toContain('first_payment_gap');
+  });
+
   it('can apply prime changes one installment later', () => {
     const paths = ratePaths.buildPaths({
       asOf: '2026-08-01',
