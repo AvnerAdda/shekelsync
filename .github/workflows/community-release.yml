@@ -1,0 +1,46 @@
+name: Release announcement
+
+on:
+  # Releases published using GITHUB_TOKEN do not emit another workflow run.
+  # package.yml calls this workflow explicitly after publication instead.
+  workflow_call:
+    inputs:
+      tag:
+        required: true
+        type: string
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing published release tag to announce or refresh
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  discussions: write
+
+concurrency:
+  group: release-announcement-${{ inputs.tag || github.event.release.tag_name }}
+  cancel-in-progress: false
+
+jobs:
+  announce:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout publishing script from main
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: main
+          persist-credentials: false
+      - name: Setup Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+        with:
+          node-version: '24'
+      - name: Announce the published version
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ inputs.tag || github.event.release.tag_name }}
+        run: node .github/scripts/community-updates.cjs release

@@ -220,6 +220,10 @@ You are responsible for lawful and compliant use in your jurisdiction.
 
 ## Community
 
+- User guides and project wiki: https://github.com/AvnerAdda/shekelsync/wiki
+- Development screenshots: [Show and tell](https://github.com/AvnerAdda/shekelsync/discussions/categories/show-and-tell)
+- Published-version updates: [Announcements](https://github.com/AvnerAdda/shekelsync/discussions/categories/announcements)
+- Community automation and wiki maintenance: [`docs/community-updates.md`](docs/community-updates.md)
 - Contribution guide: `CONTRIBUTING.md`
 - Code of conduct: `CODE_OF_CONDUCT.md`
 - Privacy policy: `PRIVACY.md`

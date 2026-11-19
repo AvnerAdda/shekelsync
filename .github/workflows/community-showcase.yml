@@ -1,0 +1,80 @@
+name: Community showcase
+
+on:
+  # This also covers merged fork PRs. Only the already-merged base commit is
+  # executed, after the merged guard below; the PR head is never checked out.
+  pull_request_target:
+    types: [closed]
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: community-showcase-${{ github.event.pull_request.number }}
+  cancel-in-progress: false
+
+jobs:
+  screenshots:
+    if: github.event.pull_request.merged == true
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout the merged version
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ github.event.pull_request.merge_commit_sha }}
+          persist-credentials: false
+      - name: Setup Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: |
+            app/package-lock.json
+            renderer/package-lock.json
+      - name: Install shared app dependencies
+        run: npm --prefix app ci
+      - name: Install renderer dependencies
+        run: npm --prefix renderer ci
+      - name: Build the merged renderer
+        run: npm --prefix renderer run build
+      - name: Install Chromium
+        run: npm --prefix renderer exec -- playwright install --with-deps chromium
+      - name: Capture public screenshots with demo data
+        run: npm --prefix renderer run screenshots:community
+      - name: Upload screenshots
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: community-screenshots
+          path: renderer/community-screenshots/*.png
+          if-no-files-found: error
+          retention-days: 7
+
+  publish:
+    needs: screenshots
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write
+      discussions: write
+    # Building the app and installing dependencies happen in the read-only job.
+    steps:
+      - name: Checkout publishing script
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - name: Setup Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+        with:
+          node-version: '24'
+      - name: Download screenshots
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
+        with:
+          name: community-screenshots
+          path: community-screenshots
+      - name: Post to Show and tell
+        env:
+          GH_TOKEN: ${{ github.token }}
+          COMMUNITY_SCREENSHOTS_DIR: community-screenshots
+        run: node .github/scripts/community-updates.cjs merge

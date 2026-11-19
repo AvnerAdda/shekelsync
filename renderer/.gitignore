@@ -3,3 +3,4 @@ dist
 *.log
 playwright-report
 test-results
+community-screenshots

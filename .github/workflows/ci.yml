@@ -52,6 +52,9 @@ jobs:
       - name: Run renderer unit tests
         run: npm --prefix renderer run test:unit
 
+      - name: Verify community publishing behavior
+        run: npm run test:community
+
       - name: Enforce coverage thresholds
         run: |
           node <<'NODE'

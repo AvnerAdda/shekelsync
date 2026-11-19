@@ -1,0 +1,1 @@
+[ShekelSync source](https://github.com/AvnerAdda/shekelsync) · [Releases](https://github.com/AvnerAdda/shekelsync/releases) · [Privacy policy](https://github.com/AvnerAdda/shekelsync/blob/main/PRIVACY.md) · [Security reporting](https://github.com/AvnerAdda/shekelsync/blob/main/SECURITY.md)

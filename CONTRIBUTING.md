@@ -31,6 +31,7 @@ npm test
 - Keep PRs focused and small when possible.
 - Include tests for behavior changes.
 - Update docs when interfaces or workflows change.
+- Add a short **Community update** to the PR description for the automatic Show and tell post after merge. Screenshots use demo data and are captured from the merged app.
 - Ensure lint/tests pass before requesting review.
 - Do not include secrets, private keys, or production data.
 
