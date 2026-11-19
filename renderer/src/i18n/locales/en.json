@@ -65,7 +65,7 @@
   "dashboardPeriod": {
     "ariaLabel": "Dashboard period",
     "mtd": "MTD",
-    "last30": "30D",
+    "lastMonth": "1M",
     "custom": "Custom",
     "startDate": "Start date",
     "endDate": "End date",
@@ -1236,7 +1236,7 @@
     },
     "periodDays": {
       "mtdLong": "Month to date",
-      "last30Long": "Last 30 days",
+      "lastMonthLong": "Past month",
       "customLong": "{{start}} – {{end}}"
     },
     "overall": {
@@ -1296,7 +1296,7 @@
     },
     "periodDays": {
       "showingMtd": "Month to date",
-      "showingLast30": "Last 30 days",
+      "showingLastMonth": "Past month",
       "showingCustom": "{{start}} – {{end}}"
     },
     "settings": {
@@ -1342,7 +1342,7 @@
       },
       "horizon": {
         "eom": "EOM",
-        "30": "30D",
+        "1m": "1M",
         "custom": "Custom"
       },
       "until": "Projection until:",
@@ -1370,7 +1370,7 @@
       "cumulative": "Cumulative",
       "historicalData": "Historical",
       "forecastData": "Forecast",
-      "next30Days": "30 day forecast",
+      "nextMonth": "One month forecast",
       "basedOnPatterns": "Based on historical spending patterns",
       "breakdownExplanation": "Each amount below contributes to the chart total. Payment dates are estimates; everyday spending is shown as a daily average.",
       "contribution": "Included in forecast",
@@ -4568,6 +4568,8 @@
       "openMenu": "Open menu",
       "lightMode": "Switch to Light Mode",
       "darkMode": "Switch to Dark Mode",
+      "hideAmounts": "Hide amounts",
+      "showAmounts": "Show amounts",
       "changeLanguage": "Change Language",
       "minimizeWindow": "Minimize window",
       "maximizeWindow": "Maximize window",

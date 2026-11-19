@@ -251,10 +251,18 @@ async function searchTransactions(params = {}) {
         t.processed_date,
         t.account_number,
         t.type,
-        t.status
+        t.status,
+        cd.name_en AS category_name_en,
+        cd.name_fr AS category_name_fr,
+        parent.name_en AS parent_name_en,
+        parent.name_fr AS parent_name_fr,
+        inst.display_name_he AS institution_name_he,
+        inst.display_name_en AS institution_name_en
       FROM transactions t
       LEFT JOIN category_definitions cd ON t.category_definition_id = cd.id
       LEFT JOIN category_definitions parent ON cd.parent_id = parent.id
+      -- vendor_code is unique, so this lookup never duplicates transaction rows.
+      LEFT JOIN institution_nodes inst ON inst.vendor_code = t.vendor AND inst.node_type = 'institution'
       ${whereClause}
       ORDER BY t.date DESC, t.processed_date DESC
       LIMIT $${limitParam}

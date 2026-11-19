@@ -65,7 +65,7 @@
   "dashboardPeriod": {
     "ariaLabel": "תקופת לוח הבקרה",
     "mtd": "MTD",
-    "last30": "30י",
+    "lastMonth": "חודש",
     "custom": "מותאם",
     "startDate": "תאריך התחלה",
     "endDate": "תאריך סיום",
@@ -1238,7 +1238,7 @@
     },
     "periodDays": {
       "mtdLong": "מתחילת החודש",
-      "last30Long": "30 הימים האחרונים",
+      "lastMonthLong": "החודש האחרון",
       "customLong": "{{start}} – {{end}}"
     },
     "overall": {
@@ -1298,7 +1298,7 @@
     },
     "periodDays": {
       "showingMtd": "מתחילת החודש",
-      "showingLast30": "30 הימים האחרונים",
+      "showingLastMonth": "החודש האחרון",
       "showingCustom": "{{start}} – {{end}}"
     },
     "settings": {
@@ -1344,7 +1344,7 @@
       },
       "horizon": {
         "eom": "סוף חודש",
-        "30": "30 י׳",
+        "1m": "חודש",
         "custom": "מותאם"
       },
       "until": "תחזית עד:",
@@ -1372,7 +1372,7 @@
       "cumulative": "מצטבר",
       "historicalData": "היסטורי",
       "forecastData": "תחזית",
-      "next30Days": "תחזית ל-30 יום",
+      "nextMonth": "תחזית לחודש",
       "basedOnPatterns": "מבוסס על דפוסי הוצאות היסטוריים",
       "breakdownExplanation": "כל סכום להלן נכלל בסכום הכולל בתרשים. מועדי התשלום משוערים; ההוצאות השוטפות מוצגות כממוצע יומי.",
       "contribution": "נכלל בתחזית",
@@ -4579,6 +4579,8 @@
       "openMenu": "פתח תפריט",
       "lightMode": "העבר למצב בהיר",
       "darkMode": "העבר למצב כהה",
+      "hideAmounts": "הסתר סכומים",
+      "showAmounts": "הצג סכומים",
       "changeLanguage": "שנה שפה",
       "minimizeWindow": "מזער חלון",
       "maximizeWindow": "הגדל חלון",

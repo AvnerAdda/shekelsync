@@ -65,7 +65,7 @@
   "dashboardPeriod": {
     "ariaLabel": "Période du tableau de bord",
     "mtd": "MTD",
-    "last30": "30J",
+    "lastMonth": "1M",
     "custom": "Personnalisé",
     "startDate": "Date de début",
     "endDate": "Date de fin",
@@ -1231,7 +1231,7 @@
     },
     "periodDays": {
       "mtdLong": "Depuis le début du mois",
-      "last30Long": "30 derniers jours",
+      "lastMonthLong": "Dernier mois",
       "customLong": "{{start}} – {{end}}"
     },
     "overall": {
@@ -1291,7 +1291,7 @@
     },
     "periodDays": {
       "showingMtd": "Depuis le début du mois",
-      "showingLast30": "30 derniers jours",
+      "showingLastMonth": "Dernier mois",
       "showingCustom": "{{start}} – {{end}}"
     },
     "settings": {
@@ -1337,7 +1337,7 @@
       },
       "horizon": {
         "eom": "Fin de mois",
-        "30": "30 j",
+        "1m": "1 mois",
         "custom": "Personnalisé"
       },
       "until": "Projection jusqu'au :",
@@ -1365,7 +1365,7 @@
       "cumulative": "Cumulatif",
       "historicalData": "Historique",
       "forecastData": "Prévision",
-      "next30Days": "Prévision 30 jours",
+      "nextMonth": "Prévision sur un mois",
       "basedOnPatterns": "Basé sur les habitudes de dépenses historiques",
       "breakdownExplanation": "Chaque montant ci-dessous contribue au total du graphique. Les dates de paiement sont estimées ; les dépenses courantes sont présentées sous forme de moyenne quotidienne.",
       "contribution": "Inclus dans la prévision",
@@ -4563,6 +4563,8 @@
       "openMenu": "Ouvrir le menu",
       "lightMode": "Passer en mode clair",
       "darkMode": "Passer en mode sombre",
+      "hideAmounts": "Masquer les montants",
+      "showAmounts": "Afficher les montants",
       "changeLanguage": "Changer de langue",
       "minimizeWindow": "Minimiser la fenêtre",
       "maximizeWindow": "Agrandir la fenêtre",

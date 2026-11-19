@@ -56,6 +56,8 @@ import TranslateIcon from '@mui/icons-material/Translate';
 import OptimizerIcon from '@mui/icons-material/TipsAndUpdatesOutlined';
 import UndoIcon from '@mui/icons-material/Undo';
 import ViewIcon from '@mui/icons-material/Visibility';
+import HideAmountsIcon from '@mui/icons-material/VisibilityOffOutlined';
+import ShowAmountsIcon from '@mui/icons-material/VisibilityOutlined';
 import ZoomInIcon from '@mui/icons-material/ZoomIn';
 import ZoomOutIcon from '@mui/icons-material/ZoomOut';
 import { useNavigate } from 'react-router-dom';
@@ -67,6 +69,7 @@ import UpdateButton from './UpdateButton';
 import { useUpdateManager } from '../hooks/useUpdateManager';
 import { useThemeMode } from '@renderer/contexts/ThemeContext';
 import { useLocaleSettings } from '@renderer/i18n/I18nProvider';
+import { useFinancePrivacy } from '@app/contexts/FinancePrivacyContext';
 import type { SupportedLocale } from '@renderer/i18n';
 import SecurityDetailsModal from '@renderer/features/security/components/SecurityDetailsModal';
 import { useSecurity } from '@renderer/features/security/contexts/SecurityContext';
@@ -101,6 +104,7 @@ const TitleBar: React.FC<TitleBarProps> = ({ sessionDisplayName, authLoading }) 
   // Theme and language hooks
   const { mode, setMode, actualTheme } = useThemeMode();
   const { locale, setLocale } = useLocaleSettings();
+  const { maskAmounts, toggleMaskAmounts } = useFinancePrivacy();
 
   const openFeedbackPage = useCallback(() => {
     window.open(FEEDBACK_URL, '_blank', 'noopener,noreferrer');
@@ -113,6 +117,7 @@ const TitleBar: React.FC<TitleBarProps> = ({ sessionDisplayName, authLoading }) 
   const isMacOS = window.electronAPI?.platform?.isMacOS;
   const modifierKeyLabel = isMacOS ? '⌘' : 'Ctrl+';
   const searchShortcutLabel = `${modifierKeyLabel}K`;
+  const maskShortcutLabel = isMacOS ? '⌘⇧H' : 'Ctrl+Shift+H';
 
   const getKeywords = useCallback(
     (key: string, fallback: string[]) => {
@@ -810,6 +815,39 @@ const TitleBar: React.FC<TitleBarProps> = ({ sessionDisplayName, authLoading }) 
             }}
           />
         )}
+
+        {/* Hide/Show Amounts Toggle */}
+        <Tooltip
+          title={`${maskAmounts ? t('titleBar.tooltips.showAmounts') : t('titleBar.tooltips.hideAmounts')} (${maskShortcutLabel})`}
+        >
+          <IconButton
+            size="small"
+            onClick={toggleMaskAmounts}
+            aria-label={maskAmounts ? t('titleBar.tooltips.showAmounts') : t('titleBar.tooltips.hideAmounts')}
+            aria-pressed={maskAmounts}
+            sx={{
+              width: 36,
+              height: 36,
+              color: maskAmounts ? theme.palette.primary.main : theme.palette.text.secondary,
+              backgroundColor: maskAmounts ? alpha(theme.palette.primary.main, 0.1) : 'transparent',
+              borderRadius: 2,
+              transition: 'all 0.2s',
+              '&:hover': {
+                backgroundColor: maskAmounts
+                  ? alpha(theme.palette.primary.main, 0.16)
+                  : alpha(theme.palette.text.primary, 0.05),
+                color: maskAmounts ? theme.palette.primary.main : theme.palette.text.primary,
+                transform: 'translateY(-2px)',
+              },
+            }}
+          >
+            {maskAmounts ? (
+              <HideAmountsIcon sx={{ fontSize: 20 }} />
+            ) : (
+              <ShowAmountsIcon sx={{ fontSize: 20 }} />
+            )}
+          </IconButton>
+        </Tooltip>
 
         {/* Dark/Light Mode Toggle */}
         <Tooltip title={actualTheme === 'dark' ? t('titleBar.tooltips.lightMode') : t('titleBar.tooltips.darkMode')}>

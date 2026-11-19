@@ -356,21 +356,21 @@ describe('TransactionHistorySection income, expense, and investment chart', () =
         .toEqual(['tabs.history', 'tabs.netPosition', 'tabs.allocation']);
     });
 
-    it('projects to month end by default, then 30 days or a confirmed custom date', () => {
+    it('projects to month end by default, then one month or a confirmed custom date', () => {
       openProjection();
       const horizons = screen.getByRole('group', { name: 'Projection until:' });
-      expect(within(horizons).getAllByRole('button').map(button => button.textContent)).toEqual(['EOM', '30D', 'Custom']);
+      expect(within(horizons).getAllByRole('button').map(button => button.textContent)).toEqual(['EOM', '1M', 'Custom']);
       expect(within(horizons).getByRole('button', { name: 'EOM' })).toHaveAttribute('aria-pressed', 'true');
       expect(getChartData().map((row: any) => row.date).at(-1)).toBe('2026-09-30');
 
-      fireEvent.click(within(horizons).getByRole('button', { name: '30D' }));
+      fireEvent.click(within(horizons).getByRole('button', { name: '1M' }));
       expect(getChartData().map((row: any) => row.date).at(-1)).toBe('2026-10-02');
 
       // Custom waits for a confirmed date; cancelling keeps the current horizon.
       fireEvent.click(within(horizons).getByRole('button', { name: 'Custom' }));
       expect(screen.getByRole('button', { name: 'Apply' })).toBeEnabled();
       fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
-      expect(within(horizons).getByRole('button', { name: '30D' })).toHaveAttribute('aria-pressed', 'true');
+      expect(within(horizons).getByRole('button', { name: '1M' })).toHaveAttribute('aria-pressed', 'true');
       expect(getChartData().map((row: any) => row.date).at(-1)).toBe('2026-10-02');
 
       // The picker opens on the current end date, so applying it selects Custom.

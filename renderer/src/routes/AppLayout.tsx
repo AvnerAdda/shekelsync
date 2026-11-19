@@ -1,7 +1,7 @@
 import TransactionDeleteDialog from '@renderer/shared/modals/TransactionDeleteDialog';
 import TransactionCategoryEditor from '@renderer/shared/modals/TransactionCategoryEditor';
 import { Outlet, useLocation, useNavigate } from 'react-router-dom';
-import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import {
   Box,
   Button,
@@ -21,6 +21,7 @@ import { DonationReminderDialog, useDonationStatus } from '@renderer/features/su
 import { UsageAnalyticsConsentDialog, trackScreenView } from '@renderer/features/usage-analytics';
 import { useReleaseNotes } from '@renderer/features/release-notes/useReleaseNotes';
 import { useAuth } from '@app/contexts/AuthContext';
+import { useFinancePrivacy } from '@app/contexts/FinancePrivacyContext';
 import TransactionDetailModal, {
   type TransactionForModal,
 } from '@renderer/shared/modals/TransactionDetailModal';
@@ -226,6 +227,7 @@ const AppLayoutContent: React.FC<AppLayoutContentProps> = ({ authLoading, sessio
   const theme = useTheme();
   const { showNotification } = useNotification();
   const { t } = useTranslation('translation');
+  const { toggleMaskAmounts } = useFinancePrivacy();
   const [currentPage, setCurrentPage] = useState<string>(() => pathToPage(location.pathname));
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchInitialFilters, setSearchInitialFilters] = useState<TransactionSearchFilters | null>(null);
@@ -234,6 +236,7 @@ const AppLayoutContent: React.FC<AppLayoutContentProps> = ({ authLoading, sessio
   const [donationReminderOpen, setDonationReminderOpen] = useState(false);
   const [donationReminderBusy, setDonationReminderBusy] = useState(false);
   const pendingDataRefreshRef = useRef(false);
+  const mainScrollRef = useRef<HTMLElement | null>(null);
   const { status: donationStatus, loading: donationStatusLoading, markReminderShown } = useDonationStatus();
   const releaseNotes = useReleaseNotes({
     suppressed: authLoading || donationStatusLoading || donationReminderOpen || searchOpen || transactionDetailOpen,
@@ -241,6 +244,16 @@ const AppLayoutContent: React.FC<AppLayoutContentProps> = ({ authLoading, sessio
 
   useEffect(() => {
     setCurrentPage(pathToPage(location.pathname));
+  }, [location.pathname]);
+
+  // Pages share one scroll container, so start each newly opened page at the top.
+  // Tab/query changes keep their position, and #section links do their own scrolling.
+  useLayoutEffect(() => {
+    if (location.hash) {
+      return;
+    }
+    mainScrollRef.current?.scrollTo?.({ top: 0, left: 0 });
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- reset only when the page changes, not on hash edits
   }, [location.pathname]);
 
   useEffect(() => {
@@ -307,7 +320,14 @@ const AppLayoutContent: React.FC<AppLayoutContentProps> = ({ authLoading, sessio
         event.preventDefault();
         setSearchOpen(true);
       }
-      
+
+      // Cmd/Ctrl + Shift + H: Hide or show amounts (quick privacy while screen sharing)
+      if (isModifierPressed(event) && event.shiftKey && isLetterShortcut(event, 'h')) {
+        event.preventDefault();
+        toggleMaskAmounts();
+        return;
+      }
+
       // Cmd/Ctrl + 1-6: Navigate between primary pages
       if (isModifierPressed(event)) {
         const codeDigit = event.code.startsWith('Digit') ? event.code.slice('Digit'.length) : '';
@@ -333,7 +353,7 @@ const AppLayoutContent: React.FC<AppLayoutContentProps> = ({ authLoading, sessio
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [navigate, handleDataRefresh]);
+  }, [navigate, handleDataRefresh, toggleMaskAmounts]);
 
   const handlePageChange = useCallback(
     (page: string) => {
@@ -496,6 +516,8 @@ const AppLayoutContent: React.FC<AppLayoutContentProps> = ({ authLoading, sessio
 
         <Box
           component="main"
+          ref={mainScrollRef}
+          data-testid="app-main-scroll"
           sx={{
             flexGrow: 1,
             minWidth: 0,

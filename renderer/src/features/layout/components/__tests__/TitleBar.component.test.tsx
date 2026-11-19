@@ -18,6 +18,8 @@ let latestLocation: { pathname: string; search: string; hash: string } = {
 };
 
 let mockActualTheme: 'light' | 'dark' = 'light';
+let mockMaskAmounts = false;
+const toggleMaskAmounts = vi.fn();
 let mockLocale: 'en' | 'he' | 'fr' = 'en';
 let mockDonationStatus: { hasDonated: boolean; tier: 'none' | 'one_time'; supportStatus: 'none' | 'verified' | 'pending' } = {
   hasDonated: false,
@@ -38,6 +40,8 @@ const translations: Record<string, string> = {
   'titleBar.tooltips.darkMode': 'Dark mode',
   'titleBar.tooltips.lightMode': 'Light mode',
   'titleBar.tooltips.changeLanguage': 'Change language',
+  'titleBar.tooltips.hideAmounts': 'Hide amounts',
+  'titleBar.tooltips.showAmounts': 'Show amounts',
   'titleBar.tooltips.moreActions': 'More actions',
   'titleBar.tooltips.minimizeWindow': 'Minimize window',
   'titleBar.tooltips.maximizeWindow': 'Maximize window',
@@ -153,6 +157,10 @@ vi.mock('@renderer/contexts/ThemeContext', () => ({
   }),
 }));
 
+vi.mock('@app/contexts/FinancePrivacyContext', () => ({
+  useFinancePrivacy: () => ({ maskAmounts: mockMaskAmounts, toggleMaskAmounts }),
+}));
+
 vi.mock('@renderer/i18n/I18nProvider', () => ({
   useLocaleSettings: () => ({
     locale: mockLocale,
@@ -236,6 +244,8 @@ describe('TitleBar component', () => {
     openManualUpdatePage.mockReset();
     installUpdate.mockReset();
     mockActualTheme = 'light';
+    mockMaskAmounts = false;
+    toggleMaskAmounts.mockReset();
     mockLocale = 'en';
     mockDonationStatus = { hasDonated: false, tier: 'none', supportStatus: 'none' };
     latestLocation = { pathname: '/', search: '', hash: '' };
@@ -316,6 +326,22 @@ describe('TitleBar component', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Change language' }));
     fireEvent.click(screen.getByRole('menuitem', { name: 'French' }));
     expect(setLocale).toHaveBeenCalledWith('fr');
+  });
+
+  it('toggles amount masking from the title bar and reflects the current state', async () => {
+    await renderTitleBar({ sessionDisplayName: 'Demo User', authLoading: false });
+
+    const hideButton = screen.getByRole('button', { name: 'Hide amounts' });
+    expect(hideButton).toHaveAttribute('aria-pressed', 'false');
+    fireEvent.click(hideButton);
+    expect(toggleMaskAmounts).toHaveBeenCalledTimes(1);
+  });
+
+  it('offers to show amounts while they are masked', async () => {
+    mockMaskAmounts = true;
+    await renderTitleBar({ sessionDisplayName: 'Demo User', authLoading: false });
+
+    expect(screen.getByRole('button', { name: 'Show amounts' })).toHaveAttribute('aria-pressed', 'true');
   });
 
   it('invokes electron window controls on non-macOS', async () => {

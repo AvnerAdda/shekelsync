@@ -1,7 +1,7 @@
 import React from 'react';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { renderHook, act } from '@testing-library/react';
-import { endOfDay, startOfDay, subDays } from 'date-fns';
+import { endOfDay } from 'date-fns';
 import { DashboardFiltersProvider, useDashboardFilters } from '../DashboardFiltersContext';
 import { AggregationPeriod } from '@renderer/types/dashboard';
 
@@ -33,16 +33,16 @@ describe('DashboardFiltersContext', () => {
     expect(periodPreset).toBe('mtd');
   });
 
-  it('switches between month-to-date and the rolling 30-day range', () => {
+  it('switches between month-to-date and the trailing one-month range', () => {
     const { result } = renderHook(() => useDashboardFilters(), { wrapper });
 
     act(() => {
-      result.current.setPeriodPreset('30d');
+      result.current.setPeriodPreset('1m');
     });
 
-    expect(result.current.periodPreset).toBe('30d');
+    expect(result.current.periodPreset).toBe('1m');
     expect(result.current.startDate.getTime()).toBe(
-      startOfDay(subDays(new Date('2024-03-15T12:00:00Z'), 29)).getTime(),
+      new Date(2024, 1, 16).getTime(),
     );
     expect(result.current.endDate.getTime()).toBe(
       endOfDay(new Date('2024-03-15T12:00:00Z')).getTime(),
@@ -80,7 +80,7 @@ describe('DashboardFiltersContext', () => {
 
     act(() => {
       result.current.setHoveredDate('2024-03-10');
-      result.current.setPeriodPreset('30d');
+      result.current.setPeriodPreset('1m');
     });
 
     expect(result.current.hoveredDate).toBeNull();

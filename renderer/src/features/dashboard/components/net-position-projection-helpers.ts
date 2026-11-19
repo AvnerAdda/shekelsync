@@ -1,15 +1,16 @@
 import { addDays, endOfMonth, format, isSameDay } from 'date-fns';
+import { monthsAhead } from '@renderer/shared/utils/month-window';
 import type { DashboardPeriodPreset } from '../DashboardFiltersContext';
 
-export type ProjectionHorizon = 'eom' | '30' | 'custom';
+export type ProjectionHorizon = 'eom' | '1m' | 'custom';
 
-export const PROJECTION_HORIZONS: readonly ProjectionHorizon[] = ['eom', '30', 'custom'];
+export const PROJECTION_HORIZONS: readonly ProjectionHorizon[] = ['eom', '1m', 'custom'];
 
 // The dashboard fetches the longest horizon once and trims it per selection.
 export const MAX_PROJECTION_DAYS = 90;
 
 export function getDefaultProjectionHorizon(periodPreset: DashboardPeriodPreset): ProjectionHorizon {
-  return periodPreset === 'mtd' ? 'eom' : '30';
+  return periodPreset === 'mtd' ? 'eom' : '1m';
 }
 
 export function getProjectionDateLimits(today: Date): { min: Date; max: Date } {
@@ -17,7 +18,7 @@ export function getProjectionDateLimits(today: Date): { min: Date; max: Date } {
 }
 
 // End of month on its last day would leave nothing to project, so it falls
-// back to the 30-day window. Custom dates are clamped to the fetched forecast.
+// back to the one-month window. Custom dates are clamped to the fetched forecast.
 export function resolveHorizonEndDate(horizon: ProjectionHorizon, today: Date, customEndDate?: string | null): string {
   if (horizon === 'custom' && customEndDate) {
     const { min, max } = getProjectionDateLimits(today);
@@ -26,9 +27,9 @@ export function resolveHorizonEndDate(horizon: ProjectionHorizon, today: Date, c
   }
   if (horizon === 'eom') {
     const monthEnd = endOfMonth(today);
-    return format(isSameDay(monthEnd, today) ? addDays(today, 30) : monthEnd, 'yyyy-MM-dd');
+    return format(isSameDay(monthEnd, today) ? monthsAhead(today) : monthEnd, 'yyyy-MM-dd');
   }
-  return format(addDays(today, 30), 'yyyy-MM-dd');
+  return format(monthsAhead(today), 'yyyy-MM-dd');
 }
 
 export type InvestmentBasis = 'before' | 'after';

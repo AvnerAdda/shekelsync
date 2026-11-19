@@ -115,6 +115,9 @@ describe('transactions list service', () => {
     expect(result.searchQuery).toBe('foo');
     expect(queryMock).toHaveBeenCalledTimes(1);
     const [sql, params] = queryMock.mock.calls[0];
+    expect(String(sql)).toContain("LEFT JOIN institution_nodes inst ON inst.vendor_code = t.vendor AND inst.node_type = 'institution'");
+    expect(String(sql)).toContain('inst.display_name_he AS institution_name_he');
+    expect(String(sql)).toContain('cd.name_en AS category_name_en');
     if (useSqlite) {
       expect(String(sql)).toContain('transactions_fts MATCH $1');
       expect(String(sql)).toContain('LOWER(t.memo) LIKE LOWER($2)');

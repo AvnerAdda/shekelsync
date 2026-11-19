@@ -24,7 +24,8 @@ import { useTheme, alpha, lighten, darken } from '@mui/material/styles';
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
-import { format, subDays, addDays, isValid } from 'date-fns';
+import { format, subDays, isValid } from 'date-fns';
+import { monthsAhead } from '@renderer/shared/utils/month-window';
 import AccountBalanceIcon from '@mui/icons-material/AccountBalance';
 import TimelineIcon from '@mui/icons-material/Timeline';
 import NotesIcon from '@mui/icons-material/Notes';
@@ -300,7 +301,7 @@ const TransactionHistorySection: React.FC<TransactionHistorySectionProps> = ({
   const rangeEndsToday = format(endDate, 'yyyy-MM-dd') === format(new Date(), 'yyyy-MM-dd');
   const selectedPeriodLabel = React.useMemo(() => {
     if (periodPreset === 'mtd') return t('periodDays.showingMtd');
-    if (periodPreset === '30d') return t('periodDays.showingLast30');
+    if (periodPreset === '1m') return t('periodDays.showingLastMonth');
 
     const formatter = new Intl.DateTimeFormat(i18n.language || undefined, {
       month: 'short',
@@ -333,7 +334,7 @@ const TransactionHistorySection: React.FC<TransactionHistorySectionProps> = ({
     if (!rangeEndsToday || aggregationPeriod !== 'daily') return [];
     const today = new Date();
     const todayStr = format(today, 'yyyy-MM-dd');
-    const forecastEndDate = format(addDays(today, 30), 'yyyy-MM-dd');
+    const forecastEndDate = format(monthsAhead(today), 'yyyy-MM-dd');
     return (forecastData?.dailyForecasts || []).filter((item: any) =>
       item.date > todayStr && item.date <= forecastEndDate && getForecastInvestments(item) !== undefined,
     );
@@ -545,11 +546,11 @@ const TransactionHistorySection: React.FC<TransactionHistorySectionProps> = ({
   }, [data.history, endDate, rangeEndsToday, startDate]);
 
   // Get combined data for Daily Income vs Expenses (historical + forecast)
-  // Current ranges include the next 30 forecast days; past custom ranges stay historical.
+  // Current ranges include the next month of forecast days; past custom ranges stay historical.
   const getDailyIncomeExpenseData = useCallback(() => {
     const today = new Date();
     const todayStr = format(today, 'yyyy-MM-dd');
-    const forecastEndDate = format(addDays(today, 30), 'yyyy-MM-dd');
+    const forecastEndDate = format(monthsAhead(today), 'yyyy-MM-dd');
     
     // Filter base historical data to the selected period
     const baseHistoricalData = chartHistory.filter((item: any) => 
@@ -571,7 +572,7 @@ const TransactionHistorySection: React.FC<TransactionHistorySectionProps> = ({
     
     // Use today as the actual end date for historical data
     const actualEndDate = todayStr;
-    // Chart extends 30 days into the future for forecast
+    // Chart extends one month into the future for forecast
     const chartEndDate = forecastEndDate;
 
     // Historical data up to today
@@ -1177,7 +1178,7 @@ const TransactionHistorySection: React.FC<TransactionHistorySectionProps> = ({
                     ? (event) => openCustomProjection(event.currentTarget)
                     : undefined}
                 >
-                  {t(`projection.horizon.${horizon}`, { defaultValue: { eom: 'EOM', '30': '30D', custom: 'Custom' }[horizon] })}
+                  {t(`projection.horizon.${horizon}`, { defaultValue: { eom: 'EOM', '1m': '1M', custom: 'Custom' }[horizon] })}
                 </ToggleButton>
               ))}
             </ToggleButtonGroup>
@@ -1341,7 +1342,7 @@ const TransactionHistorySection: React.FC<TransactionHistorySectionProps> = ({
                 mb: 1,
                 textAlign: 'center'
               }}>
-              {selectedPeriodLabel} + {t('forecast.next30Days', { defaultValue: '30 day forecast' })}
+              {selectedPeriodLabel} + {t('forecast.nextMonth', { defaultValue: 'One month forecast' })}
               {` — ${t('settings.showForecast')}: ${showForecast ? t('settings.on', { defaultValue: 'On' }) : t('settings.off', { defaultValue: 'Off' })}`}
             </Typography>
           )}

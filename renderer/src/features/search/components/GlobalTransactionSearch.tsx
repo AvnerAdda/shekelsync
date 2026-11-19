@@ -35,6 +35,7 @@ import CategoryFilterIcon from '@mui/icons-material/Category';
 import CalendarIcon from '@mui/icons-material/CalendarMonth';
 import { useTranslation } from 'react-i18next';
 import { apiClient } from '@/lib/api-client';
+import { resolveTransactionSourceLabel } from '@renderer/shared/utils/transaction-labels';
 
 interface Transaction {
   identifier: string;
@@ -42,6 +43,8 @@ interface Transaction {
   name: string;
   category_name: string | null;
   parent_name: string | null;
+  institution_name_he?: string | null;
+  institution_name_en?: string | null;
   category_definition_id: number | null;
   category_type: string | null;
   memo: string | null;
@@ -662,7 +665,7 @@ const GlobalTransactionSearch: React.FC<GlobalTransactionSearchProps> = ({
                           <Typography variant="caption" noWrap sx={{
                             color: "text.secondary"
                           }}>
-                            {transaction.vendor}
+                            {resolveTransactionSourceLabel(transaction, i18n.language)}
                           </Typography>
                         </Box>
                       )}

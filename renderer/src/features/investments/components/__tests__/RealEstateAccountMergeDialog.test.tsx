@@ -6,6 +6,13 @@ import en from '@renderer/i18n/locales/en.json';
 
 const { post } = vi.hoisted(() => ({ post: vi.fn() }));
 vi.mock('@/lib/api-client', () => ({ apiClient: { post } }));
+let mockMaskAmounts = false;
+vi.mock('@app/contexts/FinancePrivacyContext', () => ({
+  useFinancePrivacy: () => ({
+    maskAmounts: mockMaskAmounts,
+    formatCurrency: (_value: number, options?: { currencySymbol?: string }) => `${options?.currencySymbol ?? '₪'}***`,
+  }),
+}));
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
     i18n: { language: 'en' },
@@ -24,7 +31,10 @@ const accounts = [
 ];
 
 describe('real estate account merge dialog', () => {
-  beforeEach(() => post.mockReset());
+  beforeEach(() => {
+    post.mockReset();
+    mockMaskAmounts = false;
+  });
 
   it('previews the total and merges the selected entries into the keeper', async () => {
     post.mockResolvedValue({ ok: true });
@@ -46,6 +56,13 @@ describe('real estate account merge dialog', () => {
     expect(screen.getByText('Combined current value: ILS 502,500.75')).toBeInTheDocument();
     fireEvent.click(screen.getAllByRole('checkbox')[2]);
     expect(screen.getByRole('button', { name: 'Merge accounts' })).toBeDisabled();
+  });
+
+  it('hides account values while amounts are masked', () => {
+    mockMaskAmounts = true;
+    render(<RealEstateAccountMergeDialog account={accounts[0]} accounts={accounts} onClose={vi.fn()} onMerged={vi.fn()} />);
+    expect(screen.getByText('Combined current value: ILS ***')).toBeInTheDocument();
+    expect(screen.queryByText(/503,751/)).not.toBeInTheDocument();
   });
 
   it('keeps the dialog open on validation failure', async () => {
