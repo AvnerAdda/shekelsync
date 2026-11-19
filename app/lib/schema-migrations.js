@@ -1156,6 +1156,23 @@ const MIGRATIONS = [
       addColumnIfMissing(db, 'payroll_contribution_plans', 'opened_date', 'TEXT');
     },
   },
+  {
+    version: 15,
+    name: 'before-after-settings',
+    mutatesSchema: true,
+    up: (db) => {
+      // The first successful sync is saved here because deleting an account also deletes
+      // its scrape_events; category_overrides holds what the user counts as needed spending.
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS before_after_settings (
+          id INTEGER PRIMARY KEY CHECK (id = 1),
+          first_sync_at TEXT,
+          category_overrides TEXT,
+          updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+        );
+      `);
+    },
+  },
 ];
 
 const CURRENT_SCHEMA_VERSION = MIGRATIONS.length

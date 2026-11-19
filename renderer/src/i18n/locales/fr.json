@@ -1,4 +1,89 @@
 {
+  "beforeAfter": {
+    "title": "Depuis que vous utilisez ShekelSync",
+    "firstSync": "Première synchronisation le {{date}}",
+    "close": "Fermer",
+    "loading": "Chargement de la comparaison",
+    "error": "Impossible de charger la comparaison.",
+    "retry": "Réessayer",
+    "before": "Avant",
+    "after": "Après",
+    "subtitle": "{{before}} comparé à {{after}} ({{months}} mois complets de chaque côté).",
+    "verdict": {
+      "better": "Mieux",
+      "worse": "Moins bien",
+      "unchanged": "Pas de changement net",
+      "insufficient": "Données insuffisantes"
+    },
+    "metrics": {
+      "controllable": {
+        "title": "Dépenses que vous maîtrisez",
+        "caption": "Médiane par mois, sans les dépenses nécessaires",
+        "largeLeftOut": "Gros paiements exclus : {{before}} avant, {{after}} après"
+      },
+      "kept": {
+        "title": "Argent gardé chaque mois",
+        "caption": "Revenus moins toutes les dépenses (médiane). L'argent investi compte comme gardé."
+      },
+      "fees": {
+        "title": "Frais bancaires et de carte",
+        "caption": "Médiane par mois"
+      },
+      "subscriptions": {
+        "title": "Prélèvements récurrents",
+        "caption": "Depuis votre première synchronisation",
+        "stopped": "Arrêtés",
+        "started": "Nouveaux",
+        "net": "{{amount}} par an, arrêtés moins nouveaux"
+      },
+      "shareOfIncome": "{{before}} % → {{after}} % des revenus"
+    },
+    "incomeNote": "Vos revenus ont aussi changé, de {{before}} à {{after}} par mois ({{percent}} %). Gardez-le en tête en lisant les autres chiffres.",
+    "largePayments": {
+      "title": "Gros paiements exclus",
+      "subtitle": "Paiements uniques de {{threshold}} ou plus, comme des meubles, de l'électroménager ou des échéances. Ils sont exclus de « Dépenses que vous maîtrisez » pour qu'un seul achat ne décide pas du résultat.",
+      "unnamed": "Paiement"
+    },
+    "chart": {
+      "title": "Dépenses que vous maîtrisez, mois par mois"
+    },
+    "subscriptions": {
+      "stoppedTitle": "Arrêtés depuis le début",
+      "startedTitle": "Nouveaux depuis le début",
+      "noneStopped": "Aucun prélèvement récurrent arrêté.",
+      "noneStarted": "Aucun nouveau prélèvement récurrent.",
+      "perYear": "{{amount}} / an",
+      "lastCharge": "Dernier prélèvement le {{date}}",
+      "firstCharge": "Premier prélèvement le {{date}}"
+    },
+    "needed": {
+      "title": "Ce qui compte comme nécessaire",
+      "subtitle": "Les dépenses nécessaires sont exclues de « Dépenses que vous maîtrisez ». Cochez une catégorie pour la compter comme nécessaire.",
+      "uncategorized": "Sans catégorie",
+      "changedByYou": "modifié par vous",
+      "monthly": "{{before}} → {{after}} / mois",
+      "reset": "Rétablir les valeurs par défaut",
+      "reason": {
+        "essential": "Essentiel",
+        "stability": "Assurances et dettes",
+        "growth": "Épargne et formation",
+        "none": "Maîtrisable"
+      }
+    },
+    "method": "Méthode : les {{months}} mois complets avant votre première synchronisation sont comparés à vos {{months}} derniers mois complets. Le mois de la première synchronisation est exclu. On utilise des médianes pour qu'un mois inhabituel ne décide pas du résultat, et un changement ne compte que s'il dépasse votre variation habituelle d'un mois à l'autre. Les paiements uniques d'au moins 10 % de vos revenus mensuels habituels sont listés à part. Cela montre ce qui a changé depuis le début, pas la preuve que ShekelSync en est la cause.",
+    "states": {
+      "noSync": "Connectez un compte et lancez une première synchronisation pour démarrer la comparaison.",
+      "waiting": {
+        "title": "Votre comparaison arrive bientôt",
+        "body": "Seuls des mois complets sont comparés. Votre première synchronisation date du {{date}}, la comparaison s'ouvrira donc le {{readyOn}}, après 2 mois complets.",
+        "progress": "{{done}} sur {{total}} mois complets"
+      },
+      "noHistory": {
+        "title": "Pas assez d'historique avant votre première synchronisation",
+        "body": "Vos comptes connectés couvrent moins de 2 mois complets avant le {{date}} : il n'y a pas encore de base de comparaison équitable. Une synchronisation depuis une date de début plus ancienne permettrait cette comparaison."
+      }
+    }
+  },
   "appLock": {
     "title": "ShekelSync est verrouillé",
     "description": {
@@ -4560,6 +4645,7 @@
       }
     },
     "tooltips": {
+      "beforeAfter": "Voir votre avant / après",
       "openMenu": "Ouvrir le menu",
       "lightMode": "Passer en mode clair",
       "darkMode": "Passer en mode sombre",

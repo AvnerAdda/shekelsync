@@ -1,4 +1,89 @@
 {
+  "beforeAfter": {
+    "title": "Since you started ShekelSync",
+    "firstSync": "First sync on {{date}}",
+    "close": "Close",
+    "loading": "Loading the comparison",
+    "error": "Couldn't load the comparison.",
+    "retry": "Try again",
+    "before": "Before",
+    "after": "After",
+    "subtitle": "{{before}} compared with {{after}} ({{months}} full months on each side).",
+    "verdict": {
+      "better": "Better",
+      "worse": "Worse",
+      "unchanged": "No clear change",
+      "insufficient": "Not enough data"
+    },
+    "metrics": {
+      "controllable": {
+        "title": "Spending you control",
+        "caption": "Median per month, without needed spending",
+        "largeLeftOut": "Large payments left out: {{before}} before, {{after}} after"
+      },
+      "kept": {
+        "title": "Money kept each month",
+        "caption": "Income minus all spending (median). Money you invested counts as kept."
+      },
+      "fees": {
+        "title": "Bank and card fees",
+        "caption": "Median per month"
+      },
+      "subscriptions": {
+        "title": "Recurring charges",
+        "caption": "Since your first sync",
+        "stopped": "Stopped",
+        "started": "New",
+        "net": "{{amount}} a year, stopped minus new"
+      },
+      "shareOfIncome": "{{before}}% → {{after}}% of income"
+    },
+    "incomeNote": "Your income also changed, from {{before}} to {{after}} a month ({{percent}}%). Keep that in mind when you read the other numbers.",
+    "largePayments": {
+      "title": "Large payments left out",
+      "subtitle": "Single payments of {{threshold}} or more, such as furniture, appliances or instalments. They are left out of “Spending you control” so one purchase can't decide the result.",
+      "unnamed": "Payment"
+    },
+    "chart": {
+      "title": "Spending you control, month by month"
+    },
+    "subscriptions": {
+      "stoppedTitle": "Stopped since you started",
+      "startedTitle": "New since you started",
+      "noneStopped": "No recurring charge stopped.",
+      "noneStarted": "No new recurring charge.",
+      "perYear": "{{amount}} / year",
+      "lastCharge": "Last charge {{date}}",
+      "firstCharge": "First charge {{date}}"
+    },
+    "needed": {
+      "title": "What counts as needed",
+      "subtitle": "Needed spending is left out of “Spending you control”. Tick a category to count it as needed.",
+      "uncategorized": "Uncategorized",
+      "changedByYou": "changed by you",
+      "monthly": "{{before}} → {{after}} / month",
+      "reset": "Reset to defaults",
+      "reason": {
+        "essential": "Essential",
+        "stability": "Insurance and debt",
+        "growth": "Savings and learning",
+        "none": "Controllable"
+      }
+    },
+    "method": "How this is calculated: the {{months}} full months before your first sync are compared with your {{months}} most recent full months. The month of the first sync is left out. Medians are used so one unusual month doesn't decide the result, and a change only counts when it is bigger than your usual month-to-month swing. Single payments of 10% of your typical monthly income or more are listed apart. This shows what changed since you started, not proof that ShekelSync caused it.",
+    "states": {
+      "noSync": "Connect an account and run your first sync to start the comparison.",
+      "waiting": {
+        "title": "Your comparison is on its way",
+        "body": "Only full months are compared. Your first sync was on {{date}}, so the comparison opens on {{readyOn}}, once 2 full months have passed.",
+        "progress": "{{done}} of {{total}} full months"
+      },
+      "noHistory": {
+        "title": "Not enough history before your first sync",
+        "body": "Your connected accounts cover less than 2 full months before {{date}}, so there is nothing fair to compare with yet. A sync from an earlier start date would make this comparison possible."
+      }
+    }
+  },
   "appLock": {
     "title": "ShekelSync is locked",
     "description": {
@@ -4565,6 +4650,7 @@
       }
     },
     "tooltips": {
+      "beforeAfter": "See your before and after",
       "openMenu": "Open menu",
       "lightMode": "Switch to Light Mode",
       "darkMode": "Switch to Dark Mode",

@@ -1379,6 +1379,13 @@ const TABLE_DEFINITIONS = [
       SET materialized_transaction_signature = NULL, updated_at = datetime('now')
       WHERE id = 1;
     END;`,
+  // Before/after comparison: first successful sync and needed-spending overrides (migration v15).
+  `CREATE TABLE IF NOT EXISTS before_after_settings (
+      id INTEGER PRIMARY KEY CHECK (id = 1),
+      first_sync_at TEXT,
+      category_overrides TEXT,
+      updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );`,
   `CREATE TABLE IF NOT EXISTS presentation_dismissals (
       source_key TEXT PRIMARY KEY,
       source_type TEXT NOT NULL,

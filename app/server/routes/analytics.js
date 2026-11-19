@@ -14,6 +14,7 @@ const transactionsByDateService = require('../services/analytics/transactions-by
 const investmentsAnalyticsService = require('../services/analytics/investments.js');
 const temporalService = require('../services/analytics/temporal.js');
 const rhythmComparisonService = require('../services/analytics/rhythm-comparison.js');
+const beforeAfterService = require('../services/analytics/before-after.js');
 const behavioralService = require('../services/analytics/behavioral.js');
 const extendedForecastService = require('../services/analytics/extended-forecast.js');
 const timeValueService = require('../services/analytics/time-value.js');
@@ -186,6 +187,30 @@ function createAnalyticsRouter() {
     } catch (error) {
       console.error('Rhythm type repair error:', error);
       res.status(500).json({ error: 'Failed to repair transaction types' });
+    }
+  });
+
+  router.get('/before-after', async (req, res) => {
+    try {
+      res.json(await beforeAfterService.getBeforeAfter(req.query || {}));
+    } catch (error) {
+      console.error('Before/after comparison error:', error);
+      res.status(error?.status || 500).json({
+        error: 'Failed to compare before and after',
+        message: error?.status ? error.message : 'Internal server error',
+      });
+    }
+  });
+
+  router.put('/before-after/category-overrides', async (req, res) => {
+    try {
+      res.json(await beforeAfterService.updateCategoryOverrides(req.body || {}));
+    } catch (error) {
+      console.error('Before/after overrides error:', error);
+      res.status(error?.status || 500).json({
+        error: 'Failed to save needed categories',
+        message: error?.status ? error.message : 'Internal server error',
+      });
     }
   });
 

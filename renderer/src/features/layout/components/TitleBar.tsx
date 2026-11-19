@@ -1,6 +1,7 @@
-import React, { useCallback, useEffect, useState, useMemo } from 'react';
+import React, { Suspense, lazy, useCallback, useEffect, useState, useMemo } from 'react';
 import Autocomplete from '@mui/material/Autocomplete';
 import Box from '@mui/material/Box';
+import ButtonBase from '@mui/material/ButtonBase';
 import Chip from '@mui/material/Chip';
 import Divider from '@mui/material/Divider';
 import IconButton from '@mui/material/IconButton';
@@ -13,7 +14,7 @@ import Paper from '@mui/material/Paper';
 import TextField from '@mui/material/TextField';
 import Tooltip from '@mui/material/Tooltip';
 import Typography from '@mui/material/Typography';
-import { alpha, useTheme } from '@mui/material/styles';
+import { alpha, keyframes, useTheme } from '@mui/material/styles';
 import AboutIcon from '@mui/icons-material/Info';
 import AccountsIcon from '@mui/icons-material/AccountBalance';
 import AnalyticsIcon from '@mui/icons-material/Analytics';
@@ -80,6 +81,13 @@ import {
   useDonationStatus,
 } from '@renderer/features/support';
 
+const BeforeAfterDialog = lazy(() => import('@renderer/features/before-after/components/BeforeAfterDialog'));
+
+const brandShimmer = keyframes`
+  from { background-position: 150% 0; }
+  to { background-position: -50% 0; }
+`;
+
 interface TitleBarProps {
   sessionDisplayName?: string | null;
   authLoading?: boolean;
@@ -90,6 +98,7 @@ const TitleBar: React.FC<TitleBarProps> = ({ sessionDisplayName, authLoading }) 
   const navigate = useNavigate();
   const { t } = useTranslation('translation');
   const [menuAnchor, setMenuAnchor] = useState<null | HTMLElement>(null);
+  const [beforeAfterOpen, setBeforeAfterOpen] = useState(false);
   const [activeSubmenu, setActiveSubmenu] = useState<string | null>(null);
   const [isMaximized, setIsMaximized] = useState(false);
   const [windowClassesApplied, setWindowClassesApplied] = useState(false);
@@ -625,43 +634,85 @@ const TitleBar: React.FC<TitleBarProps> = ({ sessionDisplayName, authLoading }) 
           ]}
         </Menu>
 
-        <Box
-          sx={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            width: 36,
-            height: 36,
-            borderRadius: '10px',
-            background: theme.palette.primary.main,
-            boxShadow: `0 2px 6px ${alpha(theme.palette.primary.main, 0.22)}`,
-            padding: '7px',
-            transition: 'background-color 160ms ease',
-            '&:hover': { backgroundColor: theme.palette.primary.dark },
-          }}
-        >
-          <img
-            src={logoUrl}
-            alt="ShekelSync"
-            width={22}
-            height={22}
-            style={{ filter: 'brightness(0) invert(1)' }}
-          />
-        </Box>
+        <Tooltip title={t('titleBar.tooltips.beforeAfter')}>
+          <ButtonBase
+            onClick={() => setBeforeAfterOpen(true)}
+            aria-label={t('titleBar.tooltips.beforeAfter')}
+            aria-haspopup="dialog"
+            sx={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 2,
+              borderRadius: '12px',
+              pe: 1,
+              '& .brand-logo': {
+                transition: 'transform 260ms cubic-bezier(0.34, 1.56, 0.64, 1), background-color 160ms ease, box-shadow 200ms ease',
+              },
+              '& .brand-name': {
+                backgroundImage: `linear-gradient(100deg, ${theme.palette.primary.dark} 40%, ${theme.palette.primary.light} 50%, ${theme.palette.primary.dark} 60%)`,
+                backgroundSize: '250% 100%',
+                backgroundPosition: '150% 0',
+                backgroundClip: 'text',
+                WebkitBackgroundClip: 'text',
+                color: 'transparent',
+              },
+              '&:hover .brand-logo, &.Mui-focusVisible .brand-logo': {
+                transform: 'rotate(-10deg) scale(1.08)',
+                backgroundColor: theme.palette.primary.dark,
+                boxShadow: `0 4px 12px ${alpha(theme.palette.primary.main, 0.35)}`,
+              },
+              '&:hover .brand-name, &.Mui-focusVisible .brand-name': {
+                animation: `${brandShimmer} 900ms ease-out`,
+              },
+              '&.Mui-focusVisible': {
+                outline: `2px solid ${alpha(theme.palette.primary.main, 0.5)}`,
+                outlineOffset: 2,
+              },
+              '@media (prefers-reduced-motion: reduce)': {
+                '& .brand-logo': { transition: 'background-color 160ms ease' },
+                '&:hover .brand-logo, &.Mui-focusVisible .brand-logo': { transform: 'none' },
+                '&:hover .brand-name, &.Mui-focusVisible .brand-name': { animation: 'none' },
+              },
+            }}
+          >
+            <Box
+              className="brand-logo"
+              sx={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                width: 36,
+                height: 36,
+                borderRadius: '10px',
+                background: theme.palette.primary.main,
+                boxShadow: `0 2px 6px ${alpha(theme.palette.primary.main, 0.22)}`,
+                padding: '7px',
+              }}
+            >
+              <img
+                src={logoUrl}
+                alt=""
+                width={22}
+                height={22}
+                style={{ filter: 'brightness(0) invert(1)' }}
+              />
+            </Box>
 
-        <Typography
-          variant="h6"
-          component="div"
-          sx={{
-            fontWeight: 800,
-            fontSize: '1.1rem',
-            color: theme.palette.primary.dark,
-            letterSpacing: '-0.5px',
-            userSelect: 'none',
-          }}
-        >
-          ShekelSync
-        </Typography>
+            <Typography
+              variant="h6"
+              component="span"
+              className="brand-name"
+              sx={{
+                fontWeight: 800,
+                fontSize: '1.1rem',
+                letterSpacing: '-0.5px',
+                userSelect: 'none',
+              }}
+            >
+              ShekelSync
+            </Typography>
+          </ButtonBase>
+        </Tooltip>
       </Box>
       {/* Center section: Search Bar */}
       <Box sx={{ flex: 1, display: 'flex', justifyContent: 'center', maxWidth: 480, mx: 4, WebkitAppRegion: 'no-drag' }}>
@@ -1159,6 +1210,11 @@ const TitleBar: React.FC<TitleBarProps> = ({ sessionDisplayName, authLoading }) 
         open={donationModalOpen}
         onClose={() => setDonationModalOpen(false)}
       />
+      {beforeAfterOpen && (
+        <Suspense fallback={null}>
+          <BeforeAfterDialog open={beforeAfterOpen} onClose={() => setBeforeAfterOpen(false)} />
+        </Suspense>
+      )}
     </Box>
   );
 };
