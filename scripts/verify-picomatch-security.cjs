@@ -6,12 +6,15 @@ const path = require('node:path');
 
 const ROOT = path.resolve(__dirname, '..');
 const FORK_NAME = '@shekelsync/picomatch';
-const FORK_VERSION = '4.0.7-shekelsync.1';
+const FORK_VERSION = '4.0.7-shekelsync.2';
 const FIXED_ADVISORY = 'https://github.com/advisories/GHSA-fc5q-39xc-vjpf';
 
 function verifyMatcher(directory) {
   const matcher = require(directory);
   const posix = require(path.join(directory, 'posix.js'));
+  const utils = require(path.join(directory, 'lib/utils.js'));
+  assert.equal(utils.removeBackslashes('['.repeat(100000)), '['.repeat(100000), 'unmatched brackets must finish promptly');
+  assert.equal(utils.removeBackslashes('a\\*b/[a\\-z]/tail\\'), 'a*b/[a\\-z]/tail\\', 'escaped characters and protected classes');
   for (const pm of [matcher, posix]) {
     assert(pm('**/*.js')('src/example.js'), 'globstar');
     assert(!pm('**/*.js')('src/example.ts'), 'extension filtering');

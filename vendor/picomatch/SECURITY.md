@@ -1,10 +1,10 @@
 # Local picomatch security fork
 
-`@shekelsync/picomatch@4.0.7-shekelsync.1` is a private, vendored security fork
+`@shekelsync/picomatch@4.0.7-shekelsync.2` is a private, vendored security fork
 of the npm `picomatch@4.0.7` artifact identified in `UPSTREAM.json`. It retains
 the upstream MIT license and authorship. It is not an upstream patched release.
 
-The only runtime source change is in `lib/parse.js`, addressing
+The runtime source changes are in `lib/parse.js` and `lib/utils.js`, addressing
 [GHSA-fc5q-39xc-vjpf](https://github.com/advisories/GHSA-fc5q-39xc-vjpf).
 At the time of this change, npm's latest release is 4.0.7 and the advisory
 lists no patched version. The upstream discussion explicitly notes that
@@ -16,6 +16,11 @@ generate nested unbounded quantifiers. The fork uses the parser's existing
 literal fallback for these branches, while retaining its known linear rewrite
 for repeated literal-character sequences. The new guard cannot be disabled
 by setting `maxExtglobRecursion: false`.
+
+The backslash-removal helper also uses two linear scans instead of a regexp
+that retries every unmatched opening bracket (CodeQL js/polynomial-redos).
+Bounded exhaustive differential tests retain upstream bracket, escape, and
+line-break behavior.
 
 Compatibility: ordinary wildcards, globstars, braces, negated extglobs, literal
 single-branch repeats such as `+(foo)`, and the upstream multi-branch handling
