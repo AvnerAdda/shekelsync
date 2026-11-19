@@ -685,13 +685,23 @@
       "decline": "No thanks"
     },
     "panel": {
-      "title": "Anonymous usage statistics",
+      "title": "Usage statistics",
       "description": "Off unless you turn it on. When on, ShekelSync sends small, anonymous events to Aptabase (a privacy-focused analytics service): when the app starts, when you open a screen, when you add an institution or a sync finishes, a once-a-day feature summary, and error types. No device ID or account is attached.",
       "toggle": "Share anonymous usage statistics",
       "unavailable": "Usage statistics are not available in this build.",
       "saveFailed": "Could not save your choice. Please try again."
     },
-    "sharedTitle": "What is shared",
+    "installationCounting": {
+      "title": "Active installation counts",
+      "description": "A separate, optional count of installations active today, in the last 7 days, and in the last 30 days. Uses a random ID saved on this computer and sends it to ShekelSync's Supabase counter with the activity date. No financial records, account details, or hardware identifiers are included. Two installations count separately, even if used by one person.",
+      "toggle": "Include this installation in active-usage counts",
+      "unavailable": "Active-installation counting is not available in this build.",
+      "withdrawal": "Turning this off stops reporting and requests deletion of this installation's counting history. If offline, deletion is retried later. Counting records expire after 90 days.",
+      "exclude": "Exclude this installation from all usage statistics",
+      "excludeDescription": "Use this for your own development or testing copy. It also turns off installation counting and requests deletion of its counting history.",
+      "excluded": "This installation is excluded from usage statistics."
+    },
+    "sharedTitle": "Anonymous events shared with Aptabase",
     "shared": {
       "version": "App version, language and whether this is a test build",
       "system": "Operating system and version",

@@ -1,0 +1,51 @@
+name: Installation activity collector
+
+on:
+  pull_request:
+    paths:
+      - 'scripts/migrations/2026-11-19_installation_activity.sql'
+      - 'scripts/__tests__/installation-activity.sql'
+      - '.github/workflows/installation-activity.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'scripts/migrations/2026-11-19_installation_activity.sql'
+      - 'scripts/__tests__/installation-activity.sql'
+      - '.github/workflows/installation-activity.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  postgres:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres # Disposable CI database only.
+          POSTGRES_DB: shekelsync_usage_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      PGHOST: localhost
+      PGPORT: '5432'
+      PGUSER: postgres
+      PGPASSWORD: postgres # Disposable CI database only.
+      PGDATABASE: shekelsync_usage_test
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - name: Create Supabase test roles
+        run: psql -v ON_ERROR_STOP=1 -c 'create role anon; create role authenticated; create role service_role bypassrls;'
+      - name: Apply hosted activity schema
+        run: psql -v ON_ERROR_STOP=1 -f scripts/migrations/2026-11-19_installation_activity.sql
+      - name: Verify deduplication, access controls, revocation, and retention
+        run: psql -v ON_ERROR_STOP=1 -f scripts/__tests__/installation-activity.sql

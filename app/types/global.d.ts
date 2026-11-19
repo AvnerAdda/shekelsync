@@ -91,6 +91,7 @@ declare global {
   }
 
   interface ElectronAppSettings {
+    installationActivity?: { enabled?: boolean; excluded?: boolean; consentedAt?: string | null };
     lastSeenReleaseVersion?: string;
     appLocale?: 'he' | 'en' | 'fr';
     backgroundSync?: BackgroundSyncSettings;
@@ -339,7 +340,7 @@ declare global {
   interface ElectronAnalyticsApi {
     getStatus?: () => Promise<{
       success: boolean;
-      status?: { available: boolean; enabled: boolean };
+      status?: { available: boolean; enabled: boolean; installationActivity?: { available: boolean; enabled: boolean; excluded: boolean; excludedByEnvironment?: boolean } };
       error?: string;
     }>;
     track?: (eventName: 'screen_viewed' | 'app_error', props?: Record<string, string>) => void;

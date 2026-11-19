@@ -12,6 +12,7 @@
     "test": "npm --prefix app run test:coverage && npm --prefix renderer run test:unit && npm --prefix renderer run test:e2e",
     "test:ci": "npm --prefix app run test:coverage && npm --prefix renderer run test:unit",
     "test:community": "node --test .github/scripts/__tests__/community-updates.test.cjs",
+    "usage:stats": "node scripts/usage-stats.js",
     "test:security": "npm --prefix app run test",
     "test:dependency-security": "node scripts/verify-minimatch-security.cjs && node scripts/verify-picomatch-security.cjs && node --test scripts/__tests__/verify-picomatch-security.test.cjs",
     "test:security:coverage": "npm --prefix app run test:coverage",

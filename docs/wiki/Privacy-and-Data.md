@@ -24,6 +24,7 @@ Syncs connect directly to your selected financial institutions. Optional integra
 - **Telegram:** configured notifications are sent to Telegram using your bot and chat settings.
 - **Donations:** payments are handled by the selected third-party processor.
 - **Anonymous usage statistics:** off unless you opt in; controlled in **Settings → Privacy & Security**. They do not include financial records.
+- **Active installation counts:** a separate opt-in uses a random persistent installation ID to count activity over a day, seven days, and 30 days. This is pseudonymous counting, separate from Aptabase's anonymous events. Turning it off requests deletion of its counting history. Use **Exclude this installation from all usage statistics** for your own testing copy. Availability depends on the installed release and configured collector.
 
 ## Backups and exports
 

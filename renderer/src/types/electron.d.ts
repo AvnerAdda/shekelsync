@@ -134,6 +134,7 @@ interface UsageAnalyticsSettings {
 }
 
 interface ElectronAppSettings {
+  installationActivity?: { enabled?: boolean; excluded?: boolean; consentedAt?: string | null };
   lastSeenReleaseVersion?: string;
   backgroundSync?: BackgroundSyncSettings;
   usageAnalytics?: UsageAnalyticsSettings;
@@ -143,7 +144,7 @@ interface ElectronAppSettings {
 interface AnalyticsApi {
   getStatus: () => Promise<{
     success: boolean;
-    status?: { available: boolean; enabled: boolean };
+    status?: { available: boolean; enabled: boolean; installationActivity?: { available: boolean; enabled: boolean; excluded: boolean; excludedByEnvironment?: boolean } };
     error?: string;
   }>;
   track: (eventName: 'screen_viewed' | 'app_error', props?: Record<string, string>) => void;

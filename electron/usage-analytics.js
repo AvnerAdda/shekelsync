@@ -209,7 +209,8 @@ function createUsageAnalytics({
   const config = resolveAppKeyConfig(env, builtInAppKey);
   const debugSendingAllowed = env.SHEKELSYNC_ANALYTICS_DEBUG === 'true';
   const isDebug = !isPackaged;
-  const available = Boolean(config && typeof fetchImpl === 'function' && (isPackaged || debugSendingAllowed));
+  const available = Boolean(config && typeof fetchImpl === 'function' && (isPackaged || debugSendingAllowed)
+    && env.SHEKELSYNC_ANALYTICS_EXCLUDE !== 'true');
   const osInfo = describeOperatingSystem(platform);
 
   let enabled = false;
