@@ -6,7 +6,7 @@
   "advisory": "https://github.com/advisories/GHSA-fc5q-39xc-vjpf",
   "fork": {
     "name": "@shekelsync/picomatch",
-    "version": "4.0.7-shekelsync.1"
+    "version": "4.0.7-shekelsync.2"
   },
   "files": {
     "index.js": "02ae26406508e28f9ba0865be16cf77f0b33de6c4d4d49c212c4176df1d5625a",
@@ -14,7 +14,7 @@
     "lib/parse.js": "c151519da6da24e153efdadf1872352d0ec6af380f6d29a8c15b3dae1badde41",
     "lib/picomatch.js": "fdd249d7ffff853f3bb1c77eafc8baa1a437bea85a94c35877b83c6a40d9ca94",
     "lib/scan.js": "6457a1764e5c2e543cc3a0c00ce12ebb3764097628868198370b64d4e642aaae",
-    "lib/utils.js": "f04604f70cd1a3f6ace80b84766468674ff38b4bb83818d2ef1d81fc6355f935",
+    "lib/utils.js": "0e65dc2354a65b1778f6ccf83816041e3a2a8d87d9166e695489095971113b90",
     "posix.js": "5695ff5dfcd5a338a40630bd506056f2950bcb08fe1cc068519cbbfe60add480"
   }
 }

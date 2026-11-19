@@ -5,6 +5,18 @@ const path = require('node:path');
 const { test } = require('node:test');
 const { verifyCopies, checkUpstreamAdvisories } = require('../verify-picomatch-security.cjs');
 
+test('linear backslash handling preserves upstream results for bounded exhaustive inputs', () => {
+  const { removeBackslashes } = require('../../vendor/picomatch/lib/utils.js');
+  const upstream = /(?:\[.*?[^\\]\]|\\(?=.))/g;
+  let cases = [''];
+  for (let length = 0; length <= 5; length += 1) {
+    for (const value of cases) {
+      assert.equal(removeBackslashes(value), value.replace(upstream, match => match === '\\' ? '' : match), JSON.stringify(value));
+    }
+    cases = cases.flatMap(value => ['[', ']', '\\', 'a', '\n', '\r', '\u2028'].map(character => value + character));
+  }
+});
+
 function fixture(t) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'matcher-security-test-'));
   const vendor = path.resolve(__dirname, '../../vendor/picomatch');
@@ -14,7 +26,7 @@ function fixture(t) {
     fs.mkdirSync(path.join(project, 'node_modules'), { recursive: true });
     fs.cpSync(vendor, path.join(project, 'node_modules/picomatch'), { recursive: true });
     fs.writeFileSync(path.join(project, 'package-lock.json'), JSON.stringify({ packages: {
-      'node_modules/picomatch': { name: '@shekelsync/picomatch', version: '4.0.7-shekelsync.1' },
+      'node_modules/picomatch': { name: '@shekelsync/picomatch', version: '4.0.7-shekelsync.2' },
     } }));
   }
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));

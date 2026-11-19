@@ -1,7 +1,7 @@
 {
   "name": "@shekelsync/picomatch",
   "description": "Local security fork of picomatch 4.0.7 for GHSA-fc5q-39xc-vjpf",
-  "version": "4.0.7-shekelsync.1",
+  "version": "4.0.7-shekelsync.2",
   "homepage": "https://github.com/micromatch/picomatch",
   "author": "Jon Schlinkert (https://github.com/jonschlinkert)",
   "funding": "https://github.com/sponsors/jonschlinkert",
