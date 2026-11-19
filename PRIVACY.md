@@ -1,6 +1,6 @@
 # ShekelSync Privacy Policy
 
-_Last updated: 2026-11-03_
+_Last updated: 2026-11-19_
 
 ShekelSync is a **local-first desktop application**. Your financial data lives on
 your own computer, under your own operating-system user account. This document
@@ -21,7 +21,8 @@ the behavior of your build.
   key held in your operating system keychain.
 - Data leaves your device **only** for features you explicitly enable and
   configure: the optional AI assistant, optional Telegram notifications,
-  optional donations, and optional anonymous usage statistics. Each is
+  optional donations, optional anonymous usage statistics, and separately
+  opted-in active-installation counting. Each is
   described below.
 
 ## What data ShekelSync stores, and where
@@ -40,9 +41,10 @@ on Windows, `~/.config/ShekelSync` on Linux):
   troubleshooting. Account, card and ID numbers, balances, e-mail addresses and
   secrets are masked before log lines are written.
 
-ShekelSync does not operate a backend that collects this data. The only usage
-reporting is the **opt-in**, anonymous usage statistics described below; it is
-off unless you turn it on and never includes your financial data.
+ShekelSync does not operate a backend that collects your financial records.
+Usage reporting is optional: anonymous Aptabase events and, with separate consent,
+pseudonymous installation counts. Both are off unless you turn them on and
+never include your financial data.
 
 ## When data leaves your device
 
@@ -123,7 +125,7 @@ Each event contains only:
 - app version, app language, operating system name and version, and whether
   the build is a development build;
 - a random session identifier created when the app starts and kept in memory
-  only. No persistent device, installation or user identifier is created.
+  only. Aptabase events contain no persistent device, installation or user identifier.
 
 The list of connected institutions is never sent as a whole, only the count
 range, so combinations of banks can't single you out. Declining the prompt is
@@ -136,6 +138,39 @@ of allowed events and fields; any other value is dropped before sending.
 Aptabase receives your IP address as part of the network request; according to
 its documentation it does not store it and uses it only to derive an
 approximate country. See Aptabase's privacy policy for details.
+
+### 6. Optional active-installation counting (separate consent, off by default)
+
+You can separately choose **Include this installation in active-usage counts**
+in **Settings → Privacy & Security → Usage statistics**. This creates a random
+installation ID and a random revocation token stored locally outside the financial
+database. Existing consent to anonymous Aptabase statistics does not enable this option.
+
+When the packaged app is used in the foreground, it sends that ID and token over
+HTTPS to ShekelSync's Supabase counter. The server records only the random ID,
+a hash of the token, a revocation flag, and the UTC activity date. It deduplicates
+each installation/day to produce daily, 7-day, and 30-day active-installation counts.
+This is a pseudonymous identifier, not an account, hardware fingerprint, or verified
+person. Two installations can belong to the same person. No financial records,
+bank/account identifiers, names, e-mails, screen history, or feature details are sent
+to this counter. The persistent ID is never attached to Aptabase events.
+
+Turning counting off, or choosing **Exclude this installation from all usage
+statistics**, stops further reporting and requests deletion of its counting history.
+If offline, a local pending-deletion record is retained and retried later; counting
+cannot resume until deletion completes. The server keeps a revocation marker to
+prevent delayed requests from restoring deleted activity. A daily retention job
+deletes activity records and identities inactive for 90 days, including revocation
+markers. Opting in again creates a new random ID.
+
+Development builds never contribute. Background syncs and hidden, minimized,
+or unfocused windows do not contribute. The hosting provider processes network
+requests and may keep service logs, but IP addresses are not stored in the counting
+tables. Aggregate counts require project administrator access.
+
+See [`docs/active-installations.md`](docs/active-installations.md) for deployment,
+storage, and counting limitations. Counting is unavailable in builds without a
+configured collector.
 
 ## Data security
 

@@ -6,7 +6,11 @@ import UsageAnalyticsDetails from './UsageAnalyticsDetails';
 
 const UsageAnalyticsPanel: React.FC = () => {
   const { t } = useTranslation('translation', { keyPrefix: 'usageAnalytics' });
-  const { loading, available, enabled, saving, error, setEnabled } = useUsageAnalyticsSettings();
+  const {
+    loading, available, enabled, saving, error, setEnabled,
+    installationCountingAvailable, installationCountingEnabled, excluded, exclusionLocked,
+    setInstallationCountingEnabled, setExcluded,
+  } = useUsageAnalyticsSettings();
 
   return (
     <Paper sx={{ p: 3, mb: 3 }} data-testid="usage-analytics-panel">
@@ -22,7 +26,7 @@ const UsageAnalyticsPanel: React.FC = () => {
         control={(
           <Switch
             checked={enabled}
-            disabled={loading || saving || !available}
+            disabled={loading || saving || !available || excluded}
             onChange={(event) => void setEnabled(event.target.checked)}
           />
         )}
@@ -31,6 +35,41 @@ const UsageAnalyticsPanel: React.FC = () => {
       />
 
       <UsageAnalyticsDetails />
+
+      <Box sx={{ mt: 3 }}>
+        <Typography variant="subtitle1" gutterBottom>{t('installationCounting.title')}</Typography>
+        <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+          {t('installationCounting.description')}
+        </Typography>
+        <FormControlLabel
+          control={(
+            <Switch
+              checked={installationCountingEnabled}
+              disabled={loading || saving || !installationCountingAvailable || excluded}
+              onChange={(event) => void setInstallationCountingEnabled(event.target.checked)}
+            />
+          )}
+          label={t('installationCounting.toggle')}
+        />
+        {!loading && !installationCountingAvailable && (
+          <Typography variant="body2" color="text.secondary">{t('installationCounting.unavailable')}</Typography>
+        )}
+        <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+          {t('installationCounting.withdrawal')}
+        </Typography>
+      </Box>
+
+      <Box sx={{ mt: 3 }}>
+        <FormControlLabel
+          control={(
+            <Switch checked={excluded} disabled={loading || saving || exclusionLocked}
+              onChange={(event) => void setExcluded(event.target.checked)} />
+          )}
+          label={t('installationCounting.exclude')}
+        />
+        <Typography variant="body2" color="text.secondary">{t('installationCounting.excludeDescription')}</Typography>
+        {excluded && <Alert severity="info" sx={{ mt: 1 }}>{t('installationCounting.excluded')}</Alert>}
+      </Box>
 
       {!loading && !available && (
         <Alert severity="info" sx={{ mt: 2 }}>

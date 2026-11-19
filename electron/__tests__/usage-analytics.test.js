@@ -196,6 +196,15 @@ describe('usage analytics', () => {
     await expect(analytics.track('app_started')).resolves.toBe(false);
   });
 
+  test('owner exclusion also disables anonymous Aptabase events in packaged builds', async () => {
+    const { analytics, fetchImpl } = createClient({ env: {
+      SHEKELSYNC_APTABASE_APP_KEY: 'A-EU-42', SHEKELSYNC_ANALYTICS_EXCLUDE: 'true', SHEKELSYNC_ANALYTICS_DEBUG: 'true',
+    } });
+    analytics.setEnabled(true);
+    expect(await analytics.track('app_started')).toBe(false);
+    expect(fetchImpl).not.toHaveBeenCalled();
+  });
+
   test('opting in starts a new session; sessions rotate after an hour idle', async () => {
     let clock = 1_700_000_000_000;
     const { analytics, fetchImpl } = createClient({ now: () => clock });

@@ -5,18 +5,33 @@ type UsageAnalyticsState = {
   decidedAt: string | null;
 };
 
+type InstallationActivityState = {
+  enabled: boolean;
+  excluded: boolean;
+  consentedAt: string | null;
+};
+
+type AnalyticsSettings = {
+  usageAnalytics?: Partial<UsageAnalyticsState>;
+  installationActivity?: Partial<InstallationActivityState>;
+};
+
 type ElectronBridge = {
   settings?: {
-    get?: () => Promise<{ success: boolean; settings?: { usageAnalytics?: Partial<UsageAnalyticsState> } }>;
+    get?: () => Promise<{ success: boolean; settings?: AnalyticsSettings }>;
     update?: (patch: Record<string, unknown>) => Promise<{
       success: boolean;
-      settings?: { usageAnalytics?: Partial<UsageAnalyticsState> };
+      settings?: AnalyticsSettings;
       error?: string;
     }>;
-    onChange?: (callback: (settings: { usageAnalytics?: Partial<UsageAnalyticsState> }) => void) => (() => void) | void;
+    onChange?: (callback: (settings: AnalyticsSettings) => void) => (() => void) | void;
   };
   analytics?: {
-    getStatus?: () => Promise<{ success: boolean; status?: { available: boolean; enabled: boolean } }>;
+    getStatus?: () => Promise<{ success: boolean; status?: {
+      available: boolean;
+      enabled: boolean;
+      installationActivity?: { available: boolean; enabled: boolean; excluded: boolean; excludedByEnvironment?: boolean };
+    } }>;
   };
 };
 
@@ -28,6 +43,12 @@ const normalize = (raw?: Partial<UsageAnalyticsState>): UsageAnalyticsState => (
   decidedAt: typeof raw?.decidedAt === 'string' && raw.decidedAt ? raw.decidedAt : null,
 });
 
+const normalizeInstallationActivity = (raw?: Partial<InstallationActivityState>): InstallationActivityState => ({
+  enabled: raw?.enabled === true,
+  excluded: raw?.excluded === true,
+  consentedAt: typeof raw?.consentedAt === 'string' ? raw.consentedAt : null,
+});
+
 export interface UseUsageAnalyticsSettingsResult {
   loading: boolean;
   /** False when this build has no Aptabase key or runs in development. */
@@ -37,11 +58,20 @@ export interface UseUsageAnalyticsSettingsResult {
   saving: boolean;
   error: string | null;
   setEnabled: (enabled: boolean) => Promise<boolean>;
+  installationCountingAvailable: boolean;
+  installationCountingEnabled: boolean;
+  excluded: boolean;
+  exclusionLocked: boolean;
+  setInstallationCountingEnabled: (enabled: boolean) => Promise<boolean>;
+  setExcluded: (excluded: boolean) => Promise<boolean>;
 }
 
 export function useUsageAnalyticsSettings(): UseUsageAnalyticsSettingsResult {
   const [state, setState] = useState<UsageAnalyticsState>({ enabled: false, decidedAt: null });
   const [available, setAvailable] = useState(false);
+  const [installationActivity, setInstallationActivity] = useState<InstallationActivityState>(normalizeInstallationActivity());
+  const [installationCountingAvailable, setInstallationCountingAvailable] = useState(false);
+  const [excludedByEnvironment, setExcludedByEnvironment] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -59,8 +89,11 @@ export function useUsageAnalyticsSettings(): UseUsageAnalyticsSettingsResult {
         if (!active) return;
         if (settingsResult?.success) {
           setState(normalize(settingsResult.settings?.usageAnalytics));
+          setInstallationActivity(normalizeInstallationActivity(settingsResult.settings?.installationActivity));
         }
         setAvailable(Boolean(statusResult?.success && statusResult.status?.available));
+        setInstallationCountingAvailable(Boolean(statusResult?.success && statusResult.status?.installationActivity?.available));
+        setExcludedByEnvironment(statusResult?.status?.installationActivity?.excludedByEnvironment === true);
       } catch {
         if (active) setAvailable(false);
       } finally {
@@ -71,6 +104,7 @@ export function useUsageAnalyticsSettings(): UseUsageAnalyticsSettingsResult {
     void load();
     const unsubscribe = bridge?.settings?.onChange?.((nextSettings) => {
       setState(normalize(nextSettings?.usageAnalytics));
+      setInstallationActivity(normalizeInstallationActivity(nextSettings?.installationActivity));
     });
 
     return () => {
@@ -79,20 +113,19 @@ export function useUsageAnalyticsSettings(): UseUsageAnalyticsSettingsResult {
     };
   }, []);
 
-  const setEnabled = useCallback(async (enabled: boolean) => {
+  const updateSettings = useCallback(async (patch: Record<string, unknown>) => {
     const bridge = getBridge();
     if (!bridge?.settings?.update) return false;
     setSaving(true);
     setError(null);
     try {
-      const result = await bridge.settings.update({
-        usageAnalytics: { enabled, decidedAt: new Date().toISOString() },
-      });
+      const result = await bridge.settings.update(patch);
       if (!result?.success) {
         setError(result?.error || 'update_failed');
         return false;
       }
       setState(normalize(result.settings?.usageAnalytics));
+      setInstallationActivity(normalizeInstallationActivity(result.settings?.installationActivity));
       return true;
     } catch (updateError) {
       setError(updateError instanceof Error ? updateError.message : 'update_failed');
@@ -102,6 +135,16 @@ export function useUsageAnalyticsSettings(): UseUsageAnalyticsSettingsResult {
     }
   }, []);
 
+  const setEnabled = useCallback((enabled: boolean) => updateSettings({
+    usageAnalytics: { enabled, decidedAt: new Date().toISOString() },
+  }), [updateSettings]);
+  const setInstallationCountingEnabled = useCallback((enabled: boolean) => updateSettings({
+    installationActivity: { enabled, ...(enabled ? { consentedAt: new Date().toISOString() } : {}) },
+  }), [updateSettings]);
+  const setExcluded = useCallback((excluded: boolean) => updateSettings({
+    installationActivity: { excluded, ...(excluded ? { enabled: false } : {}) },
+  }), [updateSettings]);
+
   return {
     loading,
     available,
@@ -110,6 +153,12 @@ export function useUsageAnalyticsSettings(): UseUsageAnalyticsSettingsResult {
     saving,
     error,
     setEnabled,
+    installationCountingAvailable,
+    installationCountingEnabled: installationActivity.enabled,
+    excluded: installationActivity.excluded || excludedByEnvironment,
+    exclusionLocked: excludedByEnvironment,
+    setInstallationCountingEnabled,
+    setExcluded,
   };
 }
 

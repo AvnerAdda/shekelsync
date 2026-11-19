@@ -224,6 +224,7 @@ You are responsible for lawful and compliant use in your jurisdiction.
 - Development screenshots: [Show and tell](https://github.com/AvnerAdda/shekelsync/discussions/categories/show-and-tell)
 - Published-version updates: [Announcements](https://github.com/AvnerAdda/shekelsync/discussions/categories/announcements)
 - Community automation and wiki maintenance: [`docs/community-updates.md`](docs/community-updates.md)
+- Opt-in active installation counts and owner exclusion: [`docs/active-installations.md`](docs/active-installations.md)
 - Contribution guide: `CONTRIBUTING.md`
 - Code of conduct: `CODE_OF_CONDUCT.md`
 - Privacy policy: `PRIVACY.md`

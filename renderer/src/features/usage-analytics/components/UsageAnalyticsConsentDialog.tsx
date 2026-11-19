@@ -25,7 +25,7 @@ interface UsageAnalyticsConsentDialogProps {
 const UsageAnalyticsConsentDialog: React.FC<UsageAnalyticsConsentDialogProps> = ({ suppressed = false }) => {
   const { t } = useTranslation('translation', { keyPrefix: 'usageAnalytics' });
   const { t: tCommon } = useTranslation('translation', { keyPrefix: 'common' });
-  const { loading, available, decided, saving, error, setEnabled } = useUsageAnalyticsSettings();
+  const { loading, available, decided, saving, error, setEnabled, excluded } = useUsageAnalyticsSettings();
   const [ready, setReady] = useState(false);
   const [dismissed, setDismissed] = useState(false);
 
@@ -34,7 +34,7 @@ const UsageAnalyticsConsentDialog: React.FC<UsageAnalyticsConsentDialogProps> = 
     return () => window.clearTimeout(timer);
   }, []);
 
-  const open = ready && !loading && available && !decided && !suppressed && !dismissed;
+  const open = ready && !loading && available && !decided && !suppressed && !dismissed && !excluded;
   const dismiss = () => setDismissed(true);
 
   return (

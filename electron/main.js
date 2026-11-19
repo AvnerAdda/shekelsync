@@ -19,6 +19,7 @@ const {
   nativeImage,
   nativeTheme,
   clipboard,
+  powerMonitor,
 } = require('electron');
 
 const path = require('path');
@@ -726,6 +727,7 @@ const {
   bucketAgeDays,
   classifyError,
 } = require('./usage-analytics');
+const { createInstallationActivity, normalizeInstallationActivitySettings, isActiveForegroundWindow } = require('./installation-activity');
 
 function getEnvKeyRemovalInstructions() {
   if (process.platform === 'win32') {
@@ -872,10 +874,12 @@ function applySettingsDefaults(settings = {}) {
     backgroundSync: normalizedBackground,
     telegram: normalizedTelegram,
     usageAnalytics: normalizeUsageAnalyticsSettings(settings?.usageAnalytics),
+    installationActivity: normalizeInstallationActivitySettings(settings?.installationActivity),
   };
 }
 
 let usageAnalytics = null;
+let installationActivity = null;
 let usageAnalyticsStartTracked = false;
 let unsubscribeServerUsageEvents = null;
 
@@ -889,6 +893,29 @@ function getUsageAnalytics() {
     });
   }
   return usageAnalytics;
+}
+
+function getInstallationActivity() {
+  if (!installationActivity) {
+    installationActivity = createInstallationActivity({ userDataPath: app.getPath('userData'), isPackaged, logger });
+  }
+  return installationActivity;
+}
+
+function recordForegroundInstallationActivity() {
+  try {
+    if (isQuitting || !isActiveForegroundWindow(mainWindow, powerMonitor.getSystemIdleTime())) return;
+    void getInstallationActivity().recordActivity();
+  } catch {
+    // Optional analytics must not interrupt window focus, startup, or navigation.
+    logger.debug('Installation activity could not inspect foreground state.');
+  }
+}
+
+function applyInstallationActivitySettings(settings) {
+  void getInstallationActivity().setSettings(settings?.installationActivity).then(() => {
+    recordForegroundInstallationActivity();
+  });
 }
 
 // Subscribe to server-side signals only while analytics can actually send.
@@ -1022,7 +1049,7 @@ function stopDailyUsageSnapshot() {
 
 function applyUsageAnalyticsSettings(settings, { previous } = {}) {
   const analytics = getUsageAnalytics();
-  const enabled = settings?.usageAnalytics?.enabled === true;
+  const enabled = settings?.usageAnalytics?.enabled === true && settings?.installationActivity?.excluded !== true;
   analytics.setEnabled(enabled);
   setServerUsageEventSubscription(enabled && analytics.getStatus().available);
   if (enabled && previous && previous.enabled !== true) {
@@ -1043,6 +1070,7 @@ async function loadInitialSettings() {
   try {
     const initialSettings = applySettingsDefaults(await sessionStore.getSettings());
     appSettingsCache = initialSettings;
+    applyInstallationActivitySettings(initialSettings);
     applyUsageAnalyticsSettings(initialSettings);
   } catch (error) {
     logger.warn('Failed to load user settings', { error: error.message });
@@ -1072,10 +1100,15 @@ async function updateAppSettings(patch = {}) {
       ...(current?.usageAnalytics || {}),
       ...(patch?.usageAnalytics || {}),
     },
+    installationActivity: {
+      ...(current?.installationActivity || {}),
+      ...(patch?.installationActivity || {}),
+    },
   };
   const updated = await sessionStore.updateSettings(merged);
   const normalized = applySettingsDefaults(updated);
   appSettingsCache = normalized;
+  applyInstallationActivitySettings(normalized);
   applyUsageAnalyticsSettings(normalized, {
     previous: normalizeUsageAnalyticsSettings(current?.usageAnalytics),
   });
@@ -1883,6 +1916,11 @@ async function buildMainWindow() {
     show: false, // Don't show until ready
   });
 
+  mainWindow.on('focus', recordForegroundInstallationActivity);
+  const installationActivityTimer = setInterval(recordForegroundInstallationActivity, 5 * 60 * 1000);
+  installationActivityTimer.unref?.();
+  mainWindow.once('closed', () => clearInterval(installationActivityTimer));
+
   let windowShown = false;
   const showFallbackDelayMs = isDev ? 8000 : 5000;
   let showFallbackTimer = null;
@@ -2457,7 +2495,10 @@ handleIpc('analytics:getStatus', async (event) => {
   if (!requireTrustedIpcSender(event, 'analytics:getStatus')) {
     return { success: false, error: 'Untrusted IPC sender' };
   }
-  return { success: true, status: getUsageAnalytics().getStatus() };
+  return { success: true, status: {
+    ...getUsageAnalytics().getStatus(),
+    installationActivity: getInstallationActivity().getStatus(),
+  } };
 });
 
 ipcMain.on('analytics:track', (event, eventName, props) => {
@@ -2465,6 +2506,7 @@ ipcMain.on('analytics:track', (event, eventName, props) => {
     return;
   }
   void getUsageAnalytics().trackFromRenderer(eventName, props);
+  if (eventName === 'screen_viewed') recordForegroundInstallationActivity();
 });
 
 handleIpc('telegram:getStatus', async (event) => {
