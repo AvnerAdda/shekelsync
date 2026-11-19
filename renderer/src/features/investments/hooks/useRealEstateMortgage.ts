@@ -98,6 +98,7 @@ export function useMortgagePreview(draft: MortgageDraft | null, delayMs = 350) {
     if (!serialized) {
       setData(null);
       setError(null);
+      setLoading(false);
       return undefined;
     }
     const requestId = ++requestIdRef.current;
@@ -114,12 +115,19 @@ export function useMortgagePreview(draft: MortgageDraft | null, delayMs = 350) {
         setError(null);
       } catch (previewError) {
         if (requestId !== requestIdRef.current) return;
+        // Drop the last good schedule: showing it next to an invalid draft
+        // makes stale figures look like results for what is on screen.
+        setData(null);
         setError(previewError instanceof Error ? previewError.message : 'Preview failed');
       } finally {
         if (requestId === requestIdRef.current) setLoading(false);
       }
     }, delayMs);
-    return () => clearTimeout(timer);
+    return () => {
+      clearTimeout(timer);
+      // Retire in-flight work even if the next draft is incomplete or closed.
+      requestIdRef.current += 1;
+    };
   }, [serialized, delayMs]);
 
   return { data, error, loading, computable: Boolean(serialized) };

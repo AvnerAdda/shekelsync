@@ -69,6 +69,19 @@ describe('MortgageTracksDialog', () => {
     await waitFor(() => expect(onClose).toHaveBeenCalled());
   });
 
+  it('hides the last preview once the draft becomes invalid', async () => {
+    render(<MortgageTracksDialog open initialDraft={initialDraft} onClose={vi.fn()} onSave={vi.fn()} />);
+    await act(async () => { vi.advanceTimersByTime(400); });
+    expect(await screen.findByText('₪2,388')).toBeInTheDocument();
+
+    mockPost.mockResolvedValue({ ok: false, status: 400, data: { error: 'Drawdowns exceed the approved loan amount' } });
+    fireEvent.change(screen.getAllByLabelText(/^Amount/)[0], { target: { value: '5000000' } });
+    await act(async () => { vi.advanceTimersByTime(400); });
+    expect(await screen.findByText('Drawdowns exceed the approved loan amount')).toBeInTheDocument();
+    expect(screen.queryByText('₪2,388')).not.toBeInTheDocument();
+    expect(screen.queryByText(/^Balance ₪/)).not.toBeInTheDocument();
+  });
+
   it('switches to a fixed track and shows the converted effective rate', async () => {
     render(<MortgageTracksDialog open initialDraft={initialDraft} onClose={vi.fn()} onSave={vi.fn()} />);
     fireEvent.mouseDown(screen.getByLabelText('Track type'));
