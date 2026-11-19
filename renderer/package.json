@@ -12,6 +12,7 @@
     "typecheck": "tsc --noEmit",
     "lint": "eslint \"src/**/*.{ts,tsx}\"",
     "test:e2e": "node scripts/run-playwright.js",
+    "screenshots:community": "playwright test --config playwright.community.config.ts",
     "test:unit": "vitest run",
     "test:performance": "playwright test tests/performance.spec.ts --workers=1",
     "performance:budget": "node ../scripts/check-renderer-performance.js"

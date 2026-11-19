@@ -343,3 +343,14 @@ jobs:
           fi
 
           gh release edit "$TAG_NAME" --repo "$GITHUB_REPOSITORY" --title "$TAG_NAME" --draft=false
+
+  announce-release:
+    name: Announce published release
+    needs: finalize-release
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    permissions:
+      contents: read
+      discussions: write
+    uses: ./.github/workflows/community-release.yml
+    with:
+      tag: ${{ github.ref_name }}

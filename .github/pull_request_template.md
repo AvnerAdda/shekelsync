@@ -2,6 +2,12 @@
 
 Describe what changed and why.
 
+## Community update
+
+<!-- Optional: write a short user-facing explanation for the automatic Show and tell
+post after merge. If blank, the post uses Summary. Home, Plan, and Wealth demo
+screenshots are captured automatically from the merged version. -->
+
 ## Scope
 
 - [ ] Bug fix
