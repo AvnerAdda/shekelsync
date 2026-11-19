@@ -21,7 +21,7 @@ License: MIT
 Local security fork
 -------------------
 
-@shekelsync/picomatch@4.0.7-shekelsync.1 derives from picomatch@4.0.7.
+@shekelsync/picomatch@4.0.7-shekelsync.2 derives from picomatch@4.0.7.
 Copyright (c) 2017-present, Jon Schlinkert. MIT license.
 See vendor/picomatch/LICENSE, UPSTREAM.json, and SECURITY.md for the full
 license, artifact integrity, and local security changes.

@@ -3,7 +3,6 @@
 
 const {
   REGEX_BACKSLASH,
-  REGEX_REMOVE_BACKSLASH,
   REGEX_SPECIAL_CHARS,
   REGEX_SPECIAL_CHARS_GLOBAL
 } = require('./constants');
@@ -28,9 +27,35 @@ exports.isWindows = () => {
 };
 
 exports.removeBackslashes = str => {
-  return str.replace(REGEX_REMOVE_BACKSLASH, match => {
-    return match === '\\' ? '' : match;
-  });
+  if (typeof str !== 'string') throw new TypeError('Expected a string');
+  const isLineBreak = ch => ch === '\n' || ch === '\r' || ch === '\u2028' || ch === '\u2029';
+  const brackets = [];
+  let start = -1;
+  // Find the same protected bracket spans as the upstream regexp, without
+  // retrying the rest of the input at every unmatched opening bracket.
+  for (let i = 0; i < str.length; i++) {
+    if (str[i] === '[' && start === -1) start = i;
+    if (str[i] === ']' && start !== -1 && i > start + 1 && str[i - 1] !== '\\') {
+      brackets.push([start, i + 1]);
+      start = -1;
+    } else if (isLineBreak(str[i]) && str[i + 1] !== ']') {
+      start = -1;
+    }
+  }
+  const output = [];
+  let bracket = 0;
+  for (let i = 0; i < str.length;) {
+    const span = brackets[bracket];
+    if (span && i === span[0]) {
+      output.push(str.slice(i, span[1]));
+      i = span[1];
+      bracket++;
+    } else {
+      if (str[i] !== '\\' || i + 1 === str.length || isLineBreak(str[i + 1])) output.push(str[i]);
+      i++;
+    }
+  }
+  return output.join('');
 };
 
 exports.escapeLast = (input, char, lastIdx) => {

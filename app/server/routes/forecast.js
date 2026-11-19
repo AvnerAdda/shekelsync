@@ -1,4 +1,5 @@
 const express = require('express');
+const { rateLimit } = require('express-rate-limit');
 const path = require('path');
 const fs = require('fs');
 const forecastService = require('../services/forecast.js');
@@ -99,6 +100,16 @@ function createForecastRouter({
   evaluateForecast = forecastService.getForecastAccuracy,
 } = {}) {
   const router = express.Router();
+  router.use(rateLimit({
+    windowMs: 60 * 1000,
+    limit: 120,
+    // Loopback callers share a bucket; forwarding headers and rotated API
+    // tokens cannot bypass protection for these expensive forecast routes.
+    keyGenerator: () => 'forecast',
+    standardHeaders: 'draft-8',
+    legacyHeaders: false,
+    message: { error: 'Too many forecast requests. Try again shortly.', code: 'FORECAST_RATE_LIMITED' },
+  }));
   const getDbInstance = () => sqliteDb || getDatabase();
 
   router.get('/accuracy', async (req, res) => {

@@ -110,6 +110,20 @@ describe('Shared /api/forecast routes', () => {
     vi.restoreAllMocks();
   });
 
+  it('limits forecast requests before expensive work and allows them after the window resets', async () => {
+    const { app, evaluateForecast } = buildApp();
+    for (let index = 0; index < 120; index += 1) {
+      await request(app).get('/api/forecast/accuracy').expect(200);
+    }
+    const blocked = await request(app).get('/api/forecast/daily?noCache=1').expect(429);
+    expect(blocked.body.code).toBe('FORECAST_RATE_LIMITED');
+    expect(Number(blocked.headers['retry-after'])).toBeGreaterThan(0);
+    expect(evaluateForecast).toHaveBeenCalledTimes(120);
+    vi.advanceTimersByTime(60 * 1000 + 1);
+    await request(app).get('/api/forecast/accuracy').expect(200);
+    expect(evaluateForecast).toHaveBeenCalledTimes(121);
+  });
+
   it('caches daily forecasts by normalized request options', async () => {
     const { app, generateForecast } = buildApp();
 
