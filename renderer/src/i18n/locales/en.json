@@ -2004,6 +2004,7 @@
           "noScenarios": "No saved scenarios yet",
           "line": "With my plans",
           "floor": "Reserved",
+          "range": "Range with my plans",
           "title": "With your plans",
           "closing": "Closing balance with plans",
           "difference": "{{amount}} vs expected",

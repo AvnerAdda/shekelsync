@@ -32,6 +32,14 @@ describe('plan overlay', () => {
     expect(result).toMatchObject({ plannedEnding: 6200, expectedEnding: 9700, plannedLowest: { date: '2026-12-10', value: 5300 }, dipDate: null });
   });
 
+  it('shifts the forecast range by the plan changes', () => {
+    const ranged = rows.map(row => ({ ...row, forecastRange: row.historicalCumulative === null
+      ? [row.expectedCumulative! - 1000, row.expectedCumulative! + 500] as [number, number] : null }));
+    const result = applyPlanOverlay(ranged, overlay(), 10000);
+    expect(result.rows.map(row => row.plannedRange)).toEqual([null, [10000, 10000], [4500, 6000], [4300, 5800], [5200, 6700]]);
+    expect(applyPlanOverlay(rows, overlay(), 10000).rows.slice(2).every(row => row.plannedRange === null)).toBe(true);
+  });
+
   it('reports the first day the plans fall below the reserved floor', () => {
     const result = applyPlanOverlay(rows, overlay({ daily: overlay().daily.map(day => ({ ...day, reserved_floor: 6000 })) }), 10000);
     expect(result.dipDate).toBe('2026-11-30');
