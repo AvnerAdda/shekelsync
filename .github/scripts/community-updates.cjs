@@ -44,7 +44,23 @@ class GitHub {
 }
 
 function communitySummary(body = '') {
-  const clean = body.replace(/<!--[\s\S]*?-->/g, '').trim();
+  const parts = [];
+  let cursor = 0;
+  while (cursor < body.length) {
+    const start = body.indexOf('<!--', cursor);
+    if (start === -1) {
+      parts.push(body.slice(cursor));
+      break;
+    }
+    parts.push(body.slice(cursor, start));
+    const end = body.indexOf('-->', start + 4);
+    // An unterminated comment consumes the remaining input.
+    if (end === -1) break;
+    cursor = end + 3;
+  }
+  // Keep a separator so removing a comment cannot join surrounding characters
+  // into another comment opener or HTML tag.
+  const clean = parts.join('\n').trim();
   for (const heading of ['Community update', 'Summary']) {
     const match = clean.match(new RegExp(`^## ${heading}\\s*\\n([\\s\\S]*?)(?=^## |$(?![\\s\\S]))`, 'im'));
     const summary = match?.[1].trim();

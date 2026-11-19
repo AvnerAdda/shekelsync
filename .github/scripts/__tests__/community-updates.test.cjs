@@ -24,6 +24,29 @@ test('extracts the user-facing update without template comments or validation ch
   assert.equal(communitySummary(), '');
 });
 
+test('removing comments cannot reassemble comment openers or HTML tags', () => {
+  const summary = communitySummary('## Summary\nBefore <<!-- hidden -->!-- reformed --> after.');
+  assert.ok(summary.includes('Before'));
+  assert.ok(summary.includes('after.'));
+  assert.equal(summary.includes('<!--'), false);
+  const tag = communitySummary('## Summary\nBefore <scr<!-- hidden -->ipt>alert(1)</script> after.');
+  assert.equal(tag.includes('<script>'), false);
+});
+
+test('removes unterminated comments and their contents from the published summary', () => {
+  assert.equal(communitySummary('## Summary\nPublic update.\n<!-- private unfinished notes'), 'Public update.');
+  assert.equal(communitySummary('## Community update\n<!-- unfinished'), '');
+});
+
+test('removes adjacent comments while preserving Markdown and surrounding text', () => {
+  const summary = communitySummary('## Community update\n**First**<!-- one --><!-- two -->[Second](https://example.com).');
+  assert.ok(summary.includes('**First**'));
+  assert.ok(summary.includes('[Second](https://example.com).'));
+  assert.equal(summary.includes('<!--'), false);
+  assert.equal(summary.includes('one'), false);
+  assert.equal(summary.includes('two'), false);
+});
+
 test('does not post for unmerged, reopened, or non-main PRs', async () => {
   const api = { rest: () => assert.fail('No API calls expected') };
   for (const event of [
@@ -153,7 +176,7 @@ test('initializes a dedicated assets branch and preserves immutable screenshots 
   } };
   const pr = { number: 90, merge_commit_sha: commitSha };
   const first = await uploadScreenshots(api, pr, directory);
-  assert.match(first, /raw.githubusercontent.com\/AvnerAdda\/shekelsync\/community-assets\/screenshots\/pr-90/);
+  assert.match(first, /https:\/\/raw\.githubusercontent\.com\/AvnerAdda\/shekelsync\/community-assets\/screenshots\/pr-90/);
   assert.equal(uploads, 3);
   assert.equal(await uploadScreenshots(api, pr, directory), first);
   assert.equal(uploads, 3);
