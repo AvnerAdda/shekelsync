@@ -323,13 +323,19 @@ function simulateTrack(track, trackEvents, paths, options, warnings) {
     while (calendarDate(startK) <= tranche.drawDate) startK += 1;
     let prevDate = tranche.drawDate;
     let brokenEntry = null;
+    let shortFirstPeriod = false;
     if (separateBrokenPeriod) {
       // The payment day right after the draw (may precede the first regular
       // payment date) starts the schedule. Interest from the draw to it is
       // charged that day on its own; regular payments start a month later.
       let brokenK = startK;
       while (calendarDate(brokenK - 1) > tranche.drawDate) brokenK -= 1;
-      if (calendarDate(brokenK - 1) !== tranche.drawDate) {
+      if (brokenK === 0 && calendarDate(-1) < tranche.drawDate) {
+        // Drawn less than a month before the track's own first payment date:
+        // banks keep that date as the first regular instalment and charge the
+        // short period's actual-days interest in it, with no separate charge.
+        shortFirstPeriod = true;
+      } else if (calendarDate(brokenK - 1) !== tranche.drawDate) {
         const brokenDate = calendarDate(brokenK);
         brokenEntry = { date: brokenDate, days: daysBetween(tranche.drawDate, brokenDate) };
         startK = Math.max(startK, brokenK + 1);
@@ -348,6 +354,7 @@ function simulateTrack(track, trackEvents, paths, options, warnings) {
       prevDate,
       active: false,
       done: false,
+      shortFirstPeriod,
     };
     state.resolveRate = createRateResolver(track, state, paths, overrides, warn, options);
     if (brokenEntry) brokenEntries.push({ ...brokenEntry, tranche: state });
@@ -467,7 +474,7 @@ function simulateTrack(track, trackEvents, paths, options, warnings) {
       }
 
       // Broken first period: charge interest for the actual days since the draw.
-      if (k === tranche.startK && options.brokenPeriodInterest === 'actual_days') {
+      if (k === tranche.startK && (options.brokenPeriodInterest === 'actual_days' || tranche.shortFirstPeriod)) {
         const days = daysBetween(tranche.drawDate, date);
         const actual = tranche.real * (rate.annualNominal / 100) * (days / 365);
         // The extra days' interest is paid with the first instalment (or

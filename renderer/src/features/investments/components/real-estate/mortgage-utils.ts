@@ -232,7 +232,9 @@ export function trackDateIssue(track: MortgageTrack, brokenPeriodInterest?: stri
   const days = daysBetweenIso(firstDraw, firstPayment);
   if (brokenPeriodInterest === 'separate') {
     // Interest to the next payment day is charged apart; regular payments
-    // start one month after that payment day.
+    // start one month after that payment day. A first payment less than a
+    // month after the draw is also fine: it carries the short period's
+    // interest itself (no long-gap issue either way).
     const paymentDay = Number(firstPayment.slice(8, 10));
     const sameMonth = `${firstDraw.slice(0, 8)}${String(paymentDay).padStart(2, '0')}`;
     const nextPaymentDay = firstDraw < sameMonth ? sameMonth : addMonthsIso(sameMonth, 1);
