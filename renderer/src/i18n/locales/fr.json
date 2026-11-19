@@ -1999,6 +1999,7 @@
           "noScenarios": "Aucun scénario enregistré",
           "line": "Avec mes projets",
           "floor": "Réservé",
+          "range": "Fourchette avec mes projets",
           "title": "Avec vos projets",
           "closing": "Solde final avec projets",
           "difference": "{{amount}} par rapport à la prévision",

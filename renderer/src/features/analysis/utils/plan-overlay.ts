@@ -33,11 +33,12 @@ export interface OutlookRow {
   date: string;
   historicalCumulative: number | null;
   expectedCumulative: number | null;
+  forecastRange?: [number, number] | null;
   [key: string]: unknown;
 }
 
 export interface PlannedOutlook<Row extends OutlookRow> {
-  rows: Array<Row & { plannedCumulative: number | null; reservedFloor: number | null }>;
+  rows: Array<Row & { plannedCumulative: number | null; plannedRange: [number, number] | null; reservedFloor: number | null }>;
   plannedEnding: number | null;
   plannedLowest: { date: string; value: number } | null;
   expectedEnding: number | null;
@@ -61,7 +62,8 @@ export function hasActivePlans(overlay: PlanOverlay | null, selection: PlanSelec
 
 /**
  * Adds `plannedCumulative` (expected balance + scenario changes − external goal
- * contributions) and `reservedFloor` to the forecast rows. History rows are
+ * contributions), `plannedRange` (the forecast range shifted by the same plan
+ * changes, which are fixed amounts) and `reservedFloor` to the forecast rows. History rows are
  * left untouched except today's anchor, where both curves start.
  */
 export function applyPlanOverlay<Row extends OutlookRow>(
@@ -69,7 +71,7 @@ export function applyPlanOverlay<Row extends OutlookRow>(
   overlay: PlanOverlay | null,
   startingBalance: number | null | undefined,
 ): PlannedOutlook<Row> {
-  const empty = { plannedCumulative: null, reservedFloor: null };
+  const empty = { plannedCumulative: null, plannedRange: null, reservedFloor: null };
   const anchorIndex = rows.reduce((found, row, index) => (row.historicalCumulative !== null ? index : found), -1);
   if (!overlay || !finite(startingBalance)) {
     return { rows: rows.map(row => ({ ...row, ...empty })), plannedEnding: null, plannedLowest: null, expectedEnding: null, dipDate: null };
@@ -95,11 +97,15 @@ export function applyPlanOverlay<Row extends OutlookRow>(
     const expected = isAnchor ? startingBalance : row.expectedCumulative;
     if (!finite(expected)) return { ...row, ...empty };
     const planned = Math.round((expected + delta) * 100) / 100;
+    const range = row.forecastRange;
+    const plannedRange: [number, number] | null = isAnchor ? [planned, planned]
+      : Array.isArray(range) && finite(range[0]) && finite(range[1])
+        ? [Math.round((range[0] + delta) * 100) / 100, Math.round((range[1] + delta) * 100) / 100] : null;
     plannedEnding = planned;
     expectedEnding = expected;
     if (!plannedLowest || planned < plannedLowest.value) plannedLowest = { date: row.date, value: planned };
     if (!dipDate && planned < floor) dipDate = row.date;
-    return { ...row, plannedCumulative: planned, reservedFloor: floor };
+    return { ...row, plannedCumulative: planned, plannedRange, reservedFloor: floor };
   });
   return { rows: result, plannedEnding, plannedLowest, expectedEnding, dipDate };
 }
