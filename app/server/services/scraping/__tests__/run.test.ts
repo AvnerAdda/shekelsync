@@ -947,7 +947,7 @@ describe('scraping run service', () => {
 
       expect(
         internal.prepareScraperCredentials('amex', { companyId: 'amex' }, { id: 'amex-user', card6Digits: '123456', password: 'p' }),
-      ).toEqual({ username: 'amex-user', card6Digits: '123456', password: 'p' });
+      ).toEqual({ id: 'amex-user', card6Digits: '123456', password: 'p' });
       expect(
         internal.prepareScraperCredentials('other', { companyId: 'hapoalim' }, { username: 'u', password: 'p', bankAccountNumber: '1' }),
       ).toEqual({ username: 'u', password: 'p', bankAccountNumber: '1' });

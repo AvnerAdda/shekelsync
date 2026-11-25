@@ -738,14 +738,6 @@ function prepareScraperCredentials(companyId, options, credentials) {
     };
   }
 
-  if (companyId === CompanyTypes.amex) {
-    return {
-      username: credentials.id,
-      card6Digits: credentials.card6Digits,
-      password: credentials.password,
-    };
-  }
-
   if (isBankVendor(options.companyId)) {
     return {
       username: credentials.username,
