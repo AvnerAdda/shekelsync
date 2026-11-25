@@ -54,9 +54,11 @@ import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import VisibilityIcon from '@mui/icons-material/Visibility';
 import VisibilityOffIcon from '@mui/icons-material/VisibilityOff';
 import HistoryIcon from '@mui/icons-material/History';
+import PhonelinkLockIcon from '@mui/icons-material/PhonelinkLock';
 import CircularProgress from '@mui/material/CircularProgress';
 import SyncModal from './ScrapeModal';
 import AccountPairingModal from './AccountPairingModal';
+import OneZeroVerificationDialog from './OneZeroVerificationDialog';
 import InvestmentAccountSuggestionsCard from '@renderer/features/investments/components/InvestmentAccountSuggestionsCard';
 import CreditCardSuggestionsCard from '@renderer/features/investments/components/CreditCardSuggestionsCard';
 import SmartInvestmentAccountForm from '@renderer/features/investments/components/SmartInvestmentAccountForm';
@@ -191,6 +193,8 @@ export interface Account {
   email?: string;
   otpCode?: string;
   otpToken?: string;
+  /** One Zero only: the phone was verified and a long-term login token is stored. */
+  otp_verified?: boolean;
   nickname?: string;
   password?: string;
   created_at: string;
@@ -597,6 +601,10 @@ export default function AccountsModal({ isOpen, onClose, openRequest }: Accounts
   const [isAdding, setIsAdding] = useState(false);
   const [isSyncModalOpen, setIsSyncModalOpen] = useState(false);
   const [selectedAccount, setSelectedAccount] = useState<Account | null>(null);
+  const [oneZeroVerification, setOneZeroVerification] = useState<{
+    account: Account;
+    afterVerify: 'initialSync' | 'sync' | null;
+  } | null>(null);
   const [activeTab, setActiveTab] = useState(0);
   const [isSyncing, setIsSyncing] = useState(false);
   const [currentAccountType, setCurrentAccountType] = useState<'banking' | 'investment'>('banking');
@@ -1224,6 +1232,46 @@ export default function AccountsModal({ isOpen, onClose, openRequest }: Accounts
     }
   };
 
+  const startInitialSync = (syncAccount: Account) => {
+    showNotification('Account added! Starting initial sync for last 3 months...', 'info');
+    setIsSyncing(true);
+    syncTimeoutRef.current = setTimeout(async () => {
+      try {
+        const scrapeConfig = buildInitialSyncPayload(syncAccount);
+        const syncStartDate = new Date(scrapeConfig.options.startDate);
+
+        showNotification('Syncing transactions... This may take a few minutes.', 'info');
+
+        const scrapeResponse = await apiClient.post<ScrapeResponseData>('/api/scrape', scrapeConfig);
+        const scrapeResult = scrapeResponse.data;
+
+        if (scrapeResponse.ok && !(scrapeResult && scrapeResult.error)) {
+          let transactionCount = 0;
+          if (scrapeResult?.accounts) {
+            transactionCount = scrapeResult.accounts.reduce((sum, acc) => {
+              return sum + (acc.txns ? acc.txns.length : 0);
+            }, 0);
+          }
+
+          showNotification(
+            `Initial sync complete! ${transactionCount} transactions imported from last 3 months.`,
+            'success',
+          );
+
+          window.dispatchEvent(new CustomEvent('dataRefresh'));
+          await refetchOnboardingStatus();
+        } else {
+          showNotification('Sync started in background. Check notifications for updates.', 'info');
+        }
+      } catch (syncErr) {
+        console.error('[Auto-sync] Error:', syncErr);
+        showNotification('Initial sync started in background', 'info');
+      } finally {
+        setIsSyncing(false);
+      }
+    }, 1000);
+  };
+
   const handleAddBankingAccount = async () => {
     const institution =
       newAccount.vendor && institutionMap.has(newAccount.vendor)
@@ -1266,49 +1314,19 @@ export default function AccountsModal({ isOpen, onClose, openRequest }: Accounts
       await fetchAccounts();
       await refetchOnboardingStatus();
 
-      showNotification('Account added! Starting initial sync for last 3 months...', 'info');
-      setIsSyncing(true);
-
       const syncAccount: Account = {
         ...accountPayload,
         ...createdCredential,
         id: typeof createdCredential.id === 'number' ? createdCredential.id : accountPayload.id,
       };
-      syncTimeoutRef.current = setTimeout(async () => {
-        try {
-          const scrapeConfig = buildInitialSyncPayload(syncAccount);
-          const syncStartDate = new Date(scrapeConfig.options.startDate);
 
-          showNotification('Syncing transactions... This may take a few minutes.', 'info');
-
-          const scrapeResponse = await apiClient.post<ScrapeResponseData>('/api/scrape', scrapeConfig);
-          const scrapeResult = scrapeResponse.data;
-
-          if (scrapeResponse.ok && !(scrapeResult && scrapeResult.error)) {
-            let transactionCount = 0;
-            if (scrapeResult?.accounts) {
-              transactionCount = scrapeResult.accounts.reduce((sum, acc) => {
-                return sum + (acc.txns ? acc.txns.length : 0);
-              }, 0);
-            }
-
-            showNotification(
-              `Initial sync complete! ${transactionCount} transactions imported from last 3 months.`,
-              'success',
-            );
-
-            window.dispatchEvent(new CustomEvent('dataRefresh'));
-            await refetchOnboardingStatus();
-          } else {
-            showNotification('Sync started in background. Check notifications for updates.', 'info');
-          }
-        } catch (syncErr) {
-          console.error('[Auto-sync] Error:', syncErr);
-          showNotification('Initial sync started in background', 'info');
-        } finally {
-          setIsSyncing(false);
-        }
-      }, 1000);
+      if (syncAccount.vendor === 'oneZero') {
+        // One Zero can't sign in until the phone is verified by SMS; the
+        // initial sync starts once that's done.
+        setOneZeroVerification({ account: syncAccount, afterVerify: 'initialSync' });
+      } else {
+        startInitialSync(syncAccount);
+      }
 
       setNewAccount(createEmptyCredentialAccount());
       setShowNewAccountPassword(false);
@@ -1801,6 +1819,10 @@ export default function AccountsModal({ isOpen, onClose, openRequest }: Accounts
   };
 
   const handleSync = async (account: Account, { recovery = false }: { recovery?: boolean } = {}) => {
+    if (account.vendor === 'oneZero' && account.otp_verified === false) {
+      setOneZeroVerification({ account, afterVerify: 'sync' });
+      return;
+    }
     setSelectedAccount(account);
 
     // Fetch the last transaction date for this vendor to set as default start date
@@ -1828,6 +1850,27 @@ export default function AccountsModal({ isOpen, onClose, openRequest }: Accounts
     }
 
     setIsSyncModalOpen(true);
+  };
+
+  const handleOneZeroVerified = () => {
+    const pending = oneZeroVerification;
+    setOneZeroVerification(null);
+    showNotification(t('oneZeroVerification.verifiedNotice'), 'success');
+    fetchAccounts();
+    if (!pending) return;
+    const verifiedAccount = { ...pending.account, otp_verified: true };
+    if (pending.afterVerify === 'initialSync') {
+      startInitialSync(verifiedAccount);
+    } else if (pending.afterVerify === 'sync') {
+      void handleSync(verifiedAccount);
+    }
+  };
+
+  const handleOneZeroVerificationClosed = () => {
+    if (oneZeroVerification?.afterVerify === 'initialSync') {
+      showNotification(t('oneZeroVerification.pendingNotice'), 'info');
+    }
+    setOneZeroVerification(null);
   };
 
   const handleSyncSuccess = () => {
@@ -2498,6 +2541,14 @@ export default function AccountsModal({ isOpen, onClose, openRequest }: Accounts
                     {account.lastScrapeStatus === 'failed' && (
                       <ErrorIcon sx={{ color: 'error.main', fontSize: 18 }} />
                     )}
+                    {account.vendor === 'oneZero' && account.otp_verified === false && (
+                      <Chip
+                        label={t('oneZeroVerification.needsVerification')}
+                        size="small"
+                        color="warning"
+                        variant="outlined"
+                      />
+                    )}
                   </Box>
                 </TableCell>
                 <TableCell sx={{ py: 2 }}>
@@ -2568,6 +2619,21 @@ export default function AccountsModal({ isOpen, onClose, openRequest }: Accounts
                         </IconButton>
                       </span>
                     </Tooltip>
+                    {account.vendor === 'oneZero' && (
+                      <Tooltip title={t('oneZeroVerification.tooltip')}>
+                        <span>
+                          <IconButton
+                            onClick={() => setOneZeroVerification({ account, afterVerify: null })}
+                            color={account.otp_verified === false ? 'warning' : 'default'}
+                            disabled={isSyncing}
+                            size="small"
+                            aria-label={t('oneZeroVerification.tooltip')}
+                          >
+                            <PhonelinkLockIcon fontSize="small" />
+                          </IconButton>
+                        </span>
+                      </Tooltip>
+                    )}
                     <Tooltip title={isSyncing ? t('tooltips.syncInProgress') : t('tooltips.syncAccount')}>
                       <span>
                         <IconButton
@@ -4448,6 +4514,13 @@ export default function AccountsModal({ isOpen, onClose, openRequest }: Accounts
         onStart={() => setIsSyncing(true)}
         onComplete={() => setIsSyncing(false)}
         initialConfig={syncInitialConfig}
+      />
+      <OneZeroVerificationDialog
+        open={Boolean(oneZeroVerification)}
+        credentialId={typeof oneZeroVerification?.account.id === 'number' ? oneZeroVerification.account.id : null}
+        accountLabel={oneZeroVerification?.account.nickname ?? null}
+        onClose={handleOneZeroVerificationClosed}
+        onVerified={handleOneZeroVerified}
       />
       {/* Account Pairing Modal */}
       <AccountPairingModal

@@ -288,6 +288,24 @@ describe('scraping run service', () => {
       ).rejects.toMatchObject({ statusCode: 400, message: 'Invalid company ID' });
     });
 
+    it('refuses a One Zero sync without a verified phone token, before any audit row', async () => {
+      await expect(
+        runService.runScrape({
+          options: { companyId: 'oneZero' },
+          credentials: { email: 'test.user@example.com', password: 'secret', otpToken: '  ' },
+          logger: buildLogger(),
+        } as any),
+      ).rejects.toMatchObject({
+        statusCode: 400,
+        code: 'one_zero_verification_required',
+        errorType: 'oneZeroVerificationRequired',
+      });
+      expect(queryMock).not.toHaveBeenCalledWith(
+        expect.stringContaining('INSERT INTO scrape_events'),
+        expect.anything(),
+      );
+    });
+
     it('simulates sync for anonymized demo DB and inserts a latest transaction', async () => {
       process.env.SQLITE_DB_PATH = '/tmp/shekelsync-anonymized.sqlite';
 
@@ -935,10 +953,12 @@ describe('scraping run service', () => {
         { companyId: 'oneZero' },
         { email: 'test.user@example.com', password: 'p', otpCode: '777777', otpToken: 'token' },
       );
-      expect(oneZeroCredentials.email).toBe('test.user@example.com');
-      expect(oneZeroCredentials.otpLongTermToken).toBe('token');
-      expect(typeof oneZeroCredentials.otpCodeRetriever).toBe('function');
-      await expect(oneZeroCredentials.otpCodeRetriever()).resolves.toBe('777777');
+      // Only the token path: a code typed before the SMS was sent can never be valid.
+      expect(oneZeroCredentials).toEqual({
+        email: 'test.user@example.com',
+        password: 'p',
+        otpLongTermToken: 'token',
+      });
 
       process.env.PUPPETEER_DISABLE_SANDBOX = 'true';
       const sandboxDisabledOpts = internal.buildScraperOptions({ companyId: 'leumi' }, true, undefined, start);
@@ -947,7 +967,7 @@ describe('scraping run service', () => {
 
       expect(
         internal.prepareScraperCredentials('amex', { companyId: 'amex' }, { id: 'amex-user', card6Digits: '123456', password: 'p' }),
-      ).toEqual({ username: 'amex-user', card6Digits: '123456', password: 'p' });
+      ).toEqual({ id: 'amex-user', card6Digits: '123456', password: 'p' });
       expect(
         internal.prepareScraperCredentials('other', { companyId: 'hapoalim' }, { username: 'u', password: 'p', bankAccountNumber: '1' }),
       ).toEqual({ username: 'u', password: 'p', bankAccountNumber: '1' });
@@ -2209,13 +2229,6 @@ describe('scraping run service', () => {
         ),
       ).toEqual({ id: 'xyz', password: 'p' });
 
-      const oneZeroNoOtp = internal.prepareScraperCredentials(
-        'oneZero',
-        { companyId: 'oneZero' },
-        { email: 'test.user@example.com', password: 'secret' },
-      );
-      expect(oneZeroNoOtp.otpCodeRetriever).toBeUndefined();
-      expect(oneZeroNoOtp.otpLongTermToken).toBeNull();
 
       await internal.markCredentialScrapeStatus(mockClient, 7, 'success');
       expect(mockClient.query).toHaveBeenCalledWith(

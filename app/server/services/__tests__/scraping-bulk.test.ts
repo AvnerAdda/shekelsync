@@ -266,6 +266,33 @@ describe('bulk scrape service', () => {
     expect(JSON.stringify(result)).not.toContain(malformedValue);
   });
 
+  it('marks an unverified One Zero account as blocked, not failed', async () => {
+    configureService({
+      staleAccounts: [
+        makeAccount({ id: 1, vendor: 'oneZero' }),
+        makeAccount({ id: 2, vendor: 'isracard' }),
+      ],
+      runScrapeImpl: async ({ options }: any) => {
+        if (options.companyId === 'oneZero') {
+          const error: any = new Error('One Zero needs a one-time phone verification.');
+          error.code = 'one_zero_verification_required';
+          throw error;
+        }
+        return { success: true, accounts: [] };
+      },
+    });
+
+    const result = await bulkScrapeService.bulkScrape({ logger: null });
+
+    expect(result).toMatchObject({ successCount: 1, failureCount: 0, blockedCount: 1 });
+    expect(result.results[0]).toMatchObject({
+      vendor: 'oneZero',
+      status: 'blocked',
+      reason: 'one_zero_verification_required',
+      blocked: true,
+    });
+  });
+
   it('reports failed when every provider attempt fails', async () => {
     configureService({
       staleAccounts: [

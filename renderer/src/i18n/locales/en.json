@@ -4824,6 +4824,37 @@
       "otpToken": "OTP Token",
       "identification_code": "Identification Code"
     },
+    "oneZeroVerification": {
+      "title": "Verify your phone for One Zero",
+      "intro": "One Zero confirms new devices by SMS. You do this once; after that, syncs sign in on their own, including automatic ones.",
+      "phoneLabel": "Mobile number",
+      "phonePlaceholder": "050-1234567",
+      "phoneHelper": "The number registered with One Zero. It is only used to send the code and is not saved.",
+      "codeSentTo": "Enter the code sent to {{phone}}.",
+      "codeLabel": "SMS code",
+      "tooltip": "Verify phone",
+      "needsVerification": "Phone not verified",
+      "verifiedNotice": "One Zero phone verified.",
+      "pendingNotice": "One Zero added. Verify the phone from Accounts to start syncing.",
+      "actions": {
+        "sendCode": "Send code",
+        "sending": "Sending…",
+        "verify": "Verify",
+        "verifying": "Verifying…",
+        "resend": "Send a new code",
+        "later": "Later"
+      },
+      "errors": {
+        "invalid_phone_number": "Enter the mobile number registered with One Zero, for example 050-1234567.",
+        "sms_send_failed": "One Zero didn't send a code. Check the number and try again.",
+        "invalid_code": "Enter the digits from the SMS.",
+        "code_rejected": "One Zero didn't accept that code. Attempts left: {{count}}.",
+        "too_many_attempts": "Too many wrong codes. Send a new code.",
+        "session_expired": "The code expired. Send a new code.",
+        "session_not_found": "This code request is no longer active. Send a new code.",
+        "generic": "Something went wrong. Try again."
+      }
+    },
     "credentialsUpdate": {
       "title": "Update credentials",
       "description": "Update the saved login details for this account. Leave Password blank to keep the current one.",

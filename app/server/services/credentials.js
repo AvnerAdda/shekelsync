@@ -56,6 +56,12 @@ function mapCommonFields(row) {
     last_scrape_attempt: toUTCISOStringRef(row.last_scrape_attempt),
   };
 
+  if (row.vendor === 'oneZero') {
+    // Whether the long-term SMS token from phone verification exists (read
+    // from the encrypted column, so it works without decrypting).
+    credential.otp_verified = Boolean(row.identification_code);
+  }
+
   const institution = buildInstitutionFromRowRef(row);
   if (institution) {
     credential.institution = institution;

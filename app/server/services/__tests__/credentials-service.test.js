@@ -138,6 +138,25 @@ describe('credentials service', () => {
     expect(queryMock.mock.calls[0][1]).toEqual(['isracard']);
   });
 
+  it('flags whether a One Zero phone is verified without decrypting or exposing the token', async () => {
+    queryMock.mockResolvedValueOnce({
+      rows: [
+        createCredentialRow({ id: 1, vendor: 'oneZero', identification_code: 'enc(token)' }),
+        createCredentialRow({ id: 2, vendor: 'oneZero', identification_code: null }),
+        createCredentialRow({ id: 3, vendor: 'discount', identification_code: 'enc(num)' }),
+      ],
+    });
+
+    const result = await credentialsService.listCredentials({ skipDecrypt: true });
+
+    expect(result.map((row) => [row.id, row.otp_verified, row.identification_code])).toEqual([
+      [1, true, null],
+      [2, false, null],
+      [3, undefined, null],
+    ]);
+    expect(decryptMock).not.toHaveBeenCalled();
+  });
+
   it('maps sqlite alias casing for lastUpdate and lastScrapeStatus', async () => {
     queryMock.mockResolvedValueOnce({
       rows: [

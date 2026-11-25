@@ -6,6 +6,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 const { createCredentialsRouter } = require('../../routes/credentials.js');
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const credentialsService = require('../../services/credentials.js');
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const oneZeroVerification = require('../../services/scraping/one-zero-verification.js');
 
 function buildApp() {
   const app = express();
@@ -148,5 +150,77 @@ describe('Shared /api/credentials routes', () => {
 
     const res = await request(app).get('/api/credentials').expect(500);
     expect(res.body.error).toBeDefined();
+  });
+
+  describe('One Zero phone verification', () => {
+    it('starts a verification and returns only the masked number', async () => {
+      const spy = vi.spyOn(oneZeroVerification, 'startVerification').mockResolvedValue({
+        sessionId: 'session-1',
+        expiresAt: '2026-01-15T10:10:00.000Z',
+        maskedPhoneNumber: '•••• 4567',
+      });
+
+      const res = await request(app)
+        .post('/api/credentials/7/one-zero/verification')
+        .send({ phoneNumber: '0501234567' })
+        .expect(200);
+
+      expect(spy).toHaveBeenCalledWith({ credentialId: 7, phoneNumber: '0501234567' });
+      expect(res.body).toEqual({
+        sessionId: 'session-1',
+        expiresAt: '2026-01-15T10:10:00.000Z',
+        maskedPhoneNumber: '•••• 4567',
+      });
+    });
+
+    it('confirms a code and never echoes the token', async () => {
+      const spy = vi.spyOn(oneZeroVerification, 'confirmVerification').mockResolvedValue({ verified: true });
+
+      const res = await request(app)
+        .post('/api/credentials/7/one-zero/verification/confirm')
+        .send({ sessionId: 'session-1', code: '123456' })
+        .expect(200);
+
+      expect(spy).toHaveBeenCalledWith({ credentialId: 7, sessionId: 'session-1', code: '123456' });
+      expect(res.body).toEqual({ verified: true });
+    });
+
+    it('passes service error codes and remaining attempts to the client', async () => {
+      const error: any = new Error('One Zero did not accept that code');
+      error.statusCode = 400;
+      error.code = 'code_rejected';
+      error.attemptsRemaining = 3;
+      vi.spyOn(oneZeroVerification, 'confirmVerification').mockRejectedValue(error);
+
+      const res = await request(app)
+        .post('/api/credentials/7/one-zero/verification/confirm')
+        .send({ sessionId: 'session-1', code: '000000' })
+        .expect(400);
+
+      expect(res.body).toMatchObject({
+        error: 'One Zero did not accept that code',
+        code: 'code_rejected',
+        attemptsRemaining: 3,
+      });
+    });
+
+    it('hides unexpected internal error details', async () => {
+      vi.spyOn(console, 'error').mockImplementation(() => {});
+      vi.spyOn(oneZeroVerification, 'startVerification').mockRejectedValue(new Error('SQLITE_BUSY: database is locked'));
+
+      const res = await request(app)
+        .post('/api/credentials/7/one-zero/verification')
+        .send({ phoneNumber: '0501234567' })
+        .expect(500);
+
+      expect(res.body.error).toBe('Failed to send the verification code');
+      expect(res.body.code).toBeNull();
+    });
+
+    it('rejects a non-numeric credential id', async () => {
+      const spy = vi.spyOn(oneZeroVerification, 'startVerification');
+      await request(app).post('/api/credentials/abc/one-zero/verification').send({}).expect(400);
+      expect(spy).not.toHaveBeenCalled();
+    });
   });
 });

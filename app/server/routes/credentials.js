@@ -1,6 +1,7 @@
 const express = require('express');
 
 const credentialsService = require('../services/credentials.js');
+const oneZeroVerification = require('../services/scraping/one-zero-verification.js');
 const { sanitizeError, sanitizeErrorForLogging } = require('../../lib/server/error-sanitizer.js');
 const { validateCredentialCreation, validateCredentialUpdate, validateCredentialId } = require('../../lib/server/input-validator.js');
 const { resolveElectronPath } = require('../../lib/resolve-electron-path.js');
@@ -186,6 +187,60 @@ function createCredentialsRouter() {
 
   router.delete('/', handleDelete);
   router.delete('/:id', handleDelete);
+
+  const sendVerificationError = (req, res, error, defaultMessage) => {
+    const statusCode = error?.statusCode || 500;
+    if (statusCode >= 500 && statusCode !== 502) {
+      console.error(
+        '[Credentials] One Zero verification error:',
+        sanitizeErrorForLogging(error, { path: req.path, method: req.method }),
+      );
+    }
+    const exposeMessage = statusCode < 500 || statusCode === 502;
+    const sanitized = sanitizeError(error, { statusCode, defaultMessage, includeStack: false, exposeMessage });
+    res.status(statusCode).json({
+      ...sanitized,
+      code: exposeMessage ? error?.code || null : null,
+      ...(Number.isInteger(error?.attemptsRemaining) ? { attemptsRemaining: error.attemptsRemaining } : {}),
+    });
+  };
+
+  // Step 1: One Zero texts a code to the phone number. Nothing is stored yet.
+  router.post('/:id/one-zero/verification', async (req, res) => {
+    const idValidation = validateCredentialId(req.params.id);
+    if (!idValidation.valid) {
+      return res.status(400).json({ error: idValidation.error });
+    }
+    try {
+      const result = await oneZeroVerification.startVerification({
+        credentialId: idValidation.value,
+        phoneNumber: req.body?.phoneNumber,
+      });
+      res.json(result);
+    } catch (error) {
+      sendVerificationError(req, res, error, 'Failed to send the verification code');
+    }
+  });
+
+  // Step 2: exchange the SMS code for One Zero's long-term token and save it
+  // (encrypted) on the credential. The token is never sent back.
+  router.post('/:id/one-zero/verification/confirm', async (req, res) => {
+    const idValidation = validateCredentialId(req.params.id);
+    if (!idValidation.valid) {
+      return res.status(400).json({ error: idValidation.error });
+    }
+    try {
+      const result = await oneZeroVerification.confirmVerification({
+        credentialId: idValidation.value,
+        sessionId: req.body?.sessionId,
+        code: req.body?.code,
+      });
+      logCredentialUpdate({ credentialId: idValidation.value, fieldsUpdated: ['otpToken'] });
+      res.json(result);
+    } catch (error) {
+      sendVerificationError(req, res, error, 'Failed to verify the code');
+    }
+  });
 
   return router;
 }

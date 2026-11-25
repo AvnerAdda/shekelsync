@@ -42,6 +42,7 @@ describe('getProtectedAction', () => {
     ['PATCH', '/api/credentials', 'credentials'],
     ['DELETE', '/api/credentials/12', 'credentials'],
     ['POST', '/api/x/../credentials', 'credentials'],
+    ['POST', '/api/credentials/12/one-zero/verification/confirm', 'credentials'],
   ])('%s %s requires re-authentication (%s)', (method, endpoint, expected) => {
     expect(getProtectedAction(method, endpoint)).toBe(expected);
   });
@@ -53,6 +54,8 @@ describe('getProtectedAction', () => {
     ['POST', '/api/scrape/test'],
     ['GET', '/api/scrape'],
     ['POST', '/api/credentials/12/extra'],
+    // Sending the SMS stores nothing; only the confirm step saves the token.
+    ['POST', '/api/credentials/12/one-zero/verification'],
   ])('%s %s is not protected', (method, endpoint) => {
     expect(getProtectedAction(method, endpoint)).toBeNull();
   });
