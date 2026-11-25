@@ -1839,7 +1839,7 @@ const FINANCIAL_INSTITUTIONS = [
   { code: 'beyahadBishvilha', type: 'bank', nameHe: 'בנק ביחד בשבילך', nameEn: 'Beyahad Bishvilha Bank', category: 'banking', scrapable: 1, scraperCompanyId: 'beyahadBishvilha', credentialFields: '["id","password"]', displayOrder: 110 },
   { code: 'behatsdaa', type: 'bank', nameHe: 'בנק בהצדעה', nameEn: 'Behatsdaa Bank', category: 'banking', scrapable: 1, scraperCompanyId: 'behatsdaa', credentialFields: '["id","password"]', displayOrder: 120 },
   { code: 'pagi', type: 'bank', nameHe: 'בנק פאגי', nameEn: 'Pagi Bank', category: 'banking', scrapable: 1, scraperCompanyId: 'pagi', credentialFields: '["username","password"]', displayOrder: 130 },
-  { code: 'oneZero', type: 'bank', nameHe: 'וואן זירו', nameEn: 'One Zero Bank', category: 'banking', scrapable: 1, scraperCompanyId: 'oneZero', credentialFields: '["email","password","otpCode","otpToken"]', displayOrder: 140 },
+  { code: 'oneZero', type: 'bank', nameHe: 'וואן זירו', nameEn: 'One Zero Bank', category: 'banking', scrapable: 1, scraperCompanyId: 'oneZero', credentialFields: '["email","password"]', displayOrder: 140 },
 
   // ========== CREDIT CARDS ==========
   { code: 'visaCal', type: 'credit_card', nameHe: 'ויזה כאל', nameEn: 'Visa Cal', category: 'banking', scrapable: 1, scraperCompanyId: 'visaCal', credentialFields: '["username","password"]', displayOrder: 200 },

@@ -305,6 +305,12 @@ function createScrapeDiagnostics(options = {}, credentials = {}, logger = consol
   };
 }
 
+const ONE_ZERO_VERIFICATION_REQUIRED_CODE = 'one_zero_verification_required';
+const ONE_ZERO_VERIFICATION_REQUIRED_MESSAGE =
+  'One Zero needs a one-time phone verification. Open Accounts and choose "Verify phone" on this account.';
+const ONE_ZERO_REVERIFY_HINT =
+  'If One Zero keeps rejecting the login, verify the phone again from Accounts.';
+
 function createHttpError(statusCode, message, extra = {}) {
   const error = new Error(message || 'Scraping failed');
   error.statusCode = statusCode;
@@ -730,11 +736,12 @@ function prepareScraperCredentials(companyId, options, credentials) {
   }
 
   if (companyId === CompanyTypes.oneZero) {
+    // The long-term token comes from the one-time phone verification
+    // (one-zero-verification.js); _runScrapeInternal refuses to start without it.
     return {
       email: credentials.email,
       password: credentials.password,
-      otpCodeRetriever: credentials.otpCode ? () => Promise.resolve(credentials.otpCode) : undefined,
-      otpLongTermToken: credentials.otpToken || null,
+      otpLongTermToken: credentials.otpToken,
     };
   }
 
@@ -2018,6 +2025,19 @@ async function _runScrapeInternal({
     throw createHttpError(400, 'Invalid company ID');
   }
 
+  if (
+    companyType === CompanyTypes.oneZero &&
+    !hasNonEmptyString(credentials?.otpToken) &&
+    !shouldSimulateDemoSync(options, credentials)
+  ) {
+    // Fail before the audit row and rate-limit bookkeeping: this needs the user,
+    // not a retry.
+    throw createHttpError(400, ONE_ZERO_VERIFICATION_REQUIRED_MESSAGE, {
+      errorType: 'oneZeroVerificationRequired',
+      code: ONE_ZERO_VERIFICATION_REQUIRED_CODE,
+    });
+  }
+
   const isBank = isBankVendor(options.companyId);
   const repairContext = await resolveRepairBackfillState(
     { ...credentials, vendor: options.companyId },
@@ -2256,7 +2276,10 @@ async function _runScrapeInternal({
         );
       }
 
-      const baseMessage = `${result?.errorType || 'ScrapeError'}: ${result?.errorMessage || 'Unknown error'}`;
+      // One Zero's long-term token can be revoked (new phone, app reinstall);
+      // the bank then just rejects the login, so point at the fix.
+      const reverifyHint = companyType === CompanyTypes.oneZero ? ` ${ONE_ZERO_REVERIFY_HINT}` : '';
+      const baseMessage = `${result?.errorType || 'ScrapeError'}: ${result?.errorMessage || 'Unknown error'}${reverifyHint}`;
       failureMessage = buildScrapeFailureMessage({
         vendor: options.companyId,
         errorType: result?.errorType,

@@ -25,6 +25,13 @@ const PROTECTED_ACTIONS = Object.freeze([
     methods: new Set(['POST', 'PUT', 'PATCH', 'DELETE']),
     pattern: /^\/api\/credentials(?:\/[^/]+)?\/?$/i,
   },
+  {
+    // Saving One Zero's long-term login token changes the stored credential.
+    // Sending the SMS (the step before) stores nothing, so it is not gated.
+    action: 'credentials',
+    methods: new Set(['POST']),
+    pattern: /^\/api\/credentials\/[^/]+\/one-zero\/verification\/confirm\/?$/i,
+  },
 ]);
 
 const PROMPT_REASONS = Object.freeze({

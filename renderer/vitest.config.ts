@@ -63,6 +63,7 @@ export default defineProject({
       'src/shared/utils/**/__tests__/**/*.{test,spec}.{ts,tsx}',
       'src/shared/modals/**/__tests__/AccountPairingModal.test.tsx',
       'src/shared/modals/**/__tests__/PairingMatchDetailsModal.test.tsx',
+      'src/shared/modals/**/__tests__/OneZeroVerificationDialog.test.tsx',
     ],
     exclude: ['tests/**', 'node_modules/**', 'src/components/**', 'src/routes/**', 'src/pages/**'],
     coverage: {

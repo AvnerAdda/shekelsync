@@ -1156,6 +1156,24 @@ const MIGRATIONS = [
       addColumnIfMissing(db, 'payroll_contribution_plans', 'opened_date', 'TEXT');
     },
   },
+  {
+    version: 15,
+    name: 'one-zero-phone-verification-fields',
+    // Rewrites one seeded institution row; no user data or schema changes.
+    mutatesSchema: false,
+    up: (db) => {
+      // One Zero's long-term login token now comes from an in-app SMS
+      // verification, so the add form asks only for email and password
+      // instead of the old otpCode/otpToken fields.
+      if (!tableExists(db, 'institution_nodes')) return;
+      db.prepare(
+        `UPDATE institution_nodes
+            SET credential_fields = '["email","password"]'
+          WHERE vendor_code = 'oneZero'
+            AND credential_fields LIKE '%otp%'`,
+      ).run();
+    },
+  },
 ];
 
 const CURRENT_SCHEMA_VERSION = MIGRATIONS.length

@@ -4820,6 +4820,37 @@
       "otpToken": "Jeton OTP",
       "identification_code": "Code d'identification"
     },
+    "oneZeroVerification": {
+      "title": "Vérifier votre téléphone pour One Zero",
+      "intro": "One Zero confirme les nouveaux appareils par SMS. Vous ne le faites qu'une fois ; ensuite, les synchronisations se connectent seules, y compris les automatiques.",
+      "phoneLabel": "Numéro de mobile",
+      "phonePlaceholder": "050-1234567",
+      "phoneHelper": "Le numéro enregistré chez One Zero. Il sert uniquement à envoyer le code et n'est pas conservé.",
+      "codeSentTo": "Saisissez le code envoyé au {{phone}}.",
+      "codeLabel": "Code SMS",
+      "tooltip": "Vérifier le téléphone",
+      "needsVerification": "Téléphone non vérifié",
+      "verifiedNotice": "Téléphone One Zero vérifié.",
+      "pendingNotice": "One Zero ajouté. Vérifiez le téléphone depuis Comptes pour lancer la synchronisation.",
+      "actions": {
+        "sendCode": "Envoyer le code",
+        "sending": "Envoi…",
+        "verify": "Vérifier",
+        "verifying": "Vérification…",
+        "resend": "Envoyer un nouveau code",
+        "later": "Plus tard"
+      },
+      "errors": {
+        "invalid_phone_number": "Saisissez le numéro de mobile enregistré chez One Zero, par exemple 050-1234567.",
+        "sms_send_failed": "One Zero n'a pas envoyé de code. Vérifiez le numéro et réessayez.",
+        "invalid_code": "Saisissez les chiffres du SMS.",
+        "code_rejected": "One Zero a refusé ce code. Tentatives restantes : {{count}}.",
+        "too_many_attempts": "Trop de codes erronés. Envoyez un nouveau code.",
+        "session_expired": "Le code a expiré. Envoyez un nouveau code.",
+        "session_not_found": "Cette demande de code n'est plus active. Envoyez un nouveau code.",
+        "generic": "Une erreur s'est produite. Réessayez."
+      }
+    },
     "credentialsUpdate": {
       "title": "Mettre à jour les identifiants",
       "description": "Mettez à jour les identifiants enregistrés pour ce compte. Laissez le mot de passe vide pour conserver l'actuel.",

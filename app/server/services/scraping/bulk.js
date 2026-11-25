@@ -6,6 +6,8 @@ const scrapingService = require('./run.js');
 let databaseRef = database;
 let scrapingServiceRef = scrapingService;
 
+const BLOCKING_ERROR_CODES = new Set(['credential_decrypt_failed', 'one_zero_verification_required']);
+
 function decryptCredential(value, fieldName) {
   if (value === null || value === undefined) {
     return null;
@@ -218,15 +220,18 @@ async function bulkScrape(options = {}) {
       } catch (error) {
         log.error?.(`[Bulk Scrape] Error scraping ${account.vendor}:`, error);
 
+        // Blocked = needs the user (re-enter credentials, verify a phone), so a
+        // retry on the next scheduled run won't help.
+        const blocked = BLOCKING_ERROR_CODES.has(error.code);
         const failure = {
           vendor: account.vendor,
           nickname: account.nickname,
           success: false,
-          status: error.code === 'credential_decrypt_failed' ? 'blocked' : 'failed',
+          status: blocked ? 'blocked' : 'failed',
           message: error.message || 'Unknown error',
           transactionCount: 0,
           reason: error.code || null,
-          blocked: error.code === 'credential_decrypt_failed',
+          blocked,
         };
 
         onAccountComplete?.({ account, index, total: totalAccounts, result: failure, error });
