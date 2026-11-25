@@ -4868,6 +4868,85 @@
         "generic": "משהו השתבש. נסו שוב."
       }
     },
+    "statementImport": {
+      "title": "ייבוא דוח תנועות",
+      "tooltip": "ייבוא קובץ דוח",
+      "importedNotice": "הדוח יובא: {{count}} תנועות חדשות.",
+      "pick": {
+        "intro": "כשהסנכרון לא עובד, אפשר להשתמש בקובץ הדוח שמורידים מאתר הבנק או חברת האשראי. תנועות שכבר נמצאות ב-ShekelSync מזוהות ומדולגות.",
+        "choose": "בחירת קובץ",
+        "formats": "CSV,‏ XLS או XLSX, עד 15MB. הקובץ נקרא במחשב הזה בלבד."
+      },
+      "fileErrors": {
+        "too_large": "הקובץ גדול מ-15MB.",
+        "unreadable": "לא הצלחנו לקרוא את הקובץ. נסו לשמור אותו מחדש כ-XLSX או CSV.",
+        "empty": "אין שורות בקובץ."
+      },
+      "serverErrors": {
+        "no_rows": "לא נמצאו תנועות בקובץ.",
+        "too_many_rows": "בקובץ יותר מ-5,000 שורות. פצלו אותו לתקופות קצרות יותר.",
+        "credential_not_found": "החשבון הזה כבר לא קיים.",
+        "unsupported_account": "אפשר לייבא דוחות רק לחשבונות בנק וכרטיסי אשראי.",
+        "unknown_account_number": "בחרו אחד ממספרי החשבון הזה.",
+        "generic": "משהו השתבש. נסו שוב."
+      },
+      "map": {
+        "headerNotFound": "לא נמצאה שורת הכותרות. ציינו באיזו שורה היא ובחרו את העמודות.",
+        "sheet": "גיליון",
+        "headerRow": "שורת הכותרות",
+        "none": "לא בקובץ",
+        "chargesArePositive": "רכישות מופיעות כסכום חיובי",
+        "found": "נמצאו תנועות: {{count}}. שורות בלי תאריך (סיכומים, הערות): {{skipped}}."
+      },
+      "roles": {
+        "date": "תאריך",
+        "description": "תיאור",
+        "amount": "סכום",
+        "debit": "חובה",
+        "credit": "זכות",
+        "processedDate": "תאריך חיוב",
+        "originalAmount": "סכום מקורי",
+        "originalCurrency": "מטבע מקורי",
+        "memo": "הערות"
+      },
+      "table": {
+        "date": "תאריך",
+        "description": "תיאור",
+        "amount": "סכום",
+        "importAnyway": "לייבא בכל זאת",
+        "note": "הערה"
+      },
+      "review": {
+        "accountNumber": "חשבון / כרטיס",
+        "range": "מ-{{from}} עד {{to}}",
+        "new": "חדשות: {{count}}",
+        "duplicates": "כבר ב-ShekelSync: {{count}}",
+        "invalid": "לא ניתנות לייבוא: {{count}}",
+        "duplicatesHint": "השורות האלה תואמות תנועה באותו סכום בהפרש של עד יום. סמנו שורה רק אם זה באמת חיוב נפרד.",
+        "matches": "תואם ל-\"{{name}}\" בתאריך {{date}}",
+        "truncated": "מוצגות {{shown}} מתוך {{count}} שורות."
+      },
+      "reasons": {
+        "invalid_date": "תאריך לא קריא",
+        "date_out_of_range": "תאריך מחוץ לטווח",
+        "missing_description": "אין תיאור",
+        "invalid_amount": "סכום לא קריא",
+        "zero_amount": "סכום אפס"
+      },
+      "done": {
+        "imported": "תנועות שיובאו: {{count}}.",
+        "skipped": "כבר היו ב-ShekelSync ודולגו: {{count}}.",
+        "merged": "אוחדו עם תנועה קיימת בזמן השמירה: {{count}}."
+      },
+      "actions": {
+        "close": "סגירה",
+        "cancel": "ביטול",
+        "otherFile": "קובץ אחר",
+        "check": "בדיקה מול הנתונים שלי",
+        "back": "חזרה",
+        "import": "ייבוא {{count}}"
+      }
+    },
     "credentialsUpdate": {
       "title": "עדכון פרטי התחברות",
       "description": "עדכנו את פרטי ההתחברות השמורים לחשבון הזה. השאירו את שדה הסיסמה ריק כדי לשמור את הסיסמה הקיימת.",

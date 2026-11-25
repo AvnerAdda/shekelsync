@@ -4851,6 +4851,85 @@
         "generic": "Une erreur s'est produite. Réessayez."
       }
     },
+    "statementImport": {
+      "title": "Importer un relevé",
+      "tooltip": "Importer un fichier de relevé",
+      "importedNotice": "Relevé importé : {{count}} nouvelles opérations.",
+      "pick": {
+        "intro": "Utilisez le fichier de relevé téléchargé sur le site de la banque ou de la carte quand la synchronisation ne fonctionne pas. Les opérations déjà dans ShekelSync sont repérées et ignorées.",
+        "choose": "Choisir un fichier",
+        "formats": "CSV, XLS ou XLSX, 15 Mo maximum. Le fichier est lu uniquement sur cet ordinateur."
+      },
+      "fileErrors": {
+        "too_large": "Le fichier dépasse 15 Mo.",
+        "unreadable": "Ce fichier n'a pas pu être lu. Réenregistrez-le en XLSX ou CSV.",
+        "empty": "Le fichier ne contient aucune ligne."
+      },
+      "serverErrors": {
+        "no_rows": "Aucune opération trouvée dans le fichier.",
+        "too_many_rows": "Le fichier dépasse 5 000 lignes. Découpez-le en périodes plus courtes.",
+        "credential_not_found": "Ce compte n'existe plus.",
+        "unsupported_account": "Les relevés ne peuvent être importés que dans des comptes bancaires et des cartes.",
+        "unknown_account_number": "Choisissez l'un des numéros de ce compte.",
+        "generic": "Une erreur s'est produite. Réessayez."
+      },
+      "map": {
+        "headerNotFound": "Les titres de colonnes sont introuvables. Indiquez leur ligne et choisissez les colonnes.",
+        "sheet": "Feuille",
+        "headerRow": "Ligne des titres",
+        "none": "Absent du fichier",
+        "chargesArePositive": "Les achats apparaissent en montants positifs",
+        "found": "Opérations trouvées : {{count}}. Lignes sans date (totaux, notes) : {{skipped}}."
+      },
+      "roles": {
+        "date": "Date",
+        "description": "Libellé",
+        "amount": "Montant",
+        "debit": "Débit",
+        "credit": "Crédit",
+        "processedDate": "Date de débit",
+        "originalAmount": "Montant d'origine",
+        "originalCurrency": "Devise d'origine",
+        "memo": "Notes"
+      },
+      "table": {
+        "date": "Date",
+        "description": "Libellé",
+        "amount": "Montant",
+        "importAnyway": "Importer quand même",
+        "note": "Remarque"
+      },
+      "review": {
+        "accountNumber": "Compte / carte",
+        "range": "Du {{from}} au {{to}}",
+        "new": "Nouvelles : {{count}}",
+        "duplicates": "Déjà dans ShekelSync : {{count}}",
+        "invalid": "Non importables : {{count}}",
+        "duplicatesHint": "Ces lignes correspondent à une opération du même montant à un jour près. Cochez une ligne seulement s'il s'agit vraiment d'un débit distinct.",
+        "matches": "Correspond à « {{name}} » le {{date}}",
+        "truncated": "{{shown}} lignes affichées sur {{count}}."
+      },
+      "reasons": {
+        "invalid_date": "Date illisible",
+        "date_out_of_range": "Date hors plage",
+        "missing_description": "Pas de libellé",
+        "invalid_amount": "Montant illisible",
+        "zero_amount": "Montant nul"
+      },
+      "done": {
+        "imported": "Opérations importées : {{count}}.",
+        "skipped": "Déjà dans ShekelSync et ignorées : {{count}}.",
+        "merged": "Fusionnées avec une opération existante à l'enregistrement : {{count}}."
+      },
+      "actions": {
+        "close": "Fermer",
+        "cancel": "Annuler",
+        "otherFile": "Autre fichier",
+        "check": "Vérifier avec mes données",
+        "back": "Retour",
+        "import": "Importer {{count}}"
+      }
+    },
     "credentialsUpdate": {
       "title": "Mettre à jour les identifiants",
       "description": "Mettez à jour les identifiants enregistrés pour ce compte. Laissez le mot de passe vide pour conserver l'actuel.",

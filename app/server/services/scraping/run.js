@@ -2440,9 +2440,28 @@ async function notifyScrapeOutcome({ vendor, trigger, success, errorType, durati
   });
 }
 
+/**
+ * Run other ledger writers (statement import) under the same lock as scrapes,
+ * so they never interleave with a scrape's BEGIN IMMEDIATE transaction.
+ */
+function runExclusiveWithScrapes(work) {
+  return scrapeMutex.runExclusive(work);
+}
+
 module.exports = {
   runScrape,
   wasScrapedRecently,
+  runExclusiveWithScrapes,
+  // The pieces a non-scraper source (statement import) needs to land rows
+  // exactly like scraped ones: same dedupe, categorization and card pairing.
+  ledgerIngestion: {
+    isBankVendor,
+    insertTransaction,
+    createScrapeBatchContext,
+    applyCategorizationRules,
+    applyAccountPairings,
+    getNameMatchScore,
+  },
   _internal: {
     sanitizeDebugFilenamePart,
     createHttpError,

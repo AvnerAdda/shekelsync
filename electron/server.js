@@ -260,6 +260,12 @@ async function setupAPIServer(mainWindow, options = {}) {
     lazyRouter(() => require(resolveAppPath('server', 'routes', 'data-export.js')).createDataExportRouter()),
   );
 
+  // Statement file import (fallback when a scraper breaks) – lazy load
+  app.use(
+    '/api/statement-import',
+    lazyRouter(() => require(resolveAppPath('server', 'routes', 'statement-import.js')).createStatementImportRouter()),
+  );
+
   // Guide tips (post-onboarding checklist) – lazy load
   app.use(
     '/api/guide-tips',

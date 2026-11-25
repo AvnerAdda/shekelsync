@@ -55,10 +55,12 @@ import VisibilityIcon from '@mui/icons-material/Visibility';
 import VisibilityOffIcon from '@mui/icons-material/VisibilityOff';
 import HistoryIcon from '@mui/icons-material/History';
 import PhonelinkLockIcon from '@mui/icons-material/PhonelinkLock';
+import UploadFileIcon from '@mui/icons-material/UploadFile';
 import CircularProgress from '@mui/material/CircularProgress';
 import SyncModal from './ScrapeModal';
 import AccountPairingModal from './AccountPairingModal';
 import OneZeroVerificationDialog from './OneZeroVerificationDialog';
+import StatementImportDialog from '@renderer/features/statement-import/components/StatementImportDialog';
 import InvestmentAccountSuggestionsCard from '@renderer/features/investments/components/InvestmentAccountSuggestionsCard';
 import CreditCardSuggestionsCard from '@renderer/features/investments/components/CreditCardSuggestionsCard';
 import SmartInvestmentAccountForm from '@renderer/features/investments/components/SmartInvestmentAccountForm';
@@ -601,6 +603,7 @@ export default function AccountsModal({ isOpen, onClose, openRequest }: Accounts
   const [isAdding, setIsAdding] = useState(false);
   const [isSyncModalOpen, setIsSyncModalOpen] = useState(false);
   const [selectedAccount, setSelectedAccount] = useState<Account | null>(null);
+  const [statementImportTarget, setStatementImportTarget] = useState<{ account: Account; isBank: boolean } | null>(null);
   const [oneZeroVerification, setOneZeroVerification] = useState<{
     account: Account;
     afterVerify: 'initialSync' | 'sync' | null;
@@ -2619,6 +2622,18 @@ export default function AccountsModal({ isOpen, onClose, openRequest }: Accounts
                         </IconButton>
                       </span>
                     </Tooltip>
+                    <Tooltip title={t('statementImport.tooltip')}>
+                      <span>
+                        <IconButton
+                          onClick={() => setStatementImportTarget({ account, isBank: type === 'bank' })}
+                          disabled={isSyncing}
+                          size="small"
+                          aria-label={t('statementImport.tooltip')}
+                        >
+                          <UploadFileIcon fontSize="small" />
+                        </IconButton>
+                      </span>
+                    </Tooltip>
                     {account.vendor === 'oneZero' && (
                       <Tooltip title={t('oneZeroVerification.tooltip')}>
                         <span>
@@ -4514,6 +4529,25 @@ export default function AccountsModal({ isOpen, onClose, openRequest }: Accounts
         onStart={() => setIsSyncing(true)}
         onComplete={() => setIsSyncing(false)}
         initialConfig={syncInitialConfig}
+      />
+      <StatementImportDialog
+        open={Boolean(statementImportTarget)}
+        account={
+          statementImportTarget && typeof statementImportTarget.account.id === 'number'
+            ? {
+                id: statementImportTarget.account.id,
+                nickname: statementImportTarget.account.nickname ?? null,
+                vendor: statementImportTarget.account.vendor,
+              }
+            : null
+        }
+        isBank={statementImportTarget?.isBank ?? false}
+        onClose={() => setStatementImportTarget(null)}
+        onImported={(importResult) => {
+          showNotification(t('statementImport.importedNotice', { count: importResult.inserted }), 'success');
+          window.dispatchEvent(new CustomEvent('dataRefresh'));
+          fetchAccounts();
+        }}
       />
       <OneZeroVerificationDialog
         open={Boolean(oneZeroVerification)}
