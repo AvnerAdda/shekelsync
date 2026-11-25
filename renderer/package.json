@@ -37,7 +37,8 @@
     "react-markdown": "^10.1.0",
     "react-router-dom": "^7.18.4",
     "recharts": "^3.10.1",
-    "remark-gfm": "^4.0.1"
+    "remark-gfm": "^4.0.1",
+    "xlsx": "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz"
   },
   "devDependencies": {
     "@eslint/compat": "^2.1.1",
@@ -62,13 +63,13 @@
     "eslint-plugin-react-hooks": "^7.1.1",
     "jsdom": "^30.1.1",
     "patch-package": "^8.0.1",
+    "picomatch": "file:../vendor/picomatch",
     "stylis": "^4.4.0",
     "stylis-plugin-rtl": "^2.1.1",
     "terser": "^5.51.2",
     "typescript": "npm:@typescript/typescript6@^6.0.2",
     "vite": "^8.3.1",
-    "vitest": "^5.0.2",
-    "picomatch": "file:../vendor/picomatch"
+    "vitest": "^5.0.2"
   },
   "overrides": {
     "eslint-plugin-react": {

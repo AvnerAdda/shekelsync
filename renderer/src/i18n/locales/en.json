@@ -4855,6 +4855,85 @@
         "generic": "Something went wrong. Try again."
       }
     },
+    "statementImport": {
+      "title": "Import a statement",
+      "tooltip": "Import statement file",
+      "importedNotice": "Statement imported: {{count}} new transactions.",
+      "pick": {
+        "intro": "Use the statement file you download from the bank or card website when a sync isn't working. Rows already in ShekelSync are found and skipped.",
+        "choose": "Choose file",
+        "formats": "CSV, XLS or XLSX, up to 15 MB. The file is read on this computer only."
+      },
+      "fileErrors": {
+        "too_large": "The file is larger than 15 MB.",
+        "unreadable": "This file couldn't be read. Try saving it again as XLSX or CSV.",
+        "empty": "The file has no rows."
+      },
+      "serverErrors": {
+        "no_rows": "No transactions were found in the file.",
+        "too_many_rows": "The file has more than 5,000 rows. Split it into smaller periods.",
+        "credential_not_found": "This account no longer exists.",
+        "unsupported_account": "Statements can only be imported into bank and card accounts.",
+        "unknown_account_number": "Pick one of this account's numbers.",
+        "generic": "Something went wrong. Try again."
+      },
+      "map": {
+        "headerNotFound": "The column titles weren't found. Set the row they are on and pick the columns.",
+        "sheet": "Sheet",
+        "headerRow": "Titles on row",
+        "none": "Not in file",
+        "chargesArePositive": "Purchases are listed as positive amounts",
+        "found": "Transactions found: {{count}}. Rows without a date (totals, notes): {{skipped}}."
+      },
+      "roles": {
+        "date": "Date",
+        "description": "Description",
+        "amount": "Amount",
+        "debit": "Debit",
+        "credit": "Credit",
+        "processedDate": "Charge date",
+        "originalAmount": "Original amount",
+        "originalCurrency": "Original currency",
+        "memo": "Notes"
+      },
+      "table": {
+        "date": "Date",
+        "description": "Description",
+        "amount": "Amount",
+        "importAnyway": "Import anyway",
+        "note": "Note"
+      },
+      "review": {
+        "accountNumber": "Account / card",
+        "range": "From {{from}} to {{to}}",
+        "new": "New: {{count}}",
+        "duplicates": "Already in ShekelSync: {{count}}",
+        "invalid": "Can't import: {{count}}",
+        "duplicatesHint": "These match a transaction with the same amount within a day. Tick a row only if it really is a separate charge.",
+        "matches": "Matches \"{{name}}\" on {{date}}",
+        "truncated": "Showing {{shown}} of {{count}} rows."
+      },
+      "reasons": {
+        "invalid_date": "Unreadable date",
+        "date_out_of_range": "Date out of range",
+        "missing_description": "No description",
+        "invalid_amount": "Unreadable amount",
+        "zero_amount": "Zero amount"
+      },
+      "done": {
+        "imported": "Transactions imported: {{count}}.",
+        "skipped": "Already in ShekelSync and skipped: {{count}}.",
+        "merged": "Matched an existing transaction while saving: {{count}}."
+      },
+      "actions": {
+        "close": "Close",
+        "cancel": "Cancel",
+        "otherFile": "Other file",
+        "check": "Check against my data",
+        "back": "Back",
+        "import": "Import {{count}}"
+      }
+    },
     "credentialsUpdate": {
       "title": "Update credentials",
       "description": "Update the saved login details for this account. Leave Password blank to keep the current one.",
